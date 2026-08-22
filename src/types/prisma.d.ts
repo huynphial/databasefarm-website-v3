@@ -32,7 +32,6 @@ declare module '@prisma/client' {
     databaseGroup: any;
     activeAlert: any;
     alertHistory: any;
-    metricValueHistory: any;
     $connect(): Promise<void>;
     $disconnect(): Promise<void>;
   }

@@ -191,6 +191,7 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   // --- Metrics ---
+  // --- Metrics ---
   async getMetrics(): Promise<MetricEntity[]> {
     const metrics = await this.prisma.metric.findMany({
       include: { templates: true },
@@ -199,6 +200,8 @@ export class PrismaRepository implements IStorageRepository {
     return metrics.map((m) => {
       const templateIds = m.templates.map((t) => t.templateId);
       const firstTpl = m.templates[0];
+      const tConfig = m.thresholdsConfig ? (typeof m.thresholdsConfig === 'string' ? JSON.parse(m.thresholdsConfig) : m.thresholdsConfig) : null;
+      const globalConf = tConfig?.global || (tConfig?.type === 'GLOBAL' ? tConfig.global : null);
       return {
         id: m.id,
         name: m.name,
@@ -206,16 +209,16 @@ export class PrismaRepository implements IStorageRepository {
         valueType: m.valueType as any,
         relationalOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
         thresholdOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
-        thresholdWarn: m.thresholdWarn || undefined,
-        thresholdHigh: m.thresholdHigh || undefined,
-        thresholdCritical: m.thresholdCritical || undefined,
+        thresholdWarn: globalConf?.warn || null,
+        thresholdHigh: globalConf?.high || null,
+        thresholdCritical: globalConf?.critical || null,
         frequencyMinutes: m.frequencyMinutes,
         templateId: firstTpl ? firstTpl.templateId : undefined,
         templateName: firstTpl ? firstTpl.templateName : undefined,
         templateIds,
         isEnabled: m.isEnabled,
         metricQueryType: ((m as any).metricQueryType ?? 1) as 1 | 2 | 3,
-        thresholdsConfig: (m as any).thresholdsConfig ? (typeof (m as any).thresholdsConfig === 'string' ? JSON.parse((m as any).thresholdsConfig) : (m as any).thresholdsConfig) : null,
+        thresholdsConfig: tConfig,
         createdAt: m.createdAt.toISOString(),
         updatedAt: m.updatedAt.toISOString(),
       };
@@ -230,6 +233,8 @@ export class PrismaRepository implements IStorageRepository {
     if (!m) return null;
     const templateIds = m.templates.map((t) => t.templateId);
     const firstTpl = m.templates[0];
+    const tConfig = m.thresholdsConfig ? (typeof m.thresholdsConfig === 'string' ? JSON.parse(m.thresholdsConfig) : m.thresholdsConfig) : null;
+    const globalConf = tConfig?.global || (tConfig?.type === 'GLOBAL' ? tConfig.global : null);
     return {
       id: m.id,
       name: m.name,
@@ -237,16 +242,16 @@ export class PrismaRepository implements IStorageRepository {
       valueType: m.valueType as any,
       relationalOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
       thresholdOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
-      thresholdWarn: m.thresholdWarn || undefined,
-      thresholdHigh: m.thresholdHigh || undefined,
-      thresholdCritical: m.thresholdCritical || undefined,
+      thresholdWarn: globalConf?.warn || null,
+      thresholdHigh: globalConf?.high || null,
+      thresholdCritical: globalConf?.critical || null,
       frequencyMinutes: m.frequencyMinutes,
       templateId: firstTpl ? firstTpl.templateId : undefined,
       templateName: firstTpl ? firstTpl.templateName : undefined,
       templateIds,
       isEnabled: m.isEnabled,
       metricQueryType: ((m as any).metricQueryType ?? 1) as 1 | 2 | 3,
-      thresholdsConfig: (m as any).thresholdsConfig ? (typeof (m as any).thresholdsConfig === 'string' ? JSON.parse((m as any).thresholdsConfig) : (m as any).thresholdsConfig) : null,
+      thresholdsConfig: tConfig,
       createdAt: m.createdAt.toISOString(),
       updatedAt: m.updatedAt.toISOString(),
     };
@@ -258,7 +263,18 @@ export class PrismaRepository implements IStorageRepository {
     const relationalOperator = metricData.relationalOperator || metricData.thresholdOperator || '>=';
 
     const metricQueryType = metricData.metricQueryType ?? 1;
-    const thresholdsConfig = metricData.thresholdsConfig ? (typeof metricData.thresholdsConfig === 'string' ? JSON.parse(metricData.thresholdsConfig) : metricData.thresholdsConfig) : null;
+    let thresholdsConfig = metricData.thresholdsConfig ? (typeof metricData.thresholdsConfig === 'string' ? JSON.parse(metricData.thresholdsConfig) : metricData.thresholdsConfig) : null;
+
+    if (!thresholdsConfig) {
+      thresholdsConfig = {
+        type: 'GLOBAL',
+        global: {
+          warn: metricData.thresholdWarn || undefined,
+          high: metricData.thresholdHigh || undefined,
+          critical: metricData.thresholdCritical || undefined,
+        }
+      };
+    }
 
     let mRecord;
     if (id) {
@@ -269,9 +285,6 @@ export class PrismaRepository implements IStorageRepository {
           sqlQuery: metricData.sqlQuery,
           valueType,
           relationalOperator,
-          thresholdWarn: metricData.thresholdWarn,
-          thresholdHigh: metricData.thresholdHigh,
-          thresholdCritical: metricData.thresholdCritical,
           frequencyMinutes: metricData.frequencyMinutes,
           isEnabled: metricData.isEnabled !== false,
           metricQueryType,
@@ -283,9 +296,6 @@ export class PrismaRepository implements IStorageRepository {
           sqlQuery: metricData.sqlQuery || 'SELECT 1',
           valueType,
           relationalOperator,
-          thresholdWarn: metricData.thresholdWarn,
-          thresholdHigh: metricData.thresholdHigh,
-          thresholdCritical: metricData.thresholdCritical,
           frequencyMinutes: metricData.frequencyMinutes || 5,
           isEnabled: metricData.isEnabled !== false,
           metricQueryType,
@@ -299,9 +309,6 @@ export class PrismaRepository implements IStorageRepository {
           sqlQuery: metricData.sqlQuery || 'SELECT 1',
           valueType,
           relationalOperator,
-          thresholdWarn: metricData.thresholdWarn,
-          thresholdHigh: metricData.thresholdHigh,
-          thresholdCritical: metricData.thresholdCritical,
           frequencyMinutes: metricData.frequencyMinutes || 5,
           isEnabled: metricData.isEnabled !== false,
           metricQueryType,
@@ -676,92 +683,49 @@ export class PrismaRepository implements IStorageRepository {
     if (dbId) whereDataPoint.databaseId = dbId;
     if (metricId) whereDataPoint.metricId = metricId;
 
-    try {
-      const list = await (this.prisma as any).metricDataPoint.findMany({
-        where: whereDataPoint,
-        include: { database: true, metric: true },
-        orderBy: { measuredAt: 'desc' },
-        take: 200,
-      });
-
-      if (list.length > 0) {
-        return list.map((m) => ({
-          id: m.id,
-          dbId: m.databaseId,
-          dbName: m.database?.name,
-          metricId: m.metricId,
-          metricName: m.metric?.name,
-          objectName: m.objectName || 'INSTANCE',
-          attributeName: m.attributeName,
-          value: m.value,
-          createdAt: m.measuredAt.toISOString(),
-        }));
-      }
-    } catch (err) {
-      console.warn('MetricDataPoint query failed, falling back to MetricValueHistory:', err);
-    }
-
-    const legacyWhere: any = {};
-    if (dbId) legacyWhere.dbId = dbId;
-    if (metricId) legacyWhere.metricId = metricId;
-
-    const list = await this.prisma.metricValueHistory.findMany({
-      where: legacyWhere,
+    const list = await (this.prisma as any).metricDataPoint.findMany({
+      where: whereDataPoint,
       include: { database: true, metric: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { measuredAt: 'desc' },
       take: 200,
     });
 
-    return list.map((m) => ({
+    return list.map((m: any) => ({
       id: m.id,
-      dbId: m.dbId,
+      dbId: m.databaseId,
       dbName: m.database?.name,
       metricId: m.metricId,
       metricName: m.metric?.name,
       objectName: m.objectName || 'INSTANCE',
-      attributeName: 'value',
+      attributeName: m.attributeName || 'value',
       value: m.value,
-      createdAt: m.createdAt.toISOString(),
+      createdAt: m.measuredAt.toISOString(),
     }));
   }
 
   async addMetricHistory(historyData: Partial<MetricHistoryEntity>): Promise<MetricHistoryEntity> {
-    const entry = await this.prisma.metricValueHistory.create({
+    const entry = await (this.prisma as any).metricDataPoint.create({
       data: {
-        dbId: historyData.dbId!,
+        databaseId: historyData.dbId!,
         metricId: historyData.metricId!,
-        objectName: historyData.objectName || 'INSTANCE',
+        objectName: historyData.objectName || 'GLOBAL',
+        attributeName: historyData.attributeName || 'value',
         value: historyData.value || '0',
-        createdAt: historyData.createdAt ? new Date(historyData.createdAt) : new Date(),
+        measuredAt: historyData.createdAt ? new Date(historyData.createdAt) : new Date(),
       },
       include: { database: true, metric: true },
     });
 
-    try {
-      await (this.prisma as any).metricDataPoint.create({
-        data: {
-          databaseId: historyData.dbId!,
-          metricId: historyData.metricId!,
-          objectName: historyData.objectName || 'GLOBAL',
-          attributeName: historyData.attributeName || 'value',
-          value: historyData.value || '0',
-          measuredAt: historyData.createdAt ? new Date(historyData.createdAt) : new Date(),
-        },
-      });
-    } catch (err) {
-      console.error('Redesigned MetricDataPoint storage failed:', err);
-    }
-
     return {
       id: entry.id,
-      dbId: entry.dbId,
+      dbId: entry.databaseId,
       dbName: entry.database?.name,
       metricId: entry.metricId,
       metricName: entry.metric?.name,
       objectName: entry.objectName || 'INSTANCE',
-      attributeName: historyData.attributeName || 'value',
+      attributeName: entry.attributeName || 'value',
       value: entry.value,
-      createdAt: entry.createdAt.toISOString(),
+      createdAt: entry.measuredAt.toISOString(),
     };
   }
 
@@ -1187,8 +1151,20 @@ export class PrismaRepository implements IStorageRepository {
             let triggeredThreshold: string | null = null;
             let status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'DOWN' = 'NORMAL';
             const valNum = parseFloat(dp.value);
-            const warnNum = dp.metric?.thresholdWarn ? parseFloat(dp.metric.thresholdWarn) : null;
-            const critNum = dp.metric?.thresholdCritical ? parseFloat(dp.metric.thresholdCritical) : null;
+
+            let warnNum: number | null = null;
+            let critNum: number | null = null;
+            if (dp.metric?.thresholdsConfig) {
+              try {
+                const config = typeof dp.metric.thresholdsConfig === 'string' ? JSON.parse(dp.metric.thresholdsConfig) : dp.metric.thresholdsConfig;
+                if (config?.type === 'GLOBAL' && config?.global) {
+                  warnNum = config.global.warn ? parseFloat(config.global.warn) : null;
+                  critNum = config.global.critical ? parseFloat(config.global.critical) : null;
+                }
+              } catch (e) {
+                // ignore
+              }
+            }
 
             if (!isNaN(valNum) && warnNum !== null) {
               if (critNum !== null && valNum >= critNum) {

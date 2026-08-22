@@ -141,7 +141,6 @@ model Database {
   metrics          DatabaseMetricMapping[]
   activeAlerts     ActiveAlert[]
   alertHistory     AlertHistory[]
-  metricHistory    MetricValueHistory[]
   metricDataPoints MetricDataPoint[]
 
   @@map("databases")
@@ -183,12 +182,6 @@ model Metric {
   valueType          ValueType @default(NUMBER)
   /// Relational comparison operator for evaluation (>=, <=, =, !=, CONTAINS, DOES_NOT_CONTAIN).
   relationalOperator String    @default(">=") @map("relational_operator")
-  /// Warning threshold value limit.
-  thresholdWarn      String?
-  /// High severity threshold value limit.
-  thresholdHigh      String?
-  /// Critical threshold value limit.
-  thresholdCritical  String?
   /// Redesigned query types: Type 1, 2, or 3.
   metricQueryType    Int?      @default(1) @map("metric_query_type")
   /// Reorganized JSON thresholds configuration.
@@ -208,7 +201,6 @@ model Metric {
   databases        DatabaseMetricMapping[]
   activeAlerts     ActiveAlert[]
   alertHistory     AlertHistory[]
-  metricHistory    MetricValueHistory[]
   metricDataPoints MetricDataPoint[]
 
   @@map("metrics")
@@ -353,28 +345,6 @@ model AlertHistory {
 
   @@index([dbId, createdAt])
   @@map("alert_history")
-}
-
-/// MetricValueHistory Model: Time-series telemetry store for query execution values.
-model MetricValueHistory {
-  /// Unique identifier UUID for history record.
-  id        String   @id @default(uuid())
-  /// FK referencing Database ID.
-  dbId      String
-  /// FK referencing Metric ID.
-  metricId  String
-  /// Recorded metric value output string.
-  value     String
-  /// Execution status string (e.g. "OK", "BREACH").
-  status    String?
-  /// Timestamp of telemetry capture.
-  createdAt DateTime @default(now())
-
-  database Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
-  metric   Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
-
-  @@index([dbId, metricId, createdAt(sort: Desc)])
-  @@map("metric_value_history")
 }
 
 /// MetricDataPoint Model: Redesigned multidimensional time-series store for monitored tuples.

@@ -11,7 +11,7 @@ async function main() {
   // 1. Clean Upside-Down Truncations / Deletions (handling dependent tables first)
   console.log('🧹 Cleaning existing data in reverse dependency order...');
   await p.$transaction([
-    p.metricValueHistory.deleteMany(),
+    p.alertNotificationLog.deleteMany(),
     p.metricDataPoint.deleteMany(),
     p.alertHistory.deleteMany(),
     p.activeAlert.deleteMany(),
@@ -25,8 +25,117 @@ async function main() {
     p.template.deleteMany(),
     p.systemSettings.deleteMany(),
     p.user.deleteMany(),
+    p.databaseEngine.deleteMany(),
+    p.alertNotificationMethod.deleteMany(),
   ]);
   console.log('✨ Data cleanup completed successfully.');
+
+  // 1.5 Seeding Database Engines (Dynamic Registry matching storage.ts/memoryRepository.ts)
+  const databaseEnginesData = [
+    {
+      id: 'eng-01',
+      dbCode: 'ORACLE',
+      dbName: 'Oracle',
+      dbColor: '#EA580C',
+      defaultPort: 1521,
+      statusOnOff: 'ACTIVE',
+      description: 'Enterprise relational database management system developed by Oracle.',
+    },
+    {
+      id: 'eng-02',
+      dbCode: 'MYSQL',
+      dbName: 'MySQL',
+      dbColor: '#16A34A',
+      defaultPort: 3306,
+      statusOnOff: 'ACTIVE',
+      description: 'Open-source relational database management system powered by Oracle.',
+    },
+    {
+      id: 'eng-03',
+      dbCode: 'POSTGRES',
+      dbName: 'PostgreSQL',
+      dbColor: '#2563EB',
+      defaultPort: 5432,
+      statusOnOff: 'ACTIVE',
+      description: 'Powerful, open-source object-relational database system with high SQL compliance.',
+    },
+    {
+      id: 'eng-04',
+      dbCode: 'MSSQL',
+      dbName: 'Microsoft SQL Server',
+      dbColor: '#0F172A',
+      defaultPort: 1433,
+      statusOnOff: 'ACTIVE',
+      description: 'Enterprise relational database management system developed by Microsoft.',
+    },
+    {
+      id: 'eng-05',
+      dbCode: 'SINGLESTORE',
+      dbName: 'SingleStore',
+      dbColor: '#9333EA',
+      defaultPort: 3306,
+      statusOnOff: 'ACTIVE',
+      description: 'Cloud-native, real-time distributed SQL database for transactions and analytics.',
+    },
+    {
+      id: 'eng-06',
+      dbCode: 'MONGODB',
+      dbName: 'MongoDB',
+      dbColor: '#059669',
+      defaultPort: 27017,
+      statusOnOff: 'ACTIVE',
+      description: 'Document-oriented NoSQL database for flexible data modeling and clustering.',
+    },
+    {
+      id: 'eng-07',
+      dbCode: 'REDIS',
+      dbName: 'Redis',
+      dbColor: '#D97706',
+      defaultPort: 6379,
+      statusOnOff: 'ACTIVE',
+      description: 'In-memory data structure store used as a database, cache, and message broker.',
+    },
+  ];
+
+  // 1.6 Seeding Alert Notification Methods (Dynamic Protocol Dispatchers matching memoryRepository.ts)
+  const alertNotificationMethodsData = [
+    {
+      id: 'meth-email-01',
+      name: 'Corporate SMTP Dispatcher',
+      type: 'EMAIL',
+      configJson: {
+        smtpHost: 'smtp.mailgun.org',
+        smtpPort: 587,
+        smtpUser: 'alerts@dbfarm.internal',
+        useTls: true,
+        fromAddress: 'Database Sentinel <noreply-alerts@dbfarm.internal>',
+      },
+      statusOnOff: 'ACTIVE',
+    },
+    {
+      id: 'meth-tg-02',
+      name: 'Telegram Incident Operations Bot',
+      type: 'TELEGRAM',
+      configJson: {
+        botToken: '6829103847:AAH9f_KzL2e-wZ5qM7Nx982Qp',
+        apiBaseUrl: 'https://api.telegram.org',
+        defaultChatTopic: 'DATABASE_OPERATIONS',
+        parseMode: 'HTML',
+      },
+      statusOnOff: 'ACTIVE',
+    },
+    {
+      id: 'meth-slack-03',
+      name: 'Slack NOC Incident Channel',
+      type: 'SLACK',
+      configJson: {
+        webhookUrl: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
+        channelName: '#db-sentinel-alerts',
+        username: 'DB Farm Sentinel',
+      },
+      statusOnOff: 'ACTIVE',
+    },
+  ];
 
   // 2. Prepare Hashed Credentials for Default Users
   const adminUsername = process.env.SEED_ADMIN_USERNAME || 'admin';
@@ -116,84 +225,98 @@ async function main() {
       name: 'Tablespace Usage %',
       sqlQuery: 'SELECT tablespace_name AS name, ROUND((used_space/total_space)*100, 2) AS value FROM dba_tablespace_usage_metrics',
       valueType: ValueType.NUMBER,
-      thresholdWarn: '80',
-      thresholdHigh: '90',
-      thresholdCritical: '95',
       frequencyMinutes: 5,
       noAlertRequired: false,
       isEnabled: true,
+      metricQueryType: 1,
+      thresholdsConfig: {
+        type: 'GLOBAL',
+        global: { warn: '80', high: '90', critical: '95' }
+      },
     },
     {
       id: metActiveSessionsId,
       name: 'Active Sessions Count',
       sqlQuery: "SELECT username AS name, COUNT(*) AS value FROM v$session WHERE status = 'ACTIVE' AND type != 'BACKGROUND' GROUP BY username",
       valueType: ValueType.NUMBER,
-      thresholdWarn: '150',
-      thresholdHigh: '300',
-      thresholdCritical: '500',
       frequencyMinutes: 1,
       noAlertRequired: false,
       isEnabled: true,
+      metricQueryType: 1,
+      thresholdsConfig: {
+        type: 'GLOBAL',
+        global: { warn: '150', high: '300', critical: '500' }
+      },
     },
     {
       id: metSaturationId,
       name: 'Connection Saturation %',
       sqlQuery: "SELECT ROUND((count(*)::numeric / current_setting('max_connections')::numeric) * 100, 2) AS value FROM pg_stat_activity",
       valueType: ValueType.NUMBER,
-      thresholdWarn: '75',
-      thresholdHigh: '85',
-      thresholdCritical: '95',
       frequencyMinutes: 2,
       noAlertRequired: false,
       isEnabled: true,
+      metricQueryType: 1,
+      thresholdsConfig: {
+        type: 'GLOBAL',
+        global: { warn: '75', high: '85', critical: '95' }
+      },
     },
     {
       id: metCacheHitId,
       name: 'Cache Hit Ratio %',
       sqlQuery: 'SELECT ROUND(sum(heap_blks_hit) / (sum(heap_blks_hit) + sum(heap_blks_read)) * 100, 2) AS value FROM pg_statio_user_tables',
       valueType: ValueType.NUMBER,
-      thresholdWarn: '95',
-      thresholdHigh: '90',
-      thresholdCritical: '80',
       frequencyMinutes: 5,
       noAlertRequired: false,
       isEnabled: true,
+      metricQueryType: 1,
+      thresholdsConfig: {
+        type: 'GLOBAL',
+        global: { warn: '95', high: '90', critical: '80' }
+      },
     },
     {
       id: metThreadsId,
       name: 'Threads Connected',
       sqlQuery: "SHOW GLOBAL STATUS LIKE 'Threads_connected'",
       valueType: ValueType.NUMBER,
-      thresholdWarn: '200',
-      thresholdHigh: '400',
-      thresholdCritical: '800',
       frequencyMinutes: 1,
       noAlertRequired: false,
       isEnabled: true,
+      metricQueryType: 1,
+      thresholdsConfig: {
+        type: 'GLOBAL',
+        global: { warn: '200', high: '400', critical: '800' }
+      },
     },
     {
       id: metSlowQueriesId,
       name: 'Slow Queries Rate',
       sqlQuery: "SHOW GLOBAL STATUS LIKE 'Slow_queries'",
       valueType: ValueType.NUMBER,
-      thresholdWarn: '10',
-      thresholdHigh: '50',
-      thresholdCritical: '100',
       frequencyMinutes: 5,
       noAlertRequired: false,
       isEnabled: true,
+      metricQueryType: 1,
+      thresholdsConfig: {
+        type: 'GLOBAL',
+        global: { warn: '10', high: '50', critical: '100' }
+      },
     },
     {
       id: metPageLifeId,
       name: 'Page Life Expectancy (s)',
       sqlQuery: "SELECT [cntr_value] FROM sys.dm_os_performance_counters WHERE [counter_name] = 'Page life expectancy'",
       valueType: ValueType.NUMBER,
-      thresholdWarn: '300',
-      thresholdHigh: '180',
-      thresholdCritical: '60',
       frequencyMinutes: 2,
       noAlertRequired: false,
       isEnabled: true,
+      metricQueryType: 1,
+      thresholdsConfig: {
+        type: 'GLOBAL',
+        global: { warn: '300', high: '180', critical: '60' }
+      },
     },
   ];
 
@@ -551,6 +674,107 @@ async function main() {
     },
   ];
 
+  // 10.6. Seed Alert Notification Logs
+  const alertNotificationLogsData = [
+    {
+      id: 'notif-log-01',
+      timestamp: new Date(Date.now() - 18 * 60000),
+      alertId: 'alt-01',
+      dbId: 'db-01',
+      dbName: 'ERP_PROD_ORA',
+      metricName: 'Tablespace Usage %',
+      attributeName: 'used_space_pct',
+      alertLevel: 'CRITICAL',
+      dispatchMethod: 'Telegram Alert Bot',
+      dispatchType: 'TELEGRAM',
+      senderIds: '-1001234567890, -1009876543210',
+      status: 'DISPATCHED',
+      payloadSummary: 'CRITICAL: ERP_PROD_ORA [TS_DATA] Tablespace Usage % reached 97.4%',
+      latencyMs: 142,
+    },
+    {
+      id: 'notif-log-02',
+      timestamp: new Date(Date.now() - 18 * 60000 + 1200),
+      alertId: 'alt-01',
+      dbId: 'db-01',
+      dbName: 'ERP_PROD_ORA',
+      metricName: 'Tablespace Usage %',
+      attributeName: 'used_space_pct',
+      alertLevel: 'CRITICAL',
+      dispatchMethod: 'Corporate SMTP Relay',
+      dispatchType: 'EMAIL',
+      senderIds: 'dba-team@company.internal, oncall-dba@company.internal',
+      status: 'DISPATCHED',
+      payloadSummary: '[INCIDENT-974] ERP_PROD_ORA Tablespace Alert',
+      latencyMs: 380,
+    },
+    {
+      id: 'notif-log-03',
+      timestamp: new Date(Date.now() - 35 * 60000),
+      alertId: 'alt-02',
+      dbId: 'db-02',
+      dbName: 'PAYMENT_API_PG',
+      metricName: 'Connection Saturation %',
+      attributeName: 'active_connections',
+      alertLevel: 'CRITICAL',
+      dispatchMethod: 'Telegram Alert Bot',
+      dispatchType: 'TELEGRAM',
+      senderIds: '-1001234567890',
+      status: 'DISPATCHED',
+      payloadSummary: 'CRITICAL: PAYMENT_API_PG connection pool 96.8% full',
+      latencyMs: 118,
+    },
+    {
+      id: 'notif-log-04',
+      timestamp: new Date(Date.now() - 75 * 60000),
+      alertId: 'alt-03',
+      dbId: 'db-03',
+      dbName: 'AUTH_NODE_MYSQL',
+      metricName: 'Threads Connected',
+      attributeName: 'Threads_connected',
+      alertLevel: 'HIGH',
+      dispatchMethod: 'Slack Webhook Gateway',
+      dispatchType: 'SLACK',
+      senderIds: '#dba-alerts-channel',
+      status: 'DISPATCHED',
+      payloadSummary: 'HIGH: AUTH_NODE_MYSQL Threads_connected spike (430)',
+      latencyMs: 210,
+    },
+    {
+      id: 'notif-log-05',
+      timestamp: new Date(Date.now() - 120 * 60000),
+      alertId: 'alt-04',
+      dbId: 'db-04',
+      dbName: 'HR_PORTAL_MSSQL',
+      metricName: 'Page Life Expectancy (PLE)',
+      attributeName: 'ple_seconds',
+      alertLevel: 'WARN',
+      dispatchMethod: 'Corporate SMTP Relay',
+      dispatchType: 'EMAIL',
+      senderIds: 'dba-team@company.internal',
+      status: 'DISPATCHED',
+      payloadSummary: 'WARN: HR_PORTAL_MSSQL Buffer Manager PLE dropped to 240s',
+      latencyMs: 290,
+    },
+    {
+      id: 'notif-log-06',
+      timestamp: new Date(Date.now() - 5 * 3600000),
+      alertId: 'althist-01',
+      dbId: 'db-02',
+      dbName: 'PAYMENT_API_PG',
+      metricName: 'Replication Lag (Seconds)',
+      attributeName: 'lag_seconds',
+      alertLevel: 'WARN',
+      dispatchMethod: 'SMS Gateway (Twilio)',
+      dispatchType: 'SMS',
+      senderIds: '+84901234567, +84907654321',
+      status: 'FAILED',
+      errorMessage: 'HTTP 429: SMS Rate limit exceeded on backup gateway provider',
+      payloadSummary: 'WARN: PAYMENT_API_PG replica lag > 35s',
+      latencyMs: 850,
+    },
+  ];
+
   // 11. Execute High-Performance Batched Inserters (Atomic Transaction)
   console.log('⚡ Executing optimized batch insertions...');
   await p.$transaction([
@@ -560,6 +784,8 @@ async function main() {
     p.metric.createMany({ data: metricsData, skipDuplicates: true }),
     p.databaseGroup.createMany({ data: groupsData, skipDuplicates: true }),
     p.database.createMany({ data: databasesData, skipDuplicates: true }),
+    p.databaseEngine.createMany({ data: databaseEnginesData, skipDuplicates: true }),
+    p.alertNotificationMethod.createMany({ data: alertNotificationMethodsData, skipDuplicates: true }),
     p.databaseGroupMapping.createMany({ data: dbGroupMappings, skipDuplicates: true }),
     p.databaseMetricMapping.createMany({ data: dbMetricMappings, skipDuplicates: true }),
     p.groupTemplateMapping.createMany({ data: groupTemplateMappings, skipDuplicates: true }),
@@ -567,6 +793,7 @@ async function main() {
     p.activeAlert.createMany({ data: activeAlertsData, skipDuplicates: true }),
     p.alertHistory.createMany({ data: alertHistoryData, skipDuplicates: true }),
     p.metricDataPoint.createMany({ data: metricDataPointsData, skipDuplicates: true }),
+    p.alertNotificationLog.createMany({ data: alertNotificationLogsData, skipDuplicates: true }),
   ]);
 
   // 12. Create views in database for mapping tables for analyze
@@ -593,6 +820,25 @@ async function main() {
         target_db_type AS TargetDbType, 
         created_at AS AssociatedAt 
       FROM metric_template_mappings;
+    `);
+    await p.$executeRawUnsafe(`
+      CREATE OR REPLACE VIEW view_metric_data_points AS
+      SELECT 
+        mdp.id, 
+        mdp.database_id, 
+        d.name AS database_name, 
+        d.host AS database_ip, 
+        d.port AS database_port, 
+        mdp.metric_id, 
+        m.name AS metric_name, 
+        m."frequencyMinutes" AS frequency, 
+        mdp.object_name, 
+        mdp.attribute_name, 
+        mdp.value, 
+        mdp.measured_at 
+      FROM metric_data_points mdp
+      LEFT JOIN databases d ON mdp.database_id = d.id
+      LEFT JOIN metrics m ON mdp.metric_id = m.id;
     `);
     console.log('✅ Analytical views created successfully.');
   } catch (err: any) {

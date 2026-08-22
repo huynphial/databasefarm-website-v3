@@ -344,7 +344,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         if (appliedTpls.length === 0) {
           return <span className="text-xs text-slate-400 italic">No templates linked</span>;
         }
-        if (appliedTpls.length >= 2) {
+        if (appliedTpls.length >= 1) {
           const templateNamesList = appliedTpls.map((t) => `${t.name}${t.targetDbType ? ` [${t.targetDbType}]` : ''}`).join('\n');
           return (
             <div className="group relative inline-block">
@@ -362,18 +362,6 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             </div>
           );
         }
-        const t = appliedTpls[0];
-        return (
-          <span
-            title={`Target Engine: ${t.targetDbType || 'Universal'}`}
-            className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 inline-flex items-center gap-1 font-medium"
-          >
-            {t.name}
-            {t.targetDbType && (
-              <span className="font-bold opacity-75">[{t.targetDbType}]</span>
-            )}
-          </span>
-        );
       },
     },
     {
