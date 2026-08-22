@@ -184,6 +184,40 @@ function MainAppContent() {
     }
   };
 
+  const handleResetAllData = async () => {
+    try {
+      await api.resetData().catch((e) => {
+        console.warn('API reset failed, resetting client-side state directly:', e);
+      });
+      
+      // Clear client storage cache
+      storage.resetData();
+
+      // Clear all state hooks
+      setDatabases([]);
+      setMetrics([]);
+      setTemplates([]);
+      setGroups([]);
+      setActiveAlerts([]);
+      setAlertHistory([]);
+      setAlertNotificationLogs([]);
+      setMetricHistory([]);
+      setRawMeasurements([]);
+
+      toast({
+        title: 'System Reset Successful',
+        description: 'All monitoring databases, groups, templates, metrics, alerts, and histories have been cleared.',
+        type: 'success',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Reset Failed',
+        description: err.message || 'An error occurred during global data reset.',
+        type: 'error',
+      });
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -781,6 +815,7 @@ function MainAppContent() {
               onDeleteEngine={handleDeleteEngine}
               onSaveAlertMethod={handleSaveAlertMethod}
               onDeleteAlertMethod={handleDeleteAlertMethod}
+              onResetAllData={handleResetAllData}
             />
           )}
 

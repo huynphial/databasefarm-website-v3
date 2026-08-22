@@ -1449,4 +1449,43 @@ export class PrismaRepository implements IStorageRepository {
       }
     ];
   }
+
+  async resetData(): Promise<void> {
+    const p = this.prisma as any;
+    try {
+      await p.$transaction([
+        p.metricDataPoint.deleteMany(),
+        p.activeAlert.deleteMany(),
+        p.alertHistory.deleteMany(),
+        p.alertNotificationLog.deleteMany(),
+        p.databaseGroupMapping.deleteMany(),
+        p.groupTemplateMapping.deleteMany(),
+        p.metricTemplateMapping.deleteMany(),
+        p.databaseMetricMapping.deleteMany(),
+        p.database.deleteMany(),
+        p.databaseGroup.deleteMany(),
+        p.metric.deleteMany(),
+        p.template.deleteMany(),
+      ]);
+    } catch (err) {
+      console.warn('⚠️ Standard Prisma delete transaction failed, falling back to raw SQL deletion:', err);
+      await p.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0;');
+      try {
+        await p.$executeRawUnsafe('DELETE FROM `metric_data_points`;');
+        await p.$executeRawUnsafe('DELETE FROM `active_alerts`;');
+        await p.$executeRawUnsafe('DELETE FROM `alert_history`;');
+        await p.$executeRawUnsafe('DELETE FROM `alert_notification_logs`;');
+        await p.$executeRawUnsafe('DELETE FROM `database_group_mappings`;');
+        await p.$executeRawUnsafe('DELETE FROM `group_template_mappings`;');
+        await p.$executeRawUnsafe('DELETE FROM `metric_template_mappings`;');
+        await p.$executeRawUnsafe('DELETE FROM `database_metric_mappings`;');
+        await p.$executeRawUnsafe('DELETE FROM `databases`;');
+        await p.$executeRawUnsafe('DELETE FROM `database_groups`;');
+        await p.$executeRawUnsafe('DELETE FROM `metrics`;');
+        await p.$executeRawUnsafe('DELETE FROM `templates`;');
+      } finally {
+        await p.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1;');
+      }
+    }
+  }
 }

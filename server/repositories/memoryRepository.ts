@@ -1369,4 +1369,16 @@ FROM pg_tablespace`,
     this.auditLogs = [entry, ...this.auditLogs];
     return entry;
   }
+
+  async resetData(): Promise<void> {
+    this.databases = [];
+    this.groups = [];
+    this.activeAlerts = [];
+    this.alertHistory = [];
+    this.alertNotificationLogs = [];
+    this.metrics = [];
+    this.templates = [];
+    this.metricHistory = [];
+    this.rawMeasurements = [];
+  }
 }

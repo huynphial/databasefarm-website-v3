@@ -50,6 +50,7 @@ interface SystemSettingsViewProps {
   onDeleteEngine: (id: string) => Promise<void>;
   onSaveAlertMethod: (method: Partial<AlertNotificationMethodEntity>) => Promise<any>;
   onDeleteAlertMethod: (id: string) => Promise<void>;
+  onResetAllData: () => Promise<void>;
 }
 
 interface HealthCheckResult {
@@ -74,6 +75,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   onDeleteEngine,
   onSaveAlertMethod,
   onDeleteAlertMethod,
+  onResetAllData,
 }) => {
   const { toast } = useToast();
   const isAdmin = userRole === 'ADMIN';
@@ -87,6 +89,22 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   const [timestampFormat, setTimestampFormat] = useState<string>(settings.timestampFormat || 'HH24:MI:SS DD/MM/YYYY');
   const [isCheckingHealth, setIsCheckingHealth] = useState<boolean>(false);
   const [healthResult, setHealthResult] = useState<HealthCheckResult | null>(null);
+
+  // Reset All Data State
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetDataSubmit = async () => {
+    setIsResetting(true);
+    try {
+      await onResetAllData();
+      setIsResetConfirmOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Reset Failed', description: err.message, type: 'error' });
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   // Engine Modal State
   const [isEngineModalOpen, setIsEngineModalOpen] = useState(false);
@@ -558,7 +576,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
       {/* TAB 1: Collector API & UI Preferences */}
       {activeTab === 'collector' && (
-        <form onSubmit={handleSaveEndpoint} className="space-y-6">
+        <div className="space-y-6">
+          <form onSubmit={handleSaveEndpoint} className="space-y-6">
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-5">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2.5 font-bold text-slate-900 text-base">
@@ -721,7 +740,42 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
             </div>
           </div>
         </form>
-      )}
+
+        {/* Danger Zone Section */}
+        <div id="danger-zone-settings" className="bg-red-50/40 border border-red-200 rounded-xl p-6 shadow-2xs space-y-4">
+          <div className="flex items-center gap-2.5 pb-3 border-b border-red-100">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+            <div className="font-bold text-red-900 text-base">Danger Zone</div>
+          </div>
+          
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-xs font-bold text-slate-900">Reset All System Data</div>
+              <p className="text-[11px] text-slate-600 leading-relaxed max-w-2xl">
+                Destructive operation! Deletes all tables and records related to database servers, logical database groups, health monitoring templates, metric threshold configurations, active alert logs, notification dispatch history, and time-series telemetry metrics. Preserves global settings, database engines registry, protocol dispatcher configurations, and audit trail logs.
+              </p>
+            </div>
+
+            {isAdmin ? (
+              <button
+                id="btn-reset-all-data"
+                type="button"
+                onClick={() => setIsResetConfirmOpen(true)}
+                className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-colors shrink-0 shadow-2xs cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Reset All Data</span>
+              </button>
+            ) : (
+              <div className="text-xs text-slate-500 italic flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Admin Only</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
 
       {/* TAB 2: Database Engines Registry */}
       {activeTab === 'engines' && (
@@ -1240,6 +1294,64 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
             </button>
           </div>
         </form>
+      </Dialog>
+
+      {/* Reset All Data Confirmation Dialog */}
+      <Dialog
+        isOpen={isResetConfirmOpen}
+        onClose={() => setIsResetConfirmOpen(false)}
+        title="Reset All Database Monitoring Data?"
+        description="Are you absolutely sure you want to perform a global system reset? This operation is permanent and cannot be undone."
+        maxWidth="md"
+      >
+        <div className="space-y-4 text-xs text-slate-600 leading-relaxed">
+          <div className="p-3 bg-red-50 border border-red-200 text-red-900 rounded-lg flex items-start gap-2.5">
+            <AlertTriangle className="w-4.5 h-4.5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold">CRITICAL WARNING:</span> Proceeding will permanently purge:
+              <ul className="list-disc list-inside mt-1.5 space-y-1 pl-1">
+                <li>All registered <span className="font-bold">database connections</span> and monitoring statuses</li>
+                <li>All <span className="font-bold">logical groups</span> and template mappings</li>
+                <li>All health check <span className="font-bold">templates</span> and custom <span className="font-bold">metrics</span> definitions</li>
+                <li>All historical and active <span className="font-bold">incidents / alert logs</span></li>
+                <li>All time-series <span className="font-bold">metric data points / telemetry history</span></li>
+              </ul>
+              <div className="mt-2 font-semibold">
+                Audit logs, system settings, supported database engines registry, and alert notification dispatchers will be preserved intact.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+            <button
+              type="button"
+              disabled={isResetting}
+              onClick={() => setIsResetConfirmOpen(false)}
+              className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              id="btn-confirm-reset-all-data"
+              type="button"
+              disabled={isResetting}
+              onClick={handleResetDataSubmit}
+              className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+            >
+              {isResetting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Resetting...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Yes, Reset All Data</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

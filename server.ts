@@ -632,6 +632,25 @@ async function startServer() {
     }
   });
 
+  app.post('/api/system-settings/reset-data', async (req, res) => {
+    try {
+      await repo.resetData();
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req, 'admin');
+      await repo.addAuditLog({
+        userId,
+        clientIp,
+        actionType: 'DELETE',
+        targetEntity: 'SYSTEM',
+        targetId: 'all',
+        details: 'Performed global system settings reset (purged all databases, groups, templates, metrics, alerts, and histories)',
+      });
+      res.json({ status: 'ok', message: 'All transient and monitoring data has been successfully reset.' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Collector API Health Check Endpoints
   app.get('/api/collector/mock-health', (req, res) => {
     res.status(200).json({

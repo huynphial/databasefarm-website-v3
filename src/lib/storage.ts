@@ -934,6 +934,16 @@ export const storage = {
   setMetricHistory(data: MetricHistoryEntity[]) {
     localStorage.setItem(STORAGE_KEYS.METRIC_HISTORY, JSON.stringify(data));
   },
+  resetData() {
+    localStorage.removeItem(STORAGE_KEYS.DATABASES);
+    localStorage.removeItem(STORAGE_KEYS.METRICS);
+    localStorage.removeItem(STORAGE_KEYS.TEMPLATES);
+    localStorage.removeItem(STORAGE_KEYS.GROUPS);
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERTS);
+    localStorage.removeItem(STORAGE_KEYS.ALERT_HISTORY);
+    localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS);
+    localStorage.removeItem(STORAGE_KEYS.METRIC_HISTORY);
+  },
   resetToDefaults() {
     localStorage.removeItem(STORAGE_KEYS.DATABASES);
     localStorage.removeItem(STORAGE_KEYS.METRICS);

@@ -79,4 +79,7 @@ export interface IStorageRepository {
   // Audit Logs
   getAuditLogs(limit?: number): Promise<AuditLogEntity[]>;
   addAuditLog(logData: Partial<AuditLogEntity>): Promise<AuditLogEntity>;
+
+  // Reset Data
+  resetData(): Promise<void>;
 }

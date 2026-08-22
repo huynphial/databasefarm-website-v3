@@ -166,6 +166,11 @@ export const api = {
       body: JSON.stringify(settings),
     });
   },
+  async resetData(): Promise<{ status: string; message: string }> {
+    return fetchJson('/api/system-settings/reset-data', {
+      method: 'POST',
+    });
+  },
 
   // Health Check
   async checkCollectorHealth(url?: string): Promise<{
