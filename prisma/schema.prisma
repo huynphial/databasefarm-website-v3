@@ -68,6 +68,8 @@ model User {
   passwordHash String
   /// Role-based access level (ADMIN | VIEWER).
   role         Role     @default(VIEWER)
+  /// Whether the user account is locked/disabled.
+  isLocked     Boolean  @default(false)
   /// Timestamp of user record creation.
   createdAt    DateTime @default(now())
   /// Timestamp of last record update.
@@ -195,6 +197,9 @@ model Metric {
   createdAt          DateTime  @default(now())
   /// Timestamp of last metric update.
   updatedAt          DateTime  @updatedAt
+
+  databaseEngineId   String?                 @map("database_engine_id")
+  databaseEngine     DatabaseEngine?         @relation("EngineMetrics", fields: [databaseEngineId], references: [id], onDelete: SetNull)
 
   /// Relations: Parent templates and associated database execution mappings.
   templates        MetricTemplateMapping[]
@@ -447,6 +452,8 @@ model DatabaseEngine {
   description String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+
+  metrics     Metric[] @relation("EngineMetrics")
 
   @@map("database_engines")
 }

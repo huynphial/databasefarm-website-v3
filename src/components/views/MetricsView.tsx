@@ -18,7 +18,7 @@ import {
   FolderPlus,
   BellOff,
 } from 'lucide-react';
-import { MetricEntity, MetricValueType, RelationalOperator, TemplateEntity, UserRole } from '../../types';
+import { MetricEntity, MetricValueType, RelationalOperator, TemplateEntity, UserRole, DatabaseEngineEntity } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
@@ -27,6 +27,7 @@ import { validateMetricSqlQuery } from '../../lib/sqlValidator';
 interface MetricsViewProps {
   metrics: MetricEntity[];
   templates: TemplateEntity[];
+  databaseEngines: DatabaseEngineEntity[];
   userRole: UserRole;
   showInfoTips?: boolean;
   onSaveMetric: (metric: Partial<MetricEntity>) => void;
@@ -36,6 +37,7 @@ interface MetricsViewProps {
 export const MetricsView: React.FC<MetricsViewProps> = ({
   metrics,
   templates,
+  databaseEngines = [],
   userRole,
   showInfoTips = true,
   onSaveMetric,
@@ -83,6 +85,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     name: string;
     sqlQuery: string;
     valueType: MetricValueType;
+    databaseEngineId: string;
     thresholdOperator: RelationalOperator;
     thresholdWarn: string;
     thresholdHigh: string;
@@ -98,6 +101,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     name: '',
     sqlQuery: 'SELECT username AS name, COUNT(*) AS value FROM v$session WHERE status = \'ACTIVE\' GROUP BY username',
     valueType: 'NUMBER',
+    databaseEngineId: '',
     thresholdOperator: '>=',
     thresholdWarn: '80',
     thresholdHigh: '90',
@@ -121,6 +125,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       name: '',
       sqlQuery: 'SELECT count(*) AS value FROM pg_stat_activity WHERE state = \'active\'',
       valueType: 'NUMBER',
+      databaseEngineId: '',
       thresholdOperator: '>=',
       thresholdWarn: '80',
       thresholdHigh: '90',
@@ -178,6 +183,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       name: metric.name,
       sqlQuery: metric.sqlQuery,
       valueType: metric.valueType,
+      databaseEngineId: metric.databaseEngineId || '',
       thresholdOperator: metric.relationalOperator || metric.thresholdOperator || '>=',
       thresholdWarn: metric.thresholdWarn || '',
       thresholdHigh: metric.thresholdHigh || '',
@@ -333,6 +339,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       name: formData.name.trim(),
       sqlQuery: formData.sqlQuery.trim(),
       valueType: formData.valueType,
+      databaseEngineId: formData.databaseEngineId || null,
       relationalOperator: formData.thresholdOperator,
       thresholdOperator: formData.thresholdOperator,
       thresholdWarn: formData.metricQueryType === 3 ? null : (formData.thresholdWarn ? formData.thresholdWarn.trim() : null),
@@ -385,6 +392,25 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
           </div>
         </div>
       ),
+    },
+    {
+      header: 'Database Engine',
+      width: '150px',
+      cell: (row) => {
+        const engine = row.databaseEngine;
+        return (
+          <span
+            className="text-xs font-semibold px-2 py-1 rounded flex items-center gap-1.5 self-start max-w-fit"
+            style={{
+              backgroundColor: (engine?.dbColor || '#64748B') + '15',
+              color: engine?.dbColor || '#64748B',
+              border: `1px solid ${(engine?.dbColor || '#64748B') + '30'}`,
+            }}
+          >
+            {engine?.dbName || 'Universal / All'}
+          </span>
+        );
+      },
     },
     {
       header: 'Monitoring State',
@@ -689,6 +715,25 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
               />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">Database Engine *</label>
+              <select
+                value={formData.databaseEngineId}
+                onChange={(e) => setFormData({ ...formData, databaseEngineId: e.target.value })}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="">Universal / All Engines</option>
+                {databaseEngines.map((eng) => (
+                  <option key={eng.id} value={eng.id}>
+                    {eng.dbName} ({eng.dbCode})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Specify which database engine type this metric query belongs to.
+              </p>
             </div>
           </div>
 

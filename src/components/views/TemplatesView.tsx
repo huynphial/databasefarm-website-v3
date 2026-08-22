@@ -147,10 +147,28 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
   // Filter available metrics for multi-select
   const filteredAvailableMetrics = useMemo(() => {
     if (!metricManagerTemplate) return [];
-    const unassigned = metrics.filter((m) => !(m.templateIds?.includes(metricManagerTemplate.id) || m.templateId === metricManagerTemplate.id));
-    if (!metricSearchQuery.trim()) return unassigned;
+    const templateDbType = metricManagerTemplate.targetDbType; // e.g. "POSTGRES", "MYSQL", "ALL", etc.
+
+    const unassignedAndCompatible = metrics.filter((m) => {
+      // 1. Must not be already assigned to this template
+      const isAssigned = m.templateIds?.includes(metricManagerTemplate.id) || m.templateId === metricManagerTemplate.id;
+      if (isAssigned) return false;
+
+      // 2. Compatibility check:
+      // If template is universal ('ALL' or empty)
+      if (!templateDbType || templateDbType === 'ALL') return true;
+
+      // If metric is universal (no engine assigned, or engine id is null, or engine code is universal)
+      const metricDbCode = m.databaseEngine?.dbCode;
+      if (!m.databaseEngineId || !metricDbCode || metricDbCode === 'ALL') return true;
+
+      // Otherwise, database engine codes must match
+      return metricDbCode.toUpperCase() === templateDbType.toUpperCase();
+    });
+
+    if (!metricSearchQuery.trim()) return unassignedAndCompatible;
     const q = metricSearchQuery.toLowerCase().trim();
-    return unassigned.filter((m) => m.name.toLowerCase().includes(q) || m.sqlQuery.toLowerCase().includes(q));
+    return unassignedAndCompatible.filter((m) => m.name.toLowerCase().includes(q) || m.sqlQuery.toLowerCase().includes(q));
   }, [metrics, metricManagerTemplate, metricSearchQuery]);
 
   // Add selected metrics to template

@@ -21,6 +21,9 @@ export interface IStorageRepository {
   // Users
   getUsers(): Promise<User[]>;
   getUserByUsername(username: string): Promise<User | null>;
+  saveUser(userData: Partial<User> & { password?: string }): Promise<User>;
+  deleteUser(id: string): Promise<boolean>;
+  verifyUserPassword(username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }>;
 
   // Database Engines (Dynamic Registry)
   getDatabaseEngines(): Promise<DatabaseEngineEntity[]>;

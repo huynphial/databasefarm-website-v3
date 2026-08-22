@@ -5,6 +5,7 @@ export interface User {
   username: string;
   role: UserRole;
   createdAt?: string;
+  isLocked?: boolean;
 }
 
 export type DbEngine = 'ORACLE' | 'MYSQL' | 'POSTGRES' | 'MSSQL' | 'SINGLESTORE' | 'MONGODB' | 'REDIS' | string;
@@ -127,6 +128,8 @@ export interface MetricEntity {
   name: string;
   sqlQuery: string;
   valueType: MetricValueType;
+  databaseEngineId?: string | null;
+  databaseEngine?: DatabaseEngineEntity | null;
   relationalOperator?: RelationalOperator; // Operator selected according to valueType
   thresholdOperator?: RelationalOperator; // Legacy alias for relationalOperator
   thresholdWarn?: string | null;

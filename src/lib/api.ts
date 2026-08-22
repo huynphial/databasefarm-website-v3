@@ -255,5 +255,33 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+
+  // Dynamic User Accounts & Authentications
+  async getUsers(): Promise<User[]> {
+    return fetchJson('/api/users');
+  },
+  async createUser(data: Partial<User> & { password?: string }): Promise<User> {
+    return fetchJson('/api/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  async updateUser(id: string, data: Partial<User> & { password?: string }): Promise<User> {
+    return fetchJson(`/api/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteUser(id: string): Promise<{ success: boolean; id: string }> {
+    return fetchJson(`/api/users/${id}`, {
+      method: 'DELETE',
+    });
+  },
+  async login(credentials: Record<string, string>): Promise<{ success: boolean; user?: User & { fullName: string; email: string }; message?: string }> {
+    return fetchJson('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+  },
 };
 

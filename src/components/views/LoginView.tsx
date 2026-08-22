@@ -25,40 +25,65 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       return;
     }
 
-    const verification = verifyCredentials(username.trim(), password);
-    if (!verification.success || !verification.user) {
+    try {
+      // 1. Attempt dynamic storage backend login
+      const result = await api.login({ username: username.trim(), password });
+      
+      if (result.success && result.user) {
+        onLogin(result.user.username, result.user.role);
+        toast({
+          title: 'Authentication Succeeded',
+          description: `Signed in dynamically as ${result.user.fullName} (${result.user.role} Role).`,
+          type: 'success',
+        });
+        return;
+      } else {
+        toast({
+          title: 'Authentication Failed',
+          description: result.message || 'Invalid credentials or account locked.',
+          type: 'error',
+        });
+        return;
+      }
+    } catch (err: any) {
+      console.warn('Backend authentication failed or unreachable, trying local client-side directory:', err);
+      
+      // 2. Client-side fallback verify
+      const verification = verifyCredentials(username.trim(), password);
+      if (!verification.success || !verification.user) {
+        api.logAudit({
+          userId: username.trim() || 'Anonymous',
+          actionType: 'LOGIN_FAILED',
+          targetEntity: 'AUTH',
+          details: `Failed authentication attempt for username "${username.trim() || 'Anonymous'}" - ${verification.message || 'Invalid credentials'}`,
+        }).catch(() => {});
+
+        toast({
+          title: 'Authentication Failed',
+          description: verification.message || 'Invalid credentials. Password verification failed.',
+          type: 'error',
+        });
+        return;
+      }
+
+      const { user } = verification;
+
+      // Record audit log for successful login
       api.logAudit({
-        userId: username.trim() || 'Anonymous',
-        actionType: 'LOGIN_FAILED',
+        userId: user.username,
+        actionType: 'LOGIN_SUCCESS',
         targetEntity: 'AUTH',
-        details: `Failed authentication attempt for username "${username.trim() || 'Anonymous'}" - ${verification.message || 'Invalid credentials'}`,
+        targetId: user.username,
+        details: `User "${user.fullName}" (${user.role} role) authenticated successfully via client directory`,
       }).catch(() => {});
 
+      onLogin(user.username, user.role);
       toast({
-        title: 'Authentication Failed',
-        description: verification.message || 'Invalid credentials. Password verification failed.',
-        type: 'error',
+        title: 'Authentication Succeeded',
+        description: `Signed in as ${user.fullName} (${user.role} Role).`,
+        type: 'success',
       });
-      return;
     }
-
-    const { user } = verification;
-
-    // Record audit log for successful login
-    api.logAudit({
-      userId: user.username,
-      actionType: 'LOGIN_SUCCESS',
-      targetEntity: 'AUTH',
-      targetId: user.username,
-      details: `User "${user.fullName}" (${user.role} role) authenticated successfully`,
-    }).catch(() => {});
-
-    onLogin(user.username, user.role);
-    toast({
-      title: 'Authentication Succeeded',
-      description: `Signed in as ${user.fullName} (${user.role} Role).`,
-      type: 'success',
-    });
   };
 
   return (

@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import { PrismaClient, Role, DbType, ValueType, AlertLevel } from '@prisma/client';
 import { IStorageRepository } from './types';
 import { encryptPassword, decryptPassword } from '../utils/crypto';
@@ -36,6 +37,7 @@ export class PrismaRepository implements IStorageRepository {
       id: u.id,
       username: u.username,
       role: u.role as any,
+      isLocked: (u as any).isLocked || false,
       createdAt: u.createdAt.toISOString(),
     }));
   }
@@ -47,7 +49,98 @@ export class PrismaRepository implements IStorageRepository {
       id: u.id,
       username: u.username,
       role: u.role as any,
+      isLocked: (u as any).isLocked || false,
       createdAt: u.createdAt.toISOString(),
+    };
+  }
+
+  async saveUser(userData: Partial<User> & { password?: string }): Promise<User> {
+    const isEdit = !!userData.id;
+    let u: any;
+
+    const dataPayload: any = {
+      username: userData.username,
+      role: userData.role as any,
+      isLocked: userData.isLocked,
+    };
+
+    // Remove undefined properties to avoid overwriting existing properties with undefined/null
+    Object.keys(dataPayload).forEach((key) => {
+      if (dataPayload[key] === undefined) delete dataPayload[key];
+    });
+
+    if (userData.password) {
+      dataPayload.passwordHash = await bcrypt.hash(userData.password, 10);
+    }
+
+    if (isEdit) {
+      u = await this.prisma.user.update({
+        where: { id: userData.id },
+        data: dataPayload,
+      });
+    } else {
+      if (!userData.username) throw new Error('Username is required.');
+      if (!dataPayload.passwordHash) {
+        dataPayload.passwordHash = await bcrypt.hash(userData.password || 'TemporaryPassword#2026', 10);
+      }
+      u = await this.prisma.user.create({
+        data: {
+          id: userData.id,
+          username: userData.username,
+          passwordHash: dataPayload.passwordHash,
+          role: (userData.role || 'VIEWER') as any,
+          isLocked: userData.isLocked || false,
+        },
+      });
+    }
+
+    return {
+      id: u.id,
+      username: u.username,
+      role: u.role as any,
+      isLocked: u.isLocked || false,
+      createdAt: u.createdAt.toISOString(),
+    };
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const userToDelete = await this.prisma.user.findUnique({ where: { id } });
+    if (userToDelete && userToDelete.role === 'ADMIN') {
+      const remainingAdmins = await this.prisma.user.findMany({
+        where: { role: 'ADMIN', NOT: { id } },
+      });
+      if (remainingAdmins.length === 0) {
+        throw new Error('Action denied: Cannot remove the last administrative user account.');
+      }
+    }
+
+    await this.prisma.user.delete({ where: { id } });
+    return true;
+  }
+
+  async verifyUserPassword(username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> {
+    const u = await this.prisma.user.findUnique({ where: { username } });
+    if (!u) {
+      return { success: false, message: 'Invalid username. No matching account found.' };
+    }
+    if ((u as any).isLocked) {
+      return { success: false, message: 'This account is locked. Please contact your system administrator.' };
+    }
+
+    const isMatch = await bcrypt.compare(password, u.passwordHash);
+    if (!isMatch) {
+      return { success: false, message: 'Invalid password. Credentials verification failed.' };
+    }
+
+    return {
+      success: true,
+      user: {
+        id: u.id,
+        username: u.username,
+        role: u.role as any,
+        isLocked: (u as any).isLocked || false,
+        createdAt: u.createdAt.toISOString(),
+      },
     };
   }
 
@@ -191,10 +284,9 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   // --- Metrics ---
-  // --- Metrics ---
   async getMetrics(): Promise<MetricEntity[]> {
     const metrics = await this.prisma.metric.findMany({
-      include: { templates: true },
+      include: { templates: true, databaseEngine: true },
     });
 
     return metrics.map((m) => {
@@ -202,11 +294,25 @@ export class PrismaRepository implements IStorageRepository {
       const firstTpl = m.templates[0];
       const tConfig = m.thresholdsConfig ? (typeof m.thresholdsConfig === 'string' ? JSON.parse(m.thresholdsConfig) : m.thresholdsConfig) : null;
       const globalConf = tConfig?.global || (tConfig?.type === 'GLOBAL' ? tConfig.global : null);
+      const dbEngine = (m as any).databaseEngine ? {
+        id: (m as any).databaseEngine.id,
+        dbCode: (m as any).databaseEngine.dbCode,
+        dbName: (m as any).databaseEngine.dbName,
+        dbColor: (m as any).databaseEngine.dbColor,
+        defaultPort: (m as any).databaseEngine.defaultPort,
+        statusOnOff: (m as any).databaseEngine.statusOnOff as any,
+        description: (m as any).databaseEngine.description || undefined,
+        createdAt: (m as any).databaseEngine.createdAt.toISOString(),
+        updatedAt: (m as any).databaseEngine.updatedAt.toISOString(),
+      } : null;
+
       return {
         id: m.id,
         name: m.name,
         sqlQuery: m.sqlQuery,
         valueType: m.valueType as any,
+        databaseEngineId: (m as any).databaseEngineId || null,
+        databaseEngine: dbEngine,
         relationalOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
         thresholdOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
         thresholdWarn: globalConf?.warn || null,
@@ -228,18 +334,32 @@ export class PrismaRepository implements IStorageRepository {
   async getMetricById(id: string): Promise<MetricEntity | null> {
     const m = await this.prisma.metric.findUnique({
       where: { id },
-      include: { templates: true },
+      include: { templates: true, databaseEngine: true },
     });
     if (!m) return null;
     const templateIds = m.templates.map((t) => t.templateId);
     const firstTpl = m.templates[0];
     const tConfig = m.thresholdsConfig ? (typeof m.thresholdsConfig === 'string' ? JSON.parse(m.thresholdsConfig) : m.thresholdsConfig) : null;
     const globalConf = tConfig?.global || (tConfig?.type === 'GLOBAL' ? tConfig.global : null);
+    const dbEngine = (m as any).databaseEngine ? {
+      id: (m as any).databaseEngine.id,
+      dbCode: (m as any).databaseEngine.dbCode,
+      dbName: (m as any).databaseEngine.dbName,
+      dbColor: (m as any).databaseEngine.dbColor,
+      defaultPort: (m as any).databaseEngine.defaultPort,
+      statusOnOff: (m as any).databaseEngine.statusOnOff as any,
+      description: (m as any).databaseEngine.description || undefined,
+      createdAt: (m as any).databaseEngine.createdAt.toISOString(),
+      updatedAt: (m as any).databaseEngine.updatedAt.toISOString(),
+    } : null;
+
     return {
       id: m.id,
       name: m.name,
       sqlQuery: m.sqlQuery,
       valueType: m.valueType as any,
+      databaseEngineId: (m as any).databaseEngineId || null,
+      databaseEngine: dbEngine,
       relationalOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
       thresholdOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
       thresholdWarn: globalConf?.warn || null,
@@ -289,6 +409,7 @@ export class PrismaRepository implements IStorageRepository {
           isEnabled: metricData.isEnabled !== false,
           metricQueryType,
           thresholdsConfig: thresholdsConfig as any,
+          databaseEngineId: metricData.databaseEngineId !== undefined ? metricData.databaseEngineId : undefined,
         },
         create: {
           id,
@@ -300,6 +421,7 @@ export class PrismaRepository implements IStorageRepository {
           isEnabled: metricData.isEnabled !== false,
           metricQueryType,
           thresholdsConfig: thresholdsConfig as any,
+          databaseEngineId: metricData.databaseEngineId !== undefined ? metricData.databaseEngineId : undefined,
         },
       });
     } else {
@@ -313,6 +435,7 @@ export class PrismaRepository implements IStorageRepository {
           isEnabled: metricData.isEnabled !== false,
           metricQueryType,
           thresholdsConfig: thresholdsConfig as any,
+          databaseEngineId: metricData.databaseEngineId !== undefined ? metricData.databaseEngineId : undefined,
         },
       });
     }

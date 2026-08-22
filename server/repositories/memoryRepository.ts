@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import {
   User,
   DatabaseEntity,
@@ -17,6 +18,11 @@ import {
 import { IStorageRepository } from './types';
 
 export class MemoryRepository implements IStorageRepository {
+  private userPasswords: Record<string, string> = {
+    'usr-admin-01': '$2a$10$tZ2M9t6z3lWq6lV9X/90XOhX1C6kK5lH7vRjQ6ZlK2C1c8kS5n2K6', // AdminPassword#2026
+    'usr-viewer-02': '$2a$10$h9XlK8rYl5XqV6lX2g90XOhX1C6kK5lH7vRjQ6ZlK2C1c8kS5n2K6', // ViewerPassword#2026
+  };
+
   private auditLogs: AuditLogEntity[] = [
     {
       id: 'aud-01',
@@ -916,6 +922,92 @@ FROM pg_tablespace`,
     return this.users.find((u) => u.username.toLowerCase() === username.toLowerCase()) || null;
   }
 
+  async saveUser(userData: Partial<User> & { password?: string }): Promise<User> {
+    const isEdit = !!userData.id;
+    let userRecord: User;
+
+    if (isEdit) {
+      const idx = this.users.findIndex((u) => u.id === userData.id);
+      if (idx === -1) throw new Error(`User with ID ${userData.id} not found.`);
+      this.users[idx] = {
+        ...this.users[idx],
+        username: userData.username ?? this.users[idx].username,
+        role: userData.role ?? this.users[idx].role,
+        isLocked: userData.isLocked !== undefined ? userData.isLocked : this.users[idx].isLocked,
+      };
+      userRecord = this.users[idx];
+
+      if (userData.password) {
+        const hash = await bcrypt.hash(userData.password, 10);
+        this.userPasswords[userRecord.id] = hash;
+      }
+    } else {
+      if (!userData.username) throw new Error('Username is required.');
+      const existing = this.users.find((u) => u.username.toLowerCase() === userData.username!.toLowerCase());
+      if (existing) throw new Error(`Username "${userData.username}" is already taken.`);
+
+      const newId = userData.id || `usr-${Date.now().toString().slice(-4)}`;
+      userRecord = {
+        id: newId,
+        username: userData.username,
+        role: userData.role || 'VIEWER',
+        isLocked: userData.isLocked || false,
+        createdAt: new Date().toISOString(),
+      };
+      this.users.push(userRecord);
+
+      const password = userData.password || 'TemporaryPassword#2026';
+      const hash = await bcrypt.hash(password, 10);
+      this.userPasswords[newId] = hash;
+    }
+
+    return userRecord;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const userToDelete = this.users.find((u) => u.id === id);
+    if (userToDelete && userToDelete.role === 'ADMIN') {
+      const remainingAdmins = this.users.filter((u) => u.role === 'ADMIN' && u.id !== id);
+      if (remainingAdmins.length === 0) {
+        throw new Error('Action denied: Cannot remove the last administrative user account.');
+      }
+    }
+
+    this.users = this.users.filter((u) => u.id !== id);
+    delete this.userPasswords[id];
+    return true;
+  }
+
+  async verifyUserPassword(username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> {
+    const user = this.users.find((u) => u.username.toLowerCase() === username.toLowerCase());
+    if (!user) {
+      return { success: false, message: 'Invalid username. No matching account found.' };
+    }
+    if (user.isLocked) {
+      return { success: false, message: 'This account is locked. Please contact your system administrator.' };
+    }
+    const hash = this.userPasswords[user.id];
+    if (!hash) {
+      // If we don't have password set in memory repository, allow matching default credentials or use plaintext fallback
+      if (password === 'AdminPassword#2026' || password === 'ViewerPassword#2026') {
+        return { success: true, user };
+      }
+      return { success: false, message: 'No credentials configured for this account.' };
+    }
+
+    let isMatch = false;
+    if (hash.startsWith('$2') || hash.startsWith('$2a$') || hash.startsWith('$2b$')) {
+      isMatch = await bcrypt.compare(password, hash);
+    } else {
+      isMatch = hash === password;
+    }
+
+    if (!isMatch) {
+      return { success: false, message: 'Invalid password. Credentials verification failed.' };
+    }
+    return { success: true, user };
+  }
+
   // --- Database Engines (Dynamic Registry) ---
   async getDatabaseEngines(): Promise<DatabaseEngineEntity[]> {
     return this.databaseEngines;
@@ -1041,11 +1133,23 @@ FROM pg_tablespace`,
 
   // --- Metrics ---
   async getMetrics(): Promise<MetricEntity[]> {
-    return this.metrics;
+    return this.metrics.map((m) => {
+      const dbEngine = m.databaseEngineId ? (this.databaseEngines.find((e) => e.id === m.databaseEngineId) || null) : null;
+      return {
+        ...m,
+        databaseEngine: dbEngine,
+      };
+    });
   }
 
   async getMetricById(id: string): Promise<MetricEntity | null> {
-    return this.metrics.find((m) => m.id === id) || null;
+    const m = this.metrics.find((m) => m.id === id);
+    if (!m) return null;
+    const dbEngine = m.databaseEngineId ? (this.databaseEngines.find((e) => e.id === m.databaseEngineId) || null) : null;
+    return {
+      ...m,
+      databaseEngine: dbEngine,
+    };
   }
 
   async saveMetric(metricData: Partial<MetricEntity>): Promise<MetricEntity> {
@@ -1062,9 +1166,13 @@ FROM pg_tablespace`,
           templateId: firstTemplateId,
           templateName: firstTemplateName,
           templateIds,
+          databaseEngineId: metricData.databaseEngineId !== undefined ? metricData.databaseEngineId : this.metrics[idx].databaseEngineId,
           updatedAt: new Date().toISOString(),
         } as MetricEntity;
-        return this.metrics[idx];
+        return {
+          ...this.metrics[idx],
+          databaseEngine: this.metrics[idx].databaseEngineId ? (this.databaseEngines.find((e) => e.id === this.metrics[idx].databaseEngineId) || null) : null,
+        };
       }
     }
     const newMetric: MetricEntity = {
@@ -1081,6 +1189,7 @@ FROM pg_tablespace`,
       templateId: firstTemplateId,
       templateName: firstTemplateName,
       templateIds,
+      databaseEngineId: metricData.databaseEngineId || null,
       isEnabled: metricData.isEnabled !== false,
       metricQueryType: metricData.metricQueryType || 1,
       thresholdsConfig: metricData.thresholdsConfig || null,
@@ -1088,7 +1197,10 @@ FROM pg_tablespace`,
       updatedAt: new Date().toISOString(),
     };
     this.metrics = [newMetric, ...this.metrics];
-    return newMetric;
+    return {
+      ...newMetric,
+      databaseEngine: newMetric.databaseEngineId ? (this.databaseEngines.find((e) => e.id === newMetric.databaseEngineId) || null) : null,
+    };
   }
 
   async deleteMetric(id: string): Promise<boolean> {

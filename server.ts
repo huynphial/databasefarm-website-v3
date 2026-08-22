@@ -91,6 +91,119 @@ async function startServer() {
     }
   });
 
+  app.post('/api/users', async (req, res) => {
+    try {
+      const saved = await repo.saveUser(req.body);
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req);
+      await repo.addAuditLog({
+        userId,
+        clientIp,
+        actionType: 'CREATE',
+        targetEntity: 'USER',
+        targetId: saved.id,
+        details: `Created user account for "${saved.username}" with role ${saved.role}`,
+      });
+      res.status(201).json(saved);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put('/api/users/:id', async (req, res) => {
+    try {
+      const saved = await repo.saveUser({ ...req.body, id: req.params.id });
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req);
+      
+      let details = `Updated user account config for "${saved.username}"`;
+      if (req.body.password) {
+        details += ` (Password Reset/Update)`;
+      }
+      if (req.body.isLocked !== undefined) {
+        details += ` (Account ${saved.isLocked ? 'Locked' : 'Unlocked'})`;
+      }
+
+      await repo.addAuditLog({
+        userId,
+        clientIp,
+        actionType: 'UPDATE',
+        targetEntity: 'USER',
+        targetId: saved.id,
+        details,
+      });
+      res.json(saved);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/users/:id', async (req, res) => {
+    try {
+      const users = await repo.getUsers();
+      const targetUser = users.find((u) => u.id === req.params.id);
+      const username = targetUser ? targetUser.username : req.params.id;
+
+      await repo.deleteUser(req.params.id);
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req);
+      await repo.addAuditLog({
+        userId,
+        clientIp,
+        actionType: 'DELETE',
+        targetEntity: 'USER',
+        targetId: req.params.id,
+        details: `Removed user account "${username}" (ID: ${req.params.id})`,
+      });
+      res.json({ success: true, id: req.params.id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ success: false, message: 'Username and password are required.' });
+      }
+      const result = await repo.verifyUserPassword(username, password);
+      if (!result.success || !result.user) {
+        await repo.addAuditLog({
+          userId: username,
+          clientIp: getClientIp(req),
+          actionType: 'LOGIN_FAILED',
+          targetEntity: 'AUTH',
+          details: `Authentication failed: ${result.message || 'Invalid credentials'}`,
+        });
+        return res.status(401).json(result);
+      }
+
+      await repo.addAuditLog({
+        userId: result.user.username,
+        clientIp: getClientIp(req),
+        actionType: 'LOGIN_SUCCESS',
+        targetEntity: 'AUTH',
+        targetId: result.user.id,
+        details: `User "${result.user.username}" authenticated successfully via dynamic storage`,
+      });
+
+      res.json({
+        success: true,
+        user: {
+          id: result.user.id,
+          username: result.user.username,
+          role: result.user.role,
+          isLocked: result.user.isLocked,
+          fullName: result.user.username === 'admin' ? 'System Administrator' : result.user.username === 'viewer' ? 'Operations Viewer' : `${result.user.username.charAt(0).toUpperCase() + result.user.username.slice(1)} User`,
+          email: `${result.user.username}@databasefarm.internal`,
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Databases API
   app.get('/api/databases', async (req, res) => {
     try {

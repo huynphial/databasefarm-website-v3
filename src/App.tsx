@@ -753,6 +753,7 @@ function MainAppContent() {
             <MetricsView
               metrics={metrics}
               templates={templates}
+              databaseEngines={databaseEngines}
               userRole={currentUser.role}
               showInfoTips={systemSettings.showInfoTips !== false}
               onSaveMetric={handleSaveMetric}
