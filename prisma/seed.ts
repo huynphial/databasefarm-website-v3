@@ -822,23 +822,23 @@ async function main() {
       FROM metric_template_mappings;
     `);
     await p.$executeRawUnsafe(`
-      CREATE OR REPLACE VIEW view_metric_data_points AS
+      CREATE OR REPLACE VIEW \`view_metric_data_points\` AS
       SELECT 
-        mdp.id, 
-        mdp.database_id, 
-        d.name AS database_name, 
-        d.host AS database_ip, 
-        d.port AS database_port, 
-        mdp.metric_id, 
-        m.name AS metric_name, 
-        m.frequencyMinutes AS frequency, 
-        mdp.object_name, 
-        mdp.attribute_name, 
-        mdp.value, 
-        mdp.measured_at 
-      FROM metric_data_points mdp
-      LEFT JOIN databases d ON mdp.database_id = d.id
-      LEFT JOIN metrics m ON mdp.metric_id = m.id;
+        \`mdp\`.\`id\`, 
+        \`mdp\`.\`database_id\`, 
+        \`d\`.\`name\` AS \`database_name\`, 
+        \`d\`.\`host\` AS \`database_ip\`, 
+        \`d\`.\`port\` AS \`database_port\`, 
+        \`mdp\`.\`metric_id\`, 
+        \`m\`.\`name\` AS \`metric_name\`, 
+        \`m\`.\`frequencyMinutes\` AS \`frequency\`, 
+        \`mdp\`.\`object_name\`, 
+        \`mdp\`.\`attribute_name\`, 
+        \`mdp\`.\`value\`, 
+        \`mdp\`.\`measured_at\` 
+      FROM \`metric_data_points\` \`mdp\`
+      LEFT JOIN \`databases\` \`d\` ON \`mdp\`.\`database_id\` = \`d\`.\`id\`
+      LEFT JOIN \`metrics\` \`m\` ON \`mdp\`.\`metric_id\` = \`m\`.\`id\`;
     `);
     console.log('✅ Analytical views created successfully.');
   } catch (err: any) {
