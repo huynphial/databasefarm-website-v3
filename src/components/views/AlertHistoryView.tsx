@@ -1,0 +1,446 @@
+import React, { useState, useMemo } from 'react';
+import { History, Search, Calendar, Server, Filter, RefreshCw, CheckCircle2, Clock, Zap, Database } from 'lucide-react';
+import { AlertHistoryEntity, DatabaseEntity } from '../../types';
+import { DB_ENGINES } from '../../config/dbEngines';
+import { DataTable, Column } from '../tables/DataTable';
+import { formatTimeVN, cn } from '../../lib/utils';
+import { useToast } from '../ui/Toast';
+
+interface AlertHistoryViewProps {
+  alertHistory: AlertHistoryEntity[];
+  databases: DatabaseEntity[];
+  onRefresh: () => void;
+  showInfoTips?: boolean;
+}
+
+export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
+  alertHistory,
+  databases,
+  onRefresh,
+  showInfoTips = true,
+}) => {
+  const { toast } = useToast();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  // Compute 30 days ago and today as default date range
+  const defaultToDate = useMemo(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  }, []);
+
+  const defaultFromDate = useMemo(() => {
+    const d = new Date(Date.now() - 30 * 86400000);
+    return d.toISOString().split('T')[0];
+  }, []);
+
+  // Filter States
+  const [fromDate, setFromDate] = useState<string>(defaultFromDate);
+  const [toDate, setToDate] = useState<string>(defaultToDate);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDbType, setSelectedDbType] = useState<string>('ALL');
+  const [selectedDbId, setSelectedDbId] = useState<string>('ALL');
+  const [selectedLevel, setSelectedLevel] = useState<string>('ALL');
+
+  // Quick Presets
+  const applyPreset = (days: number | 'ALL') => {
+    if (days === 'ALL') {
+      setFromDate('');
+      setToDate('');
+    } else {
+      const to = new Date().toISOString().split('T')[0];
+      const from = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+      setFromDate(from);
+      setToDate(to);
+    }
+    setCurrentPage(1);
+  };
+
+  // Filter databases based on selected database engine type for the dropdown
+  const filteredDatabasesForDropdown = useMemo(() => {
+    if (selectedDbType === 'ALL') return databases;
+    return databases.filter((db) => db.dbType.toUpperCase() === selectedDbType.toUpperCase());
+  }, [databases, selectedDbType]);
+
+  // Database ID to DB entity map for quick type resolution
+  const dbMap = useMemo(() => {
+    const map = new Map<string, DatabaseEntity>();
+    databases.forEach((db) => map.set(db.id, db));
+    return map;
+  }, [databases]);
+
+  const filteredHistory = useMemo(() => {
+    return alertHistory.filter((item) => {
+      // Date Range Filter (inclusive of entire days)
+      if (fromDate) {
+        const itemDate = new Date(item.createdAt).toISOString().split('T')[0];
+        if (itemDate < fromDate) return false;
+      }
+      if (toDate) {
+        const itemDate = new Date(item.createdAt).toISOString().split('T')[0];
+        if (itemDate > toDate) return false;
+      }
+
+      // DB Type Filter
+      if (selectedDbType !== 'ALL') {
+        const db = dbMap.get(item.dbId);
+        if (!db || db.dbType.toUpperCase() !== selectedDbType.toUpperCase()) {
+          return false;
+        }
+      }
+
+      // Search Term Filter
+      const matchesSearch =
+        item.dbName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.metricName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.clearedByName && item.clearedByName.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const matchesDb = selectedDbId === 'ALL' || item.dbId === selectedDbId;
+      const matchesLevel = selectedLevel === 'ALL' || item.alertLevel === selectedLevel;
+
+      return matchesSearch && matchesDb && matchesLevel;
+    });
+  }, [alertHistory, fromDate, toDate, searchTerm, selectedDbType, selectedDbId, selectedLevel, dbMap]);
+
+  const totalPages = Math.ceil(filteredHistory.length / pageSize) || 1;
+  const paginatedData = filteredHistory.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const columns: Column<AlertHistoryEntity>[] = [
+    {
+      header: 'State',
+      width: '120px',
+      cell: (row) => {
+        const state = row.resolutionStatus || 'CLOSED';
+        const isUserCleared = !!row.clearedByName && row.clearedByName !== 'System Auto-Clear';
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded shadow-2xs">
+            <CheckCircle2 className="w-2.5 h-2.5 text-slate-500" />
+            {isUserCleared ? 'CLEARED_BY_USER' : state}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Severity',
+      accessorKey: 'alertLevel',
+      width: '110px',
+      cell: (row) => {
+        const styles = {
+          DOWN: 'bg-rose-50 text-rose-700 border-rose-200',
+          CRITICAL: 'bg-rose-50 text-rose-700 border-rose-200',
+          HIGH: 'bg-orange-50 text-orange-700 border-orange-200',
+          WARN: 'bg-amber-50 text-amber-700 border-amber-200',
+        }[row.alertLevel] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+        return (
+          <span className={cn('px-2 py-0.5 border rounded text-[10px] font-bold tracking-wider inline-block', styles)}>
+            {row.alertLevel}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Database Instance',
+      accessorKey: 'dbName',
+      width: '180px',
+      cell: (row) => {
+        const db = dbMap.get(row.dbId);
+        return (
+          <div>
+            <div className="font-semibold text-slate-900 text-xs flex items-center gap-1.5">
+              <Server className="w-3 h-3 text-slate-400" />
+              {row.dbName}
+            </div>
+            {db && (
+              <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-slate-100 border border-slate-200 text-slate-600 mt-0.5 inline-block">
+                {db.dbType}
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Metric',
+      accessorKey: 'metricName',
+      width: '180px',
+      cell: (row) => <span className="text-slate-800 text-xs font-semibold">{row.metricName}</span>,
+    },
+    {
+      header: 'Incident Message',
+      accessorKey: 'message',
+      cell: (row) => (
+        <span className="text-slate-600 text-xs leading-relaxed block max-w-md">
+          {row.message}
+        </span>
+      ),
+    },
+    {
+      header: 'Dispatch',
+      width: '120px',
+      cell: (row) => {
+        const isDispatched = row.dispatchStatus === 'DISPATCHED' || !row.dispatchStatus;
+        return isDispatched ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+            DISPATCHED
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
+            NOT_DISPATCHED
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Raised At',
+      accessorKey: 'createdAt',
+      width: '150px',
+      cell: (row) => (
+        <span className="text-slate-500 text-xs font-mono">{formatTimeVN(row.createdAt)}</span>
+      ),
+    },
+    {
+      header: 'Cleared At / Resolver',
+      accessorKey: 'clearedAt',
+      width: '180px',
+      cell: (row) => (
+        <div>
+          <div className="text-emerald-700 text-xs font-mono flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            {formatTimeVN(row.clearedAt)}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            By: <span className="text-slate-700 font-medium">{row.clearedByName || 'System Auto-Clear'}</span>
+          </div>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="p-6 sm:p-8 flex-1 flex flex-col gap-6 overflow-y-auto bg-slate-50/50">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <History className="w-5 h-5 text-indigo-600" />
+            Historical Alert Audit Log
+          </h2>
+          <p className="text-xs text-slate-500">
+            Archived and cleared incidents recorded in storage database ({filteredHistory.length} match filters)
+          </p>
+        </div>
+
+        <button
+          onClick={() => {
+            onRefresh();
+            toast({ title: 'Refreshed', description: 'Alert history reloaded from storage.', type: 'info' });
+          }}
+          className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs px-3.5 py-1.5 rounded-lg border border-slate-300 font-medium transition-colors shadow-2xs cursor-pointer"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Refresh Log
+        </button>
+      </div>
+
+      {/* Query Optimization Info Banner */}
+      {showInfoTips && (
+        <div className="p-3 bg-indigo-50/60 border border-indigo-200/80 rounded-xl flex items-center justify-between text-xs text-indigo-900 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>
+              <strong>Query Performance Optimization:</strong> Date range filtering defaults to the last 30 days to reduce database query load and avoid full-table scans.
+            </span>
+          </div>
+          <div className="flex items-center gap-1 text-[11px] font-mono font-semibold bg-white px-2.5 py-0.5 rounded border border-indigo-200">
+            <Calendar className="w-3 h-3 text-indigo-500" />
+            {fromDate || 'Start'} → {toDate || 'Present'}
+          </div>
+        </div>
+      )}
+
+      {/* Filter Controls Bar */}
+      <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3 shadow-2xs">
+        {/* Row 1: Date Range Filter and Presets */}
+        <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex flex-wrap items-center gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                From Date
+              </label>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => {
+                  setFromDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                To Date
+              </label>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => {
+                  setToDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
+              />
+            </div>
+          </div>
+
+          {/* Quick Presets */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-medium text-slate-400 mr-1">Presets:</span>
+            <button
+              type="button"
+              onClick={() => applyPreset(7)}
+              className="px-2.5 py-1 text-xs rounded bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-medium cursor-pointer"
+            >
+              7 Days
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset(30)}
+              className="px-2.5 py-1 text-xs rounded bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors font-semibold cursor-pointer"
+            >
+              30 Days (Default)
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset(90)}
+              className="px-2.5 py-1 text-xs rounded bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-medium cursor-pointer"
+            >
+              90 Days
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('ALL')}
+              className="px-2.5 py-1 text-xs rounded bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-medium cursor-pointer"
+            >
+              All Time
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: DB Type, DB, Severity, and Keywords */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Database Type Filter */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
+              <Database className="w-3.5 h-3.5 text-indigo-600" />
+              Database Type
+            </label>
+            <select
+              value={selectedDbType}
+              onChange={(e) => {
+                setSelectedDbType(e.target.value);
+                setSelectedDbId('ALL');
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
+            >
+              <option value="ALL">All Database Types ({databases.length})</option>
+              {DB_ENGINES.map((engine) => {
+                const count = databases.filter((db) => db.dbType.toUpperCase() === engine.code.toUpperCase()).length;
+                return (
+                  <option key={engine.code} value={engine.code}>
+                    {engine.name} ({count})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
+              <Server className="w-3.5 h-3.5 text-indigo-600" />
+              Target Database
+            </label>
+            <select
+              value={selectedDbId}
+              onChange={(e) => {
+                setSelectedDbId(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
+            >
+              <option value="ALL">All Databases ({filteredDatabasesForDropdown.length})</option>
+              {filteredDatabasesForDropdown.map((db) => (
+                <option key={db.id} value={db.id}>
+                  {db.name} ({db.dbType})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-indigo-600" />
+              Alert Severity
+            </label>
+            <select
+              value={selectedLevel}
+              onChange={(e) => {
+                setSelectedLevel(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
+            >
+              <option value="ALL">All Severities</option>
+              <option value="CRITICAL">Critical</option>
+              <option value="HIGH">High</option>
+              <option value="WARN">Warning</option>
+              <option value="DOWN">Down</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
+              <Search className="w-3.5 h-3.5 text-indigo-600" />
+              Search Keywords
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search message, DB, or user..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-3 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="flex-1">
+        <DataTable
+          columns={columns}
+          data={paginatedData}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalCount={filteredHistory.length}
+          pageSize={pageSize}
+          pageSizeOptions={[10, 25, 50, 100]}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+          emptyMessage="No historical alerts match the specified date range and criteria."
+        />
+      </div>
+    </div>
+  );
+};
+

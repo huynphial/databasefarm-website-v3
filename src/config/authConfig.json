@@ -1,0 +1,44 @@
+{
+  "session": {
+    "inactivityTimeoutMinutes": 30,
+    "warningThresholdSeconds": 60,
+    "activityEvents": [
+      "mousedown",
+      "mousemove",
+      "keydown",
+      "scroll",
+      "touchstart",
+      "click"
+    ]
+  },
+  "roles": {
+    "ADMIN": {
+      "name": "Admin",
+      "description": "Full read-and-write permissions (CRUD access across all configuration tabs)",
+      "permissions": ["READ", "WRITE", "DELETE", "EXECUTE", "CLEAR_ALERTS"]
+    },
+    "VIEWER": {
+      "name": "Viewer",
+      "description": "Read-only access to monitoring dashboards, metrics, logs, and database status",
+      "permissions": ["READ"]
+    }
+  },
+  "configuredUsers": [
+    {
+      "id": "usr-admin-01",
+      "username": "admin",
+      "password": "AdminPassword#2026",
+      "role": "ADMIN",
+      "fullName": "System Administrator",
+      "email": "admin@databasefarm.internal"
+    },
+    {
+      "id": "usr-viewer-02",
+      "username": "viewer",
+      "password": "ViewerPassword#2026",
+      "role": "VIEWER",
+      "fullName": "Operations Viewer",
+      "email": "viewer@databasefarm.internal"
+    }
+  ]
+}

@@ -1,0 +1,492 @@
+// =============================================================================
+// Prisma Schema for Enterprise Database Monitoring System (DatabaseFarm)
+// Storage database: Internal MySQL instance for configuration, alerts, and metric history.
+// =============================================================================
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+/// UserRole Enum: Controls administrative access levels.
+/// - ADMIN: Full read/write management permissions for database nodes, templates, metrics, and settings.
+/// - VIEWER: Read-only access to dashboard monitoring stats, active alerts, and telemetry logs.
+enum Role {
+  ADMIN
+  VIEWER
+}
+
+/// DbType Enum: Supported relational database engines.
+/// - ORACLE: Oracle Database Server (11g/12c/19c/21c).
+/// - MYSQL: MySQL Server & MariaDB.
+/// - POSTGRES: PostgreSQL Database.
+/// - MSSQL: Microsoft SQL Server.
+enum DbType {
+  ORACLE
+  MYSQL
+  POSTGRES
+  MSSQL
+}
+
+/// ValueType Enum: Metric execution result evaluation types.
+/// - NUMBER: Numeric values evaluated using relational operators (e.g. >=, <=).
+/// - STRING: Text result values evaluated using string operators (e.g. CONTAINS, DOES_NOT_CONTAIN, =, !=).
+/// - BOOLEAN: Boolean flag evaluation (e.g. =, !=).
+enum ValueType {
+  NUMBER
+  STRING
+  BOOLEAN
+}
+
+/// AlertLevel Enum: Alert severity classification.
+/// - WARN: Low-priority warning alert.
+/// - HIGH: High-priority performance breach.
+/// - CRITICAL: Critical operational threshold breach.
+/// - DOWN: Target database endpoint unreachable or connection failure.
+enum AlertLevel {
+  WARN
+  HIGH
+  CRITICAL
+  DOWN
+}
+
+// -----------------------------------------------------------------------------
+// Core Models & System Entities
+// -----------------------------------------------------------------------------
+
+/// User Model: Stores authentication details and access roles.
+model User {
+  /// Unique identifier UUID for user account.
+  id           String         @id @default(uuid())
+  /// Unique login username.
+  username     String         @unique
+  /// Bcrypt hashed account password string.
+  passwordHash String
+  /// Role-based access level (ADMIN | VIEWER).
+  role         Role           @default(VIEWER)
+  /// Timestamp of user record creation.
+  createdAt    DateTime       @default(now())
+  /// Timestamp of last record update.
+  updatedAt    DateTime       @updatedAt
+  
+  /// Relations: Alert history cleared by this administrative user.
+  clearedAlerts AlertHistory[] @relation("ClearedByUser")
+
+  @@map("users")
+}
+
+/// DatabaseGroup Model: Logical grouping of monitored databases with shared alerting rules.
+model DatabaseGroup {
+  /// Unique identifier UUID for database group.
+  id               String                  @id @default(uuid())
+  /// Unique group name (e.g., "Production Core", "Payment Gateway").
+  name             String                  @unique
+  /// Detailed description of group scope and service level requirements.
+  description      String?                 @db.Text
+  
+  /// Active Alert Notification Method IDs (comma-separated list of IDs)
+  alertMethodIds   String?                 @db.Text @map("alert_method_ids")
+  /// Target Sender IDs / Destinations
+  senderIds        String?                 @db.Text @map("sender_ids")
+  
+  /// Timestamp of group creation.
+  createdAt        DateTime                @default(now())
+  /// Timestamp of last group update.
+  updatedAt        DateTime                @updatedAt
+  
+  /// Relations: Many-to-Many mappings with Databases and Templates.
+  databases        DatabaseGroupMapping[]
+  templates        GroupTemplateMapping[]
+
+  @@map("database_groups")
+}
+
+/// Database Model: Individual target database instance configured for health checks and telemetry.
+model Database {
+  /// Unique identifier UUID for database instance.
+  id                String                  @id @default(uuid())
+  /// User-friendly name identifier (e.g., "ERP_PROD_ORA", "CRM_PORTAL_MY").
+  name              String
+  /// Database engine architecture (ORACLE | MYSQL | POSTGRES | MSSQL).
+  dbType            DbType
+  /// Hostname or IP address of database server.
+  host              String
+  /// TCP listening port.
+  port              Int
+  
+  /// DB account username.
+  username          String?
+  /// AES-256 encrypted database password string.
+  passwordEncrypted String?                 @db.Text
+  
+  /// JSON configuration object (e.g. database name, SID, service name, SSL mode).
+  connectionConfig  Json
+  /// Current operational status (UP | WARNING | DOWN).
+  status            String                  @default("UP")
+  /// Timestamp of the most recent automated health check execution.
+  lastCheckAt       DateTime?
+  /// Toggle state to enable or pause active monitoring for this instance.
+  isEnabled         Boolean                 @default(true)
+  /// Timestamp of record creation.
+  createdAt         DateTime                @default(now())
+  /// Timestamp of last record update.
+  updatedAt         DateTime                @updatedAt
+
+  /// Relations: Mappings with Groups, Metrics, Active Alerts, and History.
+  groups            DatabaseGroupMapping[]
+  metrics           DatabaseMetricMapping[]
+  activeAlerts      ActiveAlert[]
+  alertHistory      AlertHistory[]
+  metricHistory     MetricValueHistory[]
+  metricDataPoints  MetricDataPoint[]
+
+  @@map("databases")
+}
+
+/// Template Model: Reusable collection of SQL metrics targeted at specific database engines.
+model Template {
+  /// Unique identifier UUID for monitoring template.
+  id          String                 @id @default(uuid())
+  /// Unique template title (e.g., "Oracle Enterprise Standard").
+  name        String                 @unique
+  /// Operational description of template scope.
+  description String?                @db.Text
+  
+  /// Target database engine compatibility (ORACLE | MYSQL | POSTGRES | MSSQL or null for universal).
+  targetDbType DbType?
+  
+  /// Timestamp of template creation.
+  createdAt   DateTime               @default(now())
+  /// Timestamp of last template update.
+  updatedAt   DateTime               @updatedAt
+
+  /// Relations: Associated SQL metrics and group mappings.
+  metrics     Metric[]
+  groups      GroupTemplateMapping[]
+
+  @@map("templates")
+}
+
+/// Metric Model: Specific SQL query definition, threshold limits, and relational evaluation rules.
+model Metric {
+  /// Unique identifier UUID for metric.
+  id                 String                  @id @default(uuid())
+  /// Metric display name (e.g., "Tablespace Usage %", "Active Sessions").
+  name               String
+  /// Custom SQL query executed on target database instance.
+  sqlQuery           String                  @db.Text
+  /// Expected SQL return value type (NUMBER | STRING | BOOLEAN).
+  valueType          ValueType               @default(NUMBER)
+  /// Relational comparison operator for evaluation (>=, <=, =, !=, CONTAINS, DOES_NOT_CONTAIN).
+  relationalOperator String                  @default(">=") @map("relational_operator")
+  /// Warning threshold value limit.
+  thresholdWarn      String?
+  /// High severity threshold value limit.
+  thresholdHigh      String?
+  /// Critical threshold value limit.
+  thresholdCritical  String?
+  /// Redesigned query types: Type 1, 2, or 3.
+  metricQueryType    Int?                    @default(1) @map("metric_query_type")
+  /// Reorganized JSON thresholds configuration.
+  thresholdsConfig   Json?                   @map("thresholds_config")
+  /// Polling frequency interval in minutes.
+  frequencyMinutes   Int                     @default(5)
+  /// Foreign key referencing parent template.
+  templateId         String?
+  /// Toggle state to enable or disable metric evaluation.
+  isEnabled          Boolean                 @default(true)
+  /// Timestamp of metric creation.
+  createdAt          DateTime                @default(now())
+  /// Timestamp of last metric update.
+  updatedAt          DateTime                @updatedAt
+
+  /// Relations: Parent template and associated database execution mappings.
+  template           Template?               @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  databases          DatabaseMetricMapping[]
+  activeAlerts       ActiveAlert[]
+  alertHistory       AlertHistory[]
+  metricHistory      MetricValueHistory[]
+  metricDataPoints   MetricDataPoint[]
+
+  @@map("metrics")
+}
+
+// -----------------------------------------------------------------------------
+// Mapping Tables (Many-to-Many with Cascade Deletes)
+// -----------------------------------------------------------------------------
+
+/// DatabaseGroupMapping Model: Junction table mapping databases to database groups.
+model DatabaseGroupMapping {
+  /// FK referencing Database ID.
+  databaseId String
+  /// FK referencing DatabaseGroup ID.
+  groupId    String
+  /// Timestamp when mapping was created.
+  createdAt  DateTime @default(now())
+
+  database Database      @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  group    DatabaseGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([databaseId, groupId])
+  @@map("database_group_mappings")
+}
+
+/// GroupTemplateMapping Model: Junction table mapping groups to monitoring templates.
+model GroupTemplateMapping {
+  /// FK referencing DatabaseGroup ID.
+  groupId    String
+  /// FK referencing Template ID.
+  templateId String
+  /// Timestamp when mapping was created.
+  createdAt  DateTime @default(now())
+
+  group    DatabaseGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  template Template      @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, templateId])
+  @@map("group_template_mappings")
+}
+
+/// DatabaseMetricMapping Model: Junction table mapping databases to individual metrics.
+model DatabaseMetricMapping {
+  /// FK referencing Database ID.
+  databaseId String
+  /// FK referencing Metric ID.
+  metricId   String
+  /// Timestamp when mapping was created.
+  createdAt  DateTime @default(now())
+
+  database Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  metric   Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
+
+  @@id([databaseId, metricId])
+  @@map("database_metric_mappings")
+}
+
+// -----------------------------------------------------------------------------
+// Alerting & Metric History Logs
+// -----------------------------------------------------------------------------
+
+/// ActiveAlert Model: Un-cleared active threshold breaches and connectivity failures.
+model ActiveAlert {
+  /// Unique identifier UUID for active alert.
+  id         String     @id @default(uuid())
+  /// FK referencing Database ID.
+  dbId       String
+  /// FK referencing Metric ID.
+  metricId   String
+  /// Severity alert level (WARN | HIGH | CRITICAL | DOWN).
+  alertLevel AlertLevel
+  /// Descriptive alert message and context output.
+  message    String     @db.Text
+  /// Metric value captured at time of breach.
+  value      String?
+  /// Threshold value breached.
+  threshold  String?
+  /// Timestamp when alert was triggered.
+  createdAt  DateTime   @default(now())
+
+  database Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
+  metric   Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
+
+  /// Constraint: Ensures unique active alert record per database/metric pair.
+  @@unique([dbId, metricId])
+  @@map("active_alerts")
+}
+
+/// AlertHistory Model: Historical resolved or manually cleared alerts log.
+model AlertHistory {
+  /// Unique identifier UUID for alert history log.
+  id          String     @id @default(uuid())
+  /// FK referencing Database ID.
+  dbId        String
+  /// FK referencing Metric ID.
+  metricId    String
+  /// Severity alert level (WARN | HIGH | CRITICAL | DOWN).
+  alertLevel  AlertLevel
+  /// Alert message details.
+  message     String     @db.Text
+  /// Metric value recorded.
+  value       String?
+  /// Threshold limit.
+  threshold   String?
+  /// Timestamp when alert originally occurred.
+  createdAt   DateTime
+  /// Timestamp when alert was cleared/resolved.
+  clearedAt   DateTime   @default(now())
+  /// FK referencing user who cleared the alert (null for auto-cleared).
+  clearedById String?
+
+  database  Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
+  metric    Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  clearedBy User?    @relation("ClearedByUser", fields: [clearedById], references: [id], onDelete: SetNull)
+
+  @@index([dbId, createdAt])
+  @@map("alert_history")
+}
+
+/// MetricValueHistory Model: Time-series telemetry store for query execution values.
+model MetricValueHistory {
+  /// Unique identifier UUID for history record.
+  id        String   @id @default(uuid())
+  /// FK referencing Database ID.
+  dbId      String
+  /// FK referencing Metric ID.
+  metricId  String
+  /// Recorded metric value output string.
+  value     String
+  /// Execution status string (e.g. "OK", "BREACH").
+  status    String?
+  /// Timestamp of telemetry capture.
+  createdAt DateTime @default(now())
+
+  database Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
+  metric   Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
+
+  @@index([dbId, metricId, createdAt(sort: Desc)])
+  @@map("metric_value_history")
+}
+
+/// MetricDataPoint Model: Redesigned multidimensional time-series store for monitored tuples.
+model MetricDataPoint {
+  id            String   @id @default(uuid())
+  databaseId    String   @map("database_id")
+  metricId      String   @map("metric_id")
+  objectName    String?  @default("GLOBAL") @map("object_name")
+  attributeName String?  @map("attribute_name")
+  value         String
+  measuredAt    DateTime @default(now()) @map("measured_at")
+
+  database      Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  metric        Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
+
+  @@index([databaseId, metricId, measuredAt(sort: Desc)])
+  @@map("metric_data_points")
+}
+
+// -----------------------------------------------------------------------------
+// System Settings Model
+// -----------------------------------------------------------------------------
+
+/// SystemSettings Model: Global system configuration, collector parameters, and UI preferences.
+model SystemSettings {
+  /// Primary key string identifier ("default").
+  id                                  String   @id @default("default")
+  /// Collector API service toggle.
+  apiCollectorEnabled                 Boolean  @default(true)
+  /// Target endpoint URL for Collector API health checks.
+  collectorEndpoint                   String   @default("http://localhost:3000/api/collector/mock-health")
+  /// Security API key header for collector ingest.
+  collectorApiKey                     String   @default("dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3")
+  /// Collector polling frequency interval in seconds.
+  collectorPollIntervalSeconds        Int      @default(60)
+  /// Ingest batch size limit.
+  collectorBatchSize                  Int      @default(250)
+  /// Timeout limit for collector requests in milliseconds.
+  collectorTimeoutMs                  Int      @default(5000)
+  /// Retry policy string.
+  collectorRetryPolicy                String   @default("Exponential Backoff (Max 5 retries)")
+  /// Global alert threshold calculation mode (STRICT | STANDARD | RELAXED).
+  globalAlertThresholdMode            String   @default("STANDARD")
+  /// Maximum query execution retry attempts.
+  maxRetryAttempts                    Int      @default(3)
+  /// Notification dispatch batch interval in seconds.
+  notificationDispatchIntervalSeconds Int      @default(30)
+  /// Default timezone string for display and logs.
+  defaultTimezone                     String   @default("Asia/Ho_Chi_Minh (UTC+7)")
+  /// Telemetry data retention period in days.
+  dataRetentionDays                   Int      @default(90)
+  /// Flag to automatically clear active alerts when status recovers to normal.
+  autoClearResolvedAlerts             Boolean  @default(true)
+  /// Central MySQL DB sync toggle.
+  centralDbSyncEnabled                Boolean  @default(true)
+  /// Connection string for central MySQL sync database.
+  centralDbConnectionString           String   @db.Text
+  /// Global UI Preference: Toggle visibility of Info/Tips boxes across the web interface (default: true).
+  showInfoTips                        Boolean  @default(true) @map("show_info_tips")
+  /// Timestamp when settings were last updated.
+  updatedAt                           DateTime @updatedAt
+  /// Username or identifier of user who performed last update.
+  updatedBy                           String?
+
+  @@map("system_settings")
+}
+
+/// AuditLog Model: Records user activity actions, login events, CRUD operations, and configuration changes.
+model AuditLog {
+  /// Unique identifier UUID for audit record.
+  id           String   @id @default(uuid())
+  /// Account username or user identifier performing the action.
+  userId       String
+  /// Client IP address recorded from X-Forwarded-For or socket request IP.
+  clientIp     String
+  /// Type of action performed (e.g. LOGIN, CREATE, UPDATE, DELETE, CONFIG_CHANGE).
+  actionType   String
+  /// Target domain entity or component name (e.g. DATABASE, METRIC, TEMPLATE, GROUP, SYSTEM_SETTINGS, AUTH).
+  targetEntity String
+  /// Target record identifier or resource name.
+  targetId     String?
+  /// Human-readable description or details of the action performed.
+  details      String?  @db.Text
+  /// Timestamp when the user activity occurred.
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([actionType, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+/// DatabaseEngine Model: Dynamic registry of supported database engine architectures.
+model DatabaseEngine {
+  id          String   @id @default(uuid())
+  dbCode      String   @unique @map("db_code")
+  dbName      String   @map("db_name")
+  dbColor     String   @default("#2563EB") @map("db_color")
+  defaultPort Int      @default(5432) @map("default_port")
+  statusOnOff String   @default("ACTIVE") @map("status_on_off")
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("database_engines")
+}
+
+/// AlertNotificationMethod Model: Protocol dispatcher parameters for alerting channels.
+model AlertNotificationMethod {
+  id          String   @id @default(uuid())
+  name        String
+  type        String   @default("EMAIL")
+  configJson  Json     @map("config_json")
+  statusOnOff String   @default("ACTIVE") @map("status_on_off")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("alert_notification_methods")
+}
+
+/// AlertNotificationLog Model: Records historical notifications sent to users/external systems.
+model AlertNotificationLog {
+  id             String   @id @default(uuid())
+  timestamp      DateTime @default(now())
+  alertId        String   @map("alert_id")
+  dbId           String   @map("db_id")
+  dbName         String   @map("db_name")
+  metricName     String   @map("metric_name")
+  attributeName  String?  @map("attribute_name")
+  alertLevel     String   @map("alert_level")
+  dispatchMethod String   @map("dispatch_method")
+  dispatchType   String   @map("dispatch_type")
+  senderIds      String   @db.Text @map("sender_ids")
+  status         String   @default("DISPATCHED")
+  errorMessage   String?  @db.Text @map("error_message")
+  payloadSummary String?  @db.Text @map("payload_summary")
+  latencyMs      Int?     @map("latency_ms")
+
+  @@index([timestamp(sort: Desc)])
+  @@map("alert_notification_logs")
+}
+

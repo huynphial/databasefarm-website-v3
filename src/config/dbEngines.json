@@ -1,0 +1,58 @@
+[
+  {
+    "code": "ORACLE",
+    "name": "Oracle",
+    "defaultPort": 1521,
+    "badgeColor": "text-orange-700 bg-orange-50 border-orange-200",
+    "color": "#EA580C",
+    "description": "Enterprise relational database management system developed by Oracle Corporation."
+  },
+  {
+    "code": "MYSQL",
+    "name": "MySQL",
+    "defaultPort": 3306,
+    "badgeColor": "text-emerald-700 bg-emerald-50 border-emerald-200",
+    "color": "#16A34A",
+    "description": "Open-source relational database management system powered by Oracle."
+  },
+  {
+    "code": "POSTGRES",
+    "name": "PostgreSQL",
+    "defaultPort": 5432,
+    "badgeColor": "text-blue-700 bg-blue-50 border-blue-200",
+    "color": "#2563EB",
+    "description": "Powerful, open source object-relational database system with strong compliance."
+  },
+  {
+    "code": "MSSQL",
+    "name": "Microsoft SQL Server",
+    "defaultPort": 1433,
+    "badgeColor": "text-slate-900 bg-slate-100 border-slate-300",
+    "color": "#0F172A",
+    "description": "Enterprise relational database management system developed by Microsoft."
+  },
+  {
+    "code": "SINGLESTORE",
+    "name": "SingleStore",
+    "defaultPort": 3306,
+    "badgeColor": "text-purple-700 bg-purple-50 border-purple-200",
+    "color": "#9333EA",
+    "description": "Cloud-native, real-time distributed SQL database for transactions and analytics."
+  },
+  {
+    "code": "MONGODB",
+    "name": "MongoDB",
+    "defaultPort": 27017,
+    "badgeColor": "text-emerald-800 bg-emerald-50 border-emerald-300",
+    "color": "#059669",
+    "description": "Document-oriented NoSQL database for flexible data modeling and high availability."
+  },
+  {
+    "code": "REDIS",
+    "name": "Redis",
+    "defaultPort": 6379,
+    "badgeColor": "text-amber-700 bg-amber-50 border-amber-200",
+    "color": "#D97706",
+    "description": "In-memory data structure store used as a database, cache, message broker, and streaming engine."
+  }
+]

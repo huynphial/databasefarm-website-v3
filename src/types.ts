@@ -1,0 +1,279 @@
+export type UserRole = 'ADMIN' | 'VIEWER';
+
+export interface User {
+  id: string;
+  username: string;
+  role: UserRole;
+  createdAt?: string;
+}
+
+export type DbEngine = 'ORACLE' | 'MYSQL' | 'POSTGRES' | 'MSSQL' | 'SINGLESTORE' | 'MONGODB' | 'REDIS' | string;
+
+export interface DbEngineConfig {
+  code: string;
+  name: string;
+  defaultPort: number;
+  badgeColor?: string;
+  description?: string;
+}
+
+export interface DatabaseEngineEntity {
+  id: string;
+  dbCode: string; // e.g. 'ORACLE', 'MYSQL', 'POSTGRES', 'MSSQL', 'SINGLESTORE', 'MONGODB', 'REDIS'
+  dbName: string; // e.g. 'Oracle', 'MySQL', 'PostgreSQL', 'Microsoft SQL Server', 'SingleStore', 'MongoDB', 'Redis'
+  dbColor: string; // e.g. '#EA580C', '#16A34A', '#2563EB', '#0F172A', '#9333EA', '#059669', '#D97706'
+  defaultPort: number;
+  statusOnOff: 'ACTIVE' | 'INACTIVE';
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type AlertMethodType = 'EMAIL' | 'TELEGRAM' | 'SLACK' | 'WEBHOOK' | 'SMS';
+
+export interface AlertNotificationMethodEntity {
+  id: string;
+  name: string;
+  type: AlertMethodType;
+  configJson: Record<string, any>; // Protocol-specific parameters e.g., SMTP servers, Bot Tokens
+  statusOnOff: 'ACTIVE' | 'INACTIVE';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type AuthMethod = 'PASSWORD' | 'AUTH_KEY' | 'TRUST';
+
+export interface DatabaseEntity {
+  id: string;
+  name: string;
+  dbType: DbEngine;
+  host: string;
+  port: number;
+  authMethod?: AuthMethod; // 'PASSWORD' | 'AUTH_KEY' | 'TRUST'
+  username?: string;
+  password?: string;
+  authKey?: string;
+  databaseName?: string;
+  environment?: 'PRODUCTION' | 'STAGING' | 'DEVELOPMENT';
+  connectionConfig: Record<string, any>;
+  groupIds: string[]; // Many-to-Many: A database can belong to multiple groups
+  metricIds?: string[]; // Inherited automatically from group templates
+  createdAt: string;
+  updatedAt: string;
+  status?: 'UP' | 'DOWN' | 'WARNING';
+  lastCheckAt?: string; // Precise date & time timestamp of the most recent health check
+  isEnabled?: boolean; // Active monitoring toggle state for database instance
+}
+
+export interface SystemSettingsEntity {
+  // API Collector Configuration
+  apiCollectorEnabled: boolean;
+  collectorEndpoint: string;
+  collectorApiKey: string;
+  collectorPollIntervalSeconds: number;
+  collectorBatchSize: number;
+  collectorTimeoutMs: number;
+  collectorRetryPolicy: string;
+  
+  // General Application Settings
+  globalAlertThresholdMode: 'STRICT' | 'STANDARD' | 'RELAXED';
+  maxRetryAttempts: number;
+  notificationDispatchIntervalSeconds: number;
+  defaultTimezone: string;
+  dataRetentionDays: number;
+  autoClearResolvedAlerts: boolean;
+  centralDbSyncEnabled: boolean;
+  centralDbConnectionString: string;
+
+  // Global UI Customization
+  showInfoTips?: boolean;
+
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+export type MetricValueType = 'NUMBER' | 'STRING' | 'BOOLEAN';
+export type RelationalOperator = '>=' | '<=' | '=' | '!=' | 'CONTAINS' | 'DOES_NOT_CONTAIN';
+
+export interface AttributeConfig {
+  attributeName: string;
+  valueType: MetricValueType; // NUMBER, STRING, BOOLEAN
+  relationalOperator: RelationalOperator; // >=, <=, =, !=, CONTAINS, DOES_NOT_CONTAIN
+  warn?: string;
+  high?: string;
+  critical?: string;
+}
+
+export interface ThresholdTopology {
+  type: 'GLOBAL' | 'PER_ATTRIBUTE' | 'OBJECT_OVERRIDE';
+  global?: {
+    warn?: string;
+    high?: string;
+    critical?: string;
+  };
+  perAttribute?: AttributeConfig[];
+  objectOverrides?: Array<{
+    objectName: string;
+    attributeName?: string;
+    warn?: string;
+    high?: string;
+    critical?: string;
+  }>;
+}
+
+export interface MetricEntity {
+  id: string;
+  name: string;
+  sqlQuery: string;
+  valueType: MetricValueType;
+  relationalOperator?: RelationalOperator; // Operator selected according to valueType
+  thresholdOperator?: RelationalOperator; // Legacy alias for relationalOperator
+  thresholdWarn?: string | null;
+  thresholdHigh?: string | null;
+  thresholdCritical?: string | null;
+  frequencyMinutes: number;
+  templateId?: string | null;
+  templateName?: string | null;
+  isEnabled: boolean; // Active monitoring toggle state within template
+  noAlertRequired?: boolean; // When true, probe collects data only without firing threshold alert notifications
+  metricQueryType?: 1 | 2 | 3; // Redesigned query types: Type 1, 2, or 3
+  thresholdsConfig?: ThresholdTopology | null; // Reorganized JSON thresholds config
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MetricDataPointEntity {
+  id: string;
+  databaseId: string;
+  databaseName?: string;
+  metricId: string;
+  metricName?: string;
+  objectName?: string | null;
+  attributeName?: string | null;
+  value: string;
+  measuredAt: string;
+}
+
+export interface RawMeasurementEntity {
+  id: string;
+  dbId: string;
+  dbName: string;
+  dbType: string;
+  metricId: string;
+  metricName: string;
+  objectName: string; // Target object identifier (e.g. "TS_DATA", "v$session", "replica_01", "INSTANCE")
+  attributeName: string; // Target attribute identifier (e.g. "used_space_pct", "active_count")
+  value: string;
+  valueType?: MetricValueType;
+  thresholdOperator?: string;
+  triggeredThreshold?: string | null; // e.g. "Warn: 80 / High: 90 / Crit: 95"
+  frequencyMinutes?: number;
+  status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'DOWN';
+  measuredAt: string;
+}
+
+export interface TemplateEntity {
+  id: string;
+  name: string;
+  description?: string | null;
+  targetDbType?: DbEngine | 'ALL'; // Engine Compatibility: strictly matches specific DB engine
+  metricIds?: string[]; // Bound metric IDs in this template
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GroupEntity {
+  id: string;
+  name: string;
+  description?: string | null;
+  databaseIds: string[]; // Many-to-Many: Databases assigned to this group
+  templateIds: string[]; // Monitoring templates applied to this group
+  
+  // Dynamic Alert Method Binding
+  alertMethodIds?: string[];
+  senderIds?: string; // Comma-separated list of target sender/recipient IDs (Telegram chat IDs, emails, SMS numbers)
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AlertSeverity = 'WARN' | 'HIGH' | 'CRITICAL' | 'DOWN';
+export type ActiveAlertStatus = 'OPEN' | 'ACKNOWLEDGED';
+export type NotificationDispatchStatus = 'NOT_DISPATCHED' | 'DISPATCHED';
+export type AlertResolutionStatus = 'CLOSED' | 'CLEARED_BY_USER' | 'AUTO_RESOLVED';
+export type NotificationDeliveryStatus = 'DISPATCHED' | 'FAILED' | 'PENDING';
+
+export interface ActiveAlertEntity {
+  id: string;
+  dbId: string;
+  dbName: string;
+  metricId: string;
+  metricName: string;
+  objectName?: string; // Measured object name e.g. 'TS_DATA', 'payment_ledger', 'replica_01'
+  alertLevel: AlertSeverity;
+  message: string;
+  status?: ActiveAlertStatus; // 'OPEN' | 'ACKNOWLEDGED'
+  dispatchStatus?: NotificationDispatchStatus; // 'NOT_DISPATCHED' | 'DISPATCHED'
+  acknowledgedAt?: string;
+  acknowledgedById?: string | null;
+  acknowledgedByName?: string | null;
+  createdAt: string;
+}
+
+export interface AlertHistoryEntity {
+  id: string;
+  dbId: string;
+  dbName: string;
+  metricId: string;
+  metricName: string;
+  objectName?: string; // Measured object name
+  alertLevel: AlertSeverity;
+  message: string;
+  resolutionStatus?: AlertResolutionStatus; // 'CLOSED' | 'CLEARED_BY_USER' | 'AUTO_RESOLVED'
+  dispatchStatus?: NotificationDispatchStatus; // 'NOT_DISPATCHED' | 'DISPATCHED'
+  createdAt: string;
+  clearedAt: string;
+  clearedById?: string | null;
+  clearedByName?: string | null;
+}
+
+export interface AlertNotificationLogEntity {
+  id: string;
+  timestamp: string;
+  alertId: string;
+  dbId: string;
+  dbName: string;
+  metricName: string;
+  attributeName?: string | null;
+  alertLevel: AlertSeverity;
+  dispatchMethod: string; // e.g. 'Telegram Bot', 'Corporate SMTP', 'Slack Alert'
+  dispatchType: AlertMethodType;
+  senderIds: string; // Target recipients e.g. '-1001234567890', 'dba-team@company.internal'
+  status: NotificationDeliveryStatus; // 'DISPATCHED' | 'FAILED' | 'PENDING'
+  errorMessage?: string | null;
+  payloadSummary?: string;
+  latencyMs?: number;
+}
+
+export interface MetricHistoryEntity {
+  id: string; // Composite key: [dbId]_[metricId]_[objectName]_[timestamp]
+  dbId: string;
+  dbName?: string;
+  metricId: string;
+  metricName?: string;
+  objectName: string; // Target object identifier (e.g. tablespace name, mount point, replica, or instance/total)
+  attributeName?: string | null; // Redesigned attribute name for multi-attribute support
+  value: string;
+  createdAt: string;
+}
+
+export interface AuditLogEntity {
+  id: string;
+  userId: string;
+  clientIp: string;
+  actionType: 'LOGIN' | 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'PAGE_VIEW' | 'CREATE' | 'UPDATE' | 'DELETE' | 'CONFIG_CHANGE';
+  targetEntity: string;
+  targetId?: string | null;
+  details?: string | null;
+  createdAt: string;
+}
