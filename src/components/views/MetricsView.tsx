@@ -89,6 +89,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     thresholdCritical: string;
     frequencyMinutes: number;
     templateId: string;
+    templateIds: string[];
     isEnabled: boolean;
     noAlertRequired: boolean;
     metricQueryType: 1 | 2 | 3;
@@ -103,6 +104,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     thresholdCritical: '95',
     frequencyMinutes: 5,
     templateId: '',
+    templateIds: [],
     isEnabled: true,
     noAlertRequired: false,
     metricQueryType: 1,
@@ -124,7 +126,8 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       thresholdHigh: '90',
       thresholdCritical: '95',
       frequencyMinutes: 5,
-      templateId: templates[0]?.id || '',
+      templateId: '',
+      templateIds: [],
       isEnabled: true,
       noAlertRequired: false,
       metricQueryType: 1,
@@ -181,6 +184,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       thresholdCritical: metric.thresholdCritical || '',
       frequencyMinutes: metric.frequencyMinutes,
       templateId: metric.templateId || '',
+      templateIds: metric.templateIds || (metric.templateId ? [metric.templateId] : []),
       isEnabled: metric.isEnabled !== false,
       noAlertRequired: metric.noAlertRequired === true,
       metricQueryType: queryType as 1 | 2 | 3,
@@ -267,7 +271,8 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       return;
     }
 
-    const selectedTemplate = templates.find((t) => t.id === formData.templateId);
+    const firstTemplateId = formData.templateIds?.[0] || null;
+    const selectedTemplate = templates.find((t) => t.id === firstTemplateId);
 
     let thresholdsConfig: any = null;
     if (formData.metricQueryType === 3) {
@@ -304,8 +309,9 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       thresholdHigh: formData.metricQueryType === 3 ? null : (formData.thresholdHigh ? formData.thresholdHigh.trim() : null),
       thresholdCritical: formData.metricQueryType === 3 ? null : (formData.thresholdCritical ? formData.thresholdCritical.trim() : null),
       frequencyMinutes: Number(formData.frequencyMinutes),
-      templateId: formData.templateId || null,
+      templateId: firstTemplateId,
       templateName: selectedTemplate?.name || null,
+      templateIds: formData.templateIds || [],
       isEnabled: formData.isEnabled,
       noAlertRequired: formData.noAlertRequired,
       metricQueryType: formData.metricQueryType,
@@ -642,7 +648,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-3">
             <div>
               <label className="block text-slate-700 font-semibold mb-1">Metric Name *</label>
               <input
@@ -654,20 +660,59 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
               />
             </div>
-            <div>
-              <label className="block text-slate-700 font-semibold mb-1">Associated Template</label>
-              <select
-                value={formData.templateId}
-                onChange={(e) => setFormData({ ...formData, templateId: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-              >
-                <option value="">-- Standalone / Custom Metric --</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} [{t.targetDbType || 'Universal'}]
-                  </option>
-                ))}
-              </select>
+          </div>
+
+          {/* Applied Templates Multi-Select */}
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-slate-800 font-bold flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                Associated Templates (Multi-Template Selection)
+              </label>
+              <span className="text-[11px] text-slate-500 font-mono">
+                {formData.templateIds?.length || 0} of {templates.length} selected
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Select the templates this metric should be assigned to. It will be evaluated on all databases inside groups with these templates applied.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto p-2 bg-white border border-slate-200 rounded-lg">
+              {templates.map((tpl) => {
+                const isSelected = formData.templateIds?.includes(tpl.id) || false;
+                return (
+                  <label
+                    key={tpl.id}
+                    className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-semibold'
+                        : 'border-transparent hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        const currentIds = formData.templateIds || [];
+                        if (e.target.checked) {
+                          setFormData({ ...formData, templateIds: [...currentIds, tpl.id] });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            templateIds: currentIds.filter((id) => id !== tpl.id),
+                          });
+                        }
+                      }}
+                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div className="truncate flex-1">
+                      <div className="font-semibold truncate text-[11px]">{tpl.name}</div>
+                      <div className="text-[9px] text-slate-500 font-mono">
+                        {tpl.targetDbType || 'Universal'}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           </div>
 

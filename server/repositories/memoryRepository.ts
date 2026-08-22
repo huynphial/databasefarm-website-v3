@@ -1049,12 +1049,19 @@ FROM pg_tablespace`,
   }
 
   async saveMetric(metricData: Partial<MetricEntity>): Promise<MetricEntity> {
+    const templateIds = metricData.templateIds || (metricData.templateId ? [metricData.templateId] : []);
+    const firstTemplateId = templateIds[0] || null;
+    const firstTemplateName = firstTemplateId ? (this.templates.find((t) => t.id === firstTemplateId)?.name || null) : null;
+
     if (metricData.id) {
       const idx = this.metrics.findIndex((m) => m.id === metricData.id);
       if (idx !== -1) {
         this.metrics[idx] = {
           ...this.metrics[idx],
           ...metricData,
+          templateId: firstTemplateId,
+          templateName: firstTemplateName,
+          templateIds,
           updatedAt: new Date().toISOString(),
         } as MetricEntity;
         return this.metrics[idx];
@@ -1071,8 +1078,9 @@ FROM pg_tablespace`,
       thresholdHigh: metricData.thresholdHigh || null,
       thresholdCritical: metricData.thresholdCritical || null,
       frequencyMinutes: metricData.frequencyMinutes || 5,
-      templateId: metricData.templateId || null,
-      templateName: metricData.templateName || null,
+      templateId: firstTemplateId,
+      templateName: firstTemplateName,
+      templateIds,
       isEnabled: metricData.isEnabled !== false,
       metricQueryType: metricData.metricQueryType || 1,
       thresholdsConfig: metricData.thresholdsConfig || null,

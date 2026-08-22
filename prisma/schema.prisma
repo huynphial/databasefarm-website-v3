@@ -165,7 +165,7 @@ model Template {
   updatedAt DateTime @updatedAt
 
   /// Relations: Associated SQL metrics and group mappings.
-  metrics Metric[]
+  metrics MetricTemplateMapping[]
   groups  GroupTemplateMapping[]
 
   @@map("templates")
@@ -195,9 +195,6 @@ model Metric {
   thresholdsConfig   Json?     @map("thresholds_config")
   /// Polling frequency interval in minutes.
   frequencyMinutes   Int       @default(5)
-  /// Foreign key referencing parent template.
-  templateId         String?
-  templateIds        Json?     @map("template_ids")
   noAlertRequired    Boolean   @default(false) @map("no_alert_required")
   /// Toggle state to enable or disable metric evaluation.
   isEnabled          Boolean   @default(true)
@@ -206,8 +203,8 @@ model Metric {
   /// Timestamp of last metric update.
   updatedAt          DateTime  @updatedAt
 
-  /// Relations: Parent template and associated database execution mappings.
-  template         Template?               @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  /// Relations: Parent templates and associated database execution mappings.
+  templates        MetricTemplateMapping[]
   databases        DatabaseMetricMapping[]
   activeAlerts     ActiveAlert[]
   alertHistory     AlertHistory[]
@@ -240,17 +237,36 @@ model DatabaseGroupMapping {
 /// GroupTemplateMapping Model: Junction table mapping groups to monitoring templates.
 model GroupTemplateMapping {
   /// FK referencing DatabaseGroup ID.
-  groupId    String
+  groupId      String      @map("group_id")
+  groupName    String      @map("group_name") @default("")
   /// FK referencing Template ID.
-  templateId String
+  templateId   String      @map("template_id")
+  templateName String      @map("template_name") @default("")
+  targetDbType DbType?     @map("target_db_type")
   /// Timestamp when mapping was created.
-  createdAt  DateTime @default(now())
+  createdAt    DateTime    @default(now()) @map("created_at")
 
   group    DatabaseGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   template Template      @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@id([groupId, templateId])
   @@map("group_template_mappings")
+}
+
+/// MetricTemplateMapping Model: Junction table mapping metrics to templates.
+model MetricTemplateMapping {
+  metricId     String   @map("metric_id")
+  metricName   String   @map("metric_name") @default("")
+  templateId   String   @map("template_id")
+  templateName String   @map("template_name") @default("")
+  targetDbType DbType?  @map("target_db_type")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  metric   Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@id([metricId, templateId])
+  @@map("metric_template_mappings")
 }
 
 /// DatabaseMetricMapping Model: Junction table mapping databases to individual metrics.

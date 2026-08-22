@@ -193,36 +193,43 @@ export class PrismaRepository implements IStorageRepository {
   // --- Metrics ---
   async getMetrics(): Promise<MetricEntity[]> {
     const metrics = await this.prisma.metric.findMany({
-      include: { template: true },
+      include: { templates: true },
     });
 
-    return metrics.map((m) => ({
-      id: m.id,
-      name: m.name,
-      sqlQuery: m.sqlQuery,
-      valueType: m.valueType as any,
-      relationalOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
-      thresholdOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
-      thresholdWarn: m.thresholdWarn || undefined,
-      thresholdHigh: m.thresholdHigh || undefined,
-      thresholdCritical: m.thresholdCritical || undefined,
-      frequencyMinutes: m.frequencyMinutes,
-      templateId: m.templateId || undefined,
-      templateName: m.template?.name || undefined,
-      isEnabled: m.isEnabled,
-      metricQueryType: ((m as any).metricQueryType ?? 1) as 1 | 2 | 3,
-      thresholdsConfig: (m as any).thresholdsConfig ? (typeof (m as any).thresholdsConfig === 'string' ? JSON.parse((m as any).thresholdsConfig) : (m as any).thresholdsConfig) : null,
-      createdAt: m.createdAt.toISOString(),
-      updatedAt: m.updatedAt.toISOString(),
-    }));
+    return metrics.map((m) => {
+      const templateIds = m.templates.map((t) => t.templateId);
+      const firstTpl = m.templates[0];
+      return {
+        id: m.id,
+        name: m.name,
+        sqlQuery: m.sqlQuery,
+        valueType: m.valueType as any,
+        relationalOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
+        thresholdOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
+        thresholdWarn: m.thresholdWarn || undefined,
+        thresholdHigh: m.thresholdHigh || undefined,
+        thresholdCritical: m.thresholdCritical || undefined,
+        frequencyMinutes: m.frequencyMinutes,
+        templateId: firstTpl ? firstTpl.templateId : undefined,
+        templateName: firstTpl ? firstTpl.templateName : undefined,
+        templateIds,
+        isEnabled: m.isEnabled,
+        metricQueryType: ((m as any).metricQueryType ?? 1) as 1 | 2 | 3,
+        thresholdsConfig: (m as any).thresholdsConfig ? (typeof (m as any).thresholdsConfig === 'string' ? JSON.parse((m as any).thresholdsConfig) : (m as any).thresholdsConfig) : null,
+        createdAt: m.createdAt.toISOString(),
+        updatedAt: m.updatedAt.toISOString(),
+      };
+    });
   }
 
   async getMetricById(id: string): Promise<MetricEntity | null> {
     const m = await this.prisma.metric.findUnique({
       where: { id },
-      include: { template: true },
+      include: { templates: true },
     });
     if (!m) return null;
+    const templateIds = m.templates.map((t) => t.templateId);
+    const firstTpl = m.templates[0];
     return {
       id: m.id,
       name: m.name,
@@ -234,8 +241,9 @@ export class PrismaRepository implements IStorageRepository {
       thresholdHigh: m.thresholdHigh || undefined,
       thresholdCritical: m.thresholdCritical || undefined,
       frequencyMinutes: m.frequencyMinutes,
-      templateId: m.templateId || undefined,
-      templateName: m.template?.name || undefined,
+      templateId: firstTpl ? firstTpl.templateId : undefined,
+      templateName: firstTpl ? firstTpl.templateName : undefined,
+      templateIds,
       isEnabled: m.isEnabled,
       metricQueryType: ((m as any).metricQueryType ?? 1) as 1 | 2 | 3,
       thresholdsConfig: (m as any).thresholdsConfig ? (typeof (m as any).thresholdsConfig === 'string' ? JSON.parse((m as any).thresholdsConfig) : (m as any).thresholdsConfig) : null,
@@ -265,7 +273,6 @@ export class PrismaRepository implements IStorageRepository {
           thresholdHigh: metricData.thresholdHigh,
           thresholdCritical: metricData.thresholdCritical,
           frequencyMinutes: metricData.frequencyMinutes,
-          templateId: metricData.templateId || null,
           isEnabled: metricData.isEnabled !== false,
           metricQueryType,
           thresholdsConfig: thresholdsConfig as any,
@@ -280,12 +287,10 @@ export class PrismaRepository implements IStorageRepository {
           thresholdHigh: metricData.thresholdHigh,
           thresholdCritical: metricData.thresholdCritical,
           frequencyMinutes: metricData.frequencyMinutes || 5,
-          templateId: metricData.templateId || null,
           isEnabled: metricData.isEnabled !== false,
           metricQueryType,
           thresholdsConfig: thresholdsConfig as any,
         },
-        include: { template: true },
       });
     } else {
       mRecord = await this.prisma.metric.create({
@@ -298,13 +303,31 @@ export class PrismaRepository implements IStorageRepository {
           thresholdHigh: metricData.thresholdHigh,
           thresholdCritical: metricData.thresholdCritical,
           frequencyMinutes: metricData.frequencyMinutes || 5,
-          templateId: metricData.templateId || null,
           isEnabled: metricData.isEnabled !== false,
           metricQueryType,
           thresholdsConfig: thresholdsConfig as any,
         },
-        include: { template: true },
       });
+    }
+
+    const targetTemplateIds = metricData.templateIds || (metricData.templateId ? [metricData.templateId] : undefined);
+    if (targetTemplateIds !== undefined) {
+      await (this.prisma as any).metricTemplateMapping.deleteMany({ where: { metricId: mRecord.id } });
+      if (targetTemplateIds.length > 0) {
+        const templates = await this.prisma.template.findMany({
+          where: { id: { in: targetTemplateIds } },
+        });
+        await (this.prisma as any).metricTemplateMapping.createMany({
+          data: templates.map((tpl) => ({
+            metricId: mRecord.id,
+            metricName: mRecord.name,
+            templateId: tpl.id,
+            templateName: tpl.name,
+            targetDbType: tpl.targetDbType,
+          })),
+          skipDuplicates: true,
+        });
+      }
     }
 
     const reloaded = await this.getMetricById(mRecord.id);
@@ -329,7 +352,7 @@ export class PrismaRepository implements IStorageRepository {
       name: t.name,
       description: t.description || null,
       targetDbType: (t.targetDbType as any) || undefined,
-      metricIds: t.metrics.map((m) => m.id),
+      metricIds: t.metrics.map((m) => m.metricId),
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
     }));
@@ -346,7 +369,7 @@ export class PrismaRepository implements IStorageRepository {
       name: t.name,
       description: t.description || null,
       targetDbType: (t.targetDbType as any) || undefined,
-      metricIds: t.metrics.map((m) => m.id),
+      metricIds: t.metrics.map((m) => m.metricId),
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
     };
@@ -471,6 +494,26 @@ export class PrismaRepository implements IStorageRepository {
       if (targetDbIds.length > 0) {
         await (this.prisma as any).databaseGroupMapping.createMany({
           data: targetDbIds.map((dbId) => ({ groupId: gRecord.id, databaseId: dbId })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
+    const targetTemplateIds = groupData.templateIds;
+    if (targetTemplateIds !== undefined) {
+      await (this.prisma as any).groupTemplateMapping.deleteMany({ where: { groupId: gRecord.id } });
+      if (targetTemplateIds.length > 0) {
+        const templates = await this.prisma.template.findMany({
+          where: { id: { in: targetTemplateIds } },
+        });
+        await (this.prisma as any).groupTemplateMapping.createMany({
+          data: templates.map((tpl) => ({
+            groupId: gRecord.id,
+            groupName: gRecord.name,
+            templateId: tpl.id,
+            templateName: tpl.name,
+            targetDbType: tpl.targetDbType,
+          })),
           skipDuplicates: true,
         });
       }
