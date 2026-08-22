@@ -278,14 +278,25 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     if (formData.metricQueryType === 3) {
       thresholdsConfig = {
         type: 'PER_ATTRIBUTE',
-        perAttribute: type3Attributes.filter(a => a.attributeName.trim()).map(a => ({
-          attributeName: a.attributeName.trim(),
-          valueType: a.valueType || 'NUMBER',
-          operator: a.operator || '>=',
-          warn: a.warn.trim() || undefined,
-          high: a.high.trim() || undefined,
-          critical: a.critical.trim() || undefined,
-        })),
+        perAttribute: type3Attributes.filter(a => a.attributeName.trim()).map(a => {
+          let warnVal = a.warn ? a.warn.trim() : '';
+          let highVal = a.high ? a.high.trim() : '';
+          let critVal = a.critical ? a.critical.trim() : '';
+
+          if (a.valueType === 'BOOLEAN') {
+            critVal = critVal || 'TRUE';
+            warnVal = warnVal || (critVal === 'TRUE' ? 'FALSE' : 'TRUE');
+          }
+
+          return {
+            attributeName: a.attributeName.trim(),
+            valueType: a.valueType || 'NUMBER',
+            operator: a.operator || '>=',
+            warn: warnVal || undefined,
+            high: highVal || undefined,
+            critical: critVal || undefined,
+          };
+        }),
       };
     } else {
       thresholdsConfig = {
@@ -882,10 +893,22 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                             value={attr.valueType}
                             onChange={(e) => {
                               const vt = e.target.value as MetricValueType;
-                              let op: RelationalOperator = '>=';
-                              if (vt === 'BOOLEAN') op = '=';
-                              if (vt === 'STRING') op = 'CONTAINS';
-                              setType3Attributes(prev => prev.map((item, i) => i === idx ? { ...item, valueType: vt, operator: op } : item));
+                              setType3Attributes(prev => prev.map((item, i) => {
+                                if (i === idx) {
+                                  let op: RelationalOperator = '>=';
+                                  let crit = item.critical;
+                                  let wrn = item.warn;
+                                  if (vt === 'BOOLEAN') {
+                                    op = '=';
+                                    crit = crit || 'TRUE';
+                                    wrn = wrn || 'FALSE';
+                                  } else if (vt === 'STRING') {
+                                    op = 'CONTAINS';
+                                  }
+                                  return { ...item, valueType: vt, operator: op, critical: crit, warn: wrn };
+                                }
+                                return item;
+                              }));
                             }}
                             className="w-full bg-white border border-indigo-300 rounded px-2 py-1 text-xs font-bold text-indigo-800 focus:outline-none focus:border-indigo-500"
                           >
@@ -963,15 +986,15 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                           <div>
                             <label className="block text-[10px] text-rose-700 font-semibold mb-0.5">Critical Trigger State</label>
                             <select
-                              value={attr.critical || 'FALSE'}
+                              value={attr.critical || 'TRUE'}
                               onChange={(e) => {
                                 const val = e.target.value;
                                 setType3Attributes(prev => prev.map((item, i) => i === idx ? { ...item, critical: val, warn: val === 'FALSE' ? 'TRUE' : 'FALSE' } : item));
                               }}
                               className="w-full bg-white border border-rose-300 rounded px-2 py-1 text-xs font-bold text-rose-800"
                             >
-                              <option value="FALSE">Trigger Alert when FALSE</option>
                               <option value="TRUE">Trigger Alert when TRUE</option>
+                              <option value="FALSE">Trigger Alert when FALSE</option>
                             </select>
                           </div>
                           <div>
@@ -979,7 +1002,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                             <input
                               type="text"
                               readOnly
-                              value={attr.critical === 'TRUE' ? 'FALSE' : 'TRUE'}
+                              value={attr.critical === 'FALSE' ? 'TRUE' : 'FALSE'}
                               className="w-full bg-slate-100 border border-slate-200 rounded px-2 py-1 text-xs font-mono text-slate-600"
                             />
                           </div>
