@@ -831,7 +831,7 @@ async function main() {
         d.port AS database_port, 
         mdp.metric_id, 
         m.name AS metric_name, 
-        m."frequencyMinutes" AS frequency, 
+        m.frequencyMinutes AS frequency, 
         mdp.object_name, 
         mdp.attribute_name, 
         mdp.value, 
