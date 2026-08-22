@@ -51,7 +51,8 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
   // Manage Metrics Modal State
   const [metricManagerTemplate, setMetricManagerTemplate] = useState<TemplateEntity | null>(null);
-  const [selectedMetricToAdd, setSelectedMetricToAdd] = useState<string>('');
+  const [metricSearchQuery, setMetricSearchQuery] = useState('');
+  const [selectedMetricIdsToAdd, setSelectedMetricIdsToAdd] = useState<Set<string>>(new Set());
 
   const [formData, setFormData] = useState<{
     id?: string;
@@ -129,10 +130,12 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
   // Remove metric from template
   const handleRemoveMetricFromTemplate = (metric: MetricEntity) => {
+    const nextIds = (metric.templateIds || (metric.templateId ? [metric.templateId] : [])).filter((id) => id !== metricManagerTemplate?.id);
     onSaveMetric({
       ...metric,
-      templateId: null,
-      templateName: null,
+      templateIds: nextIds,
+      templateId: nextIds[0] || null,
+      templateName: nextIds.length > 0 ? metric.templateName : null,
     });
     toast({
       title: 'Metric Removed from Template',
@@ -141,23 +144,39 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
     });
   };
 
-  // Add metric to template
-  const handleAddMetricToTemplate = () => {
-    if (!selectedMetricToAdd || !metricManagerTemplate) return;
-    const targetMetric = metrics.find((m) => m.id === selectedMetricToAdd);
-    if (!targetMetric) return;
+  // Filter available metrics for multi-select
+  const filteredAvailableMetrics = useMemo(() => {
+    if (!metricManagerTemplate) return [];
+    const unassigned = metrics.filter((m) => !(m.templateIds?.includes(metricManagerTemplate.id) || m.templateId === metricManagerTemplate.id));
+    if (!metricSearchQuery.trim()) return unassigned;
+    const q = metricSearchQuery.toLowerCase().trim();
+    return unassigned.filter((m) => m.name.toLowerCase().includes(q) || m.sqlQuery.toLowerCase().includes(q));
+  }, [metrics, metricManagerTemplate, metricSearchQuery]);
 
-    onSaveMetric({
-      ...targetMetric,
-      templateId: metricManagerTemplate.id,
-      templateName: metricManagerTemplate.name,
-      isEnabled: true,
+  // Add selected metrics to template
+  const handleAddSelectedMetricsToTemplate = () => {
+    if (!metricManagerTemplate || selectedMetricIdsToAdd.size === 0) return;
+    selectedMetricIdsToAdd.forEach((metricId) => {
+      const targetMetric = metrics.find((m) => m.id === metricId);
+      if (targetMetric) {
+        const currentIds = targetMetric.templateIds || (targetMetric.templateId ? [targetMetric.templateId] : []);
+        const nextIds = Array.from(new Set([...currentIds, metricManagerTemplate.id]));
+        onSaveMetric({
+          ...targetMetric,
+          templateIds: nextIds,
+          templateId: nextIds[0] || null,
+          templateName: metricManagerTemplate.name,
+          isEnabled: true,
+        });
+      }
     });
 
-    setSelectedMetricToAdd('');
+    const count = selectedMetricIdsToAdd.size;
+    setSelectedMetricIdsToAdd(new Set());
+    setMetricSearchQuery('');
     toast({
-      title: 'Metric Attached',
-      description: `Metric "${targetMetric.name}" attached to "${metricManagerTemplate.name}".`,
+      title: 'Metrics Attached',
+      description: `${count} metrics attached to template "${metricManagerTemplate.name}".`,
       type: 'success',
     });
   };
@@ -203,7 +222,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       header: 'Bundled Metrics Status',
       width: '240px',
       cell: (row) => {
-        const templateMetrics = metrics.filter((m) => m.templateId === row.id);
+        const templateMetrics = metrics.filter((m) => m.templateIds?.includes(row.id) || m.templateId === row.id);
         const activeCount = templateMetrics.filter((m) => m.isEnabled !== false).length;
         const pausedCount = templateMetrics.length - activeCount;
 
@@ -264,11 +283,11 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
   // For the active manager template, get its metrics and available unassigned metrics
   const activeTemplateMetrics = metricManagerTemplate
-    ? metrics.filter((m) => m.templateId === metricManagerTemplate.id)
+    ? metrics.filter((m) => m.templateIds?.includes(metricManagerTemplate.id) || m.templateId === metricManagerTemplate.id)
     : [];
 
   const availableMetricsToAdd = metricManagerTemplate
-    ? metrics.filter((m) => m.templateId !== metricManagerTemplate.id)
+    ? metrics.filter((m) => !(m.templateIds?.includes(metricManagerTemplate.id) || m.templateId === metricManagerTemplate.id))
     : [];
 
   // Filter templates by search term
@@ -381,30 +400,80 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
               </span>
             </div>
 
-            {/* Add Metric to Template Bar */}
+            {/* Searchable Multi-Select Checkbox Attach Section */}
             {userRole === 'ADMIN' && (
-              <div className="p-3 bg-indigo-50/50 border border-indigo-200/70 rounded-xl space-y-2">
-                <span className="font-bold text-slate-900 block text-xs">Attach Metric to This Template</span>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedMetricToAdd}
-                    onChange={(e) => setSelectedMetricToAdd(e.target.value)}
-                    className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
-                  >
-                    <option value="">-- Select an existing metric to add --</option>
-                    {availableMetricsToAdd.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} ({m.templateName ? `Currently in: ${m.templateName}` : 'Standalone'})
-                      </option>
-                    ))}
-                  </select>
+              <div className="p-3 bg-indigo-50/50 border border-indigo-200/70 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 text-xs">Attach Metrics to This Template</span>
+                  <span className="text-[10px] text-indigo-700 font-mono font-bold">
+                    {selectedMetricIdsToAdd.size} selected
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search available metrics to attach..."
+                    value={metricSearchQuery}
+                    onChange={(e) => setMetricSearchQuery(e.target.value)}
+                    className="w-full bg-white border border-slate-300 text-xs pl-8 pr-3 py-2 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-2xs"
+                  />
+                </div>
+
+                <div className="max-h-48 overflow-y-auto space-y-1 pr-1 bg-white border border-slate-200 rounded-lg p-2">
+                  {filteredAvailableMetrics.length > 0 ? (
+                    filteredAvailableMetrics.map((m) => {
+                      const isChecked = selectedMetricIdsToAdd.has(m.id);
+                      return (
+                        <label
+                          key={m.id}
+                          className={`flex items-center justify-between p-2 rounded-md hover:bg-slate-50 transition-colors cursor-pointer text-xs ${
+                            isChecked ? 'bg-indigo-50/70 border border-indigo-200' : 'border border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const next = new Set(selectedMetricIdsToAdd);
+                                if (e.target.checked) {
+                                  next.add(m.id);
+                                } else {
+                                  next.delete(m.id);
+                                }
+                                setSelectedMetricIdsToAdd(next);
+                              }}
+                              className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <div className="truncate">
+                              <div className="font-bold text-slate-900 truncate">{m.name}</div>
+                              <div className="text-[10px] text-slate-500 font-mono truncate">{m.sqlQuery}</div>
+                            </div>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-2">
+                            {m.templateName ? `In: ${m.templateName}` : 'Standalone'}
+                          </span>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <div className="py-4 text-center text-slate-400 text-xs italic">
+                      No available metrics match your search.
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end">
                   <button
                     type="button"
-                    onClick={handleAddMetricToTemplate}
-                    disabled={!selectedMetricToAdd}
-                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium rounded-lg transition-colors cursor-pointer shrink-0 shadow-2xs"
+                    onClick={handleAddSelectedMetricsToTemplate}
+                    disabled={selectedMetricIdsToAdd.size === 0}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
                   >
-                    Add to Template
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Attach Selected ({selectedMetricIdsToAdd.size}) Metrics</span>
                   </button>
                 </div>
               </div>

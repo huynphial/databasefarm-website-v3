@@ -251,13 +251,17 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       width: '180px',
       cell: (row) => {
         const dbObj = databases.find((d) => d.id === row.dbId);
+        const ipPort = dbObj ? `${dbObj.host}:${dbObj.port}` : '127.0.0.1:3306';
         const engineBadge = dbObj ? getDbEngineBadgeClass(dbObj.dbType) : 'text-slate-600 bg-slate-100 border-slate-200';
         return (
           <div>
-            <span className="font-semibold text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
-              <Server className="w-3.5 h-3.5 text-slate-400" />
+            <span className="font-semibold text-slate-900 text-xs tracking-tight flex items-center gap-1.5">
+              <Server className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               {row.dbName}
             </span>
+            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+              {ipPort}
+            </div>
             {dbObj && (
               <span className={`px-1.5 py-0.2 text-[9px] font-bold border rounded mt-0.5 inline-block ${engineBadge}`}>
                 {dbObj.dbType}
@@ -268,17 +272,24 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       },
     },
     {
-      header: 'Metric & Target Object',
+      header: 'Metric',
       accessorKey: 'metricName',
       width: '200px',
       cell: (row) => (
-        <div>
-          <span className="text-slate-800 text-sm font-medium block">{row.metricName}</span>
-          {row.objectName && (
-            <span className="text-[11px] font-mono text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100 mt-0.5 inline-block font-semibold">
-              Object: {row.objectName}
-            </span>
-          )}
+        <div className="space-y-0.5">
+          <span className="text-slate-900 text-xs font-bold block">{row.metricName}</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {row.objectName && (
+              <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200 font-semibold">
+                Obj: {row.objectName}
+              </span>
+            )}
+            {row.attributeName && (
+              <span className="text-[10px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                Attr: {row.attributeName}
+              </span>
+            )}
+          </div>
         </div>
       ),
     },

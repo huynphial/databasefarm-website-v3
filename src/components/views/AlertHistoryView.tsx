@@ -108,24 +108,12 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
 
   const columns: Column<AlertHistoryEntity>[] = [
     {
-      header: 'State',
-      width: '120px',
+      header: 'Status & Severity',
+      width: '130px',
       cell: (row) => {
         const state = row.resolutionStatus || 'CLOSED';
         const isUserCleared = !!row.clearedByName && row.clearedByName !== 'System Auto-Clear';
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded shadow-2xs">
-            <CheckCircle2 className="w-2.5 h-2.5 text-slate-500" />
-            {isUserCleared ? 'CLEARED_BY_USER' : state}
-          </span>
-        );
-      },
-    },
-    {
-      header: 'Severity',
-      accessorKey: 'alertLevel',
-      width: '110px',
-      cell: (row) => {
+        const isDispatched = row.dispatchStatus === 'DISPATCHED' || !row.dispatchStatus;
         const styles = {
           DOWN: 'bg-rose-50 text-rose-700 border-rose-200',
           CRITICAL: 'bg-rose-50 text-rose-700 border-rose-200',
@@ -134,23 +122,39 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
         }[row.alertLevel] || 'bg-slate-100 text-slate-700 border-slate-200';
 
         return (
-          <span className={cn('px-2 py-0.5 border rounded text-[10px] font-bold tracking-wider inline-block', styles)}>
-            {row.alertLevel}
-          </span>
+          <div className="space-y-1 py-0.5">
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className={cn('px-1.5 py-0.2 border rounded text-[9px] font-bold tracking-wider', styles)}>
+                {row.alertLevel}
+              </span>
+              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
+                {isUserCleared ? 'CLEARED' : state}
+              </span>
+            </div>
+            <div>
+              <span className={cn('inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded', isDispatched ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-slate-600 bg-slate-100 border border-slate-200')}>
+                {isDispatched ? 'DISPATCHED' : 'PENDING'}
+              </span>
+            </div>
+          </div>
         );
       },
     },
     {
       header: 'Database Instance',
       accessorKey: 'dbName',
-      width: '180px',
+      width: '140px',
       cell: (row) => {
         const db = dbMap.get(row.dbId);
+        const ipPort = db ? `${db.host}:${db.port}` : '127.0.0.1:3306';
         return (
           <div>
             <div className="font-semibold text-slate-900 text-xs flex items-center gap-1.5">
-              <Server className="w-3 h-3 text-slate-400" />
+              <Server className="w-3 h-3 text-slate-400 shrink-0" />
               {row.dbName}
+            </div>
+            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+              {ipPort}
             </div>
             {db && (
               <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-slate-100 border border-slate-200 text-slate-600 mt-0.5 inline-block">
@@ -165,33 +169,32 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       header: 'Metric',
       accessorKey: 'metricName',
       width: '180px',
-      cell: (row) => <span className="text-slate-800 text-xs font-semibold">{row.metricName}</span>,
+      cell: (row) => (
+        <div className="space-y-0.5">
+          <span className="text-slate-900 text-xs font-bold block">{row.metricName}</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {row.objectName && (
+              <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200 font-semibold">
+                Obj: {row.objectName}
+              </span>
+            )}
+            {row.attributeName && (
+              <span className="text-[10px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                Attr: {row.attributeName}
+              </span>
+            )}
+          </div>
+        </div>
+      ),
     },
     {
       header: 'Incident Message',
       accessorKey: 'message',
       cell: (row) => (
-        <span className="text-slate-600 text-xs leading-relaxed block max-w-md">
+        <span className="text-slate-600 text-xs leading-relaxed block w-full min-w-[280px]">
           {row.message}
         </span>
       ),
-    },
-    {
-      header: 'Dispatch',
-      width: '120px',
-      cell: (row) => {
-        const isDispatched = row.dispatchStatus === 'DISPATCHED' || !row.dispatchStatus;
-        return isDispatched ? (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-            DISPATCHED
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
-            NOT_DISPATCHED
-          </span>
-        );
-      },
     },
     {
       header: 'Raised At',

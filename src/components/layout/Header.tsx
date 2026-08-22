@@ -114,65 +114,56 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, userRole, storageType
         </p>
       </div>
 
-      {/* Sleek, Compact Grouped Horizontal Toolbar */}
-      <div className="flex items-center bg-slate-50 border border-slate-200/80 rounded-lg p-1 shadow-2xs divide-x divide-slate-200">
-        {/* Storage Provider */}
-        <div
-          title={`Active persistence provider: ${storageType.toUpperCase()}`}
-          className="px-2.5 py-0.5 flex items-center gap-1.5 font-mono text-[10px] font-semibold text-slate-600"
-        >
-          <Database className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-          <span className="hidden sm:inline">
-            STORE: {storageType === 'prisma' ? 'PRISMA (MYSQL)' : 'IN-MEMORY'}
-          </span>
-          <span className="sm:hidden">
-            {storageType === 'prisma' ? 'PRISMA' : 'MEM'}
-          </span>
-        </div>
+      {/* Stacked Info Columns Toolbar */}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center bg-slate-50 border border-slate-200/80 rounded-lg p-1.5 shadow-2xs divide-x divide-slate-200 text-[10px] font-mono">
+          {/* Column 1: Storage Provider | Collector Status */}
+          <div className="px-2.5 flex flex-col justify-center gap-0.5">
+            <div
+              title={`Active persistence provider: ${storageType.toUpperCase()}`}
+              className="flex items-center gap-1.5 font-semibold text-slate-700"
+            >
+              <Database className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <span>
+                STORE: {storageType === 'prisma' ? 'PRISMA (MYSQL)' : 'IN-MEMORY'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 font-semibold text-slate-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span>COLLECTOR: ACTIVE</span>
+            </div>
+          </div>
 
-        {/* Collector Status */}
-        <div className="px-2.5 py-0.5 flex items-center gap-1.5 font-mono text-[10px] font-semibold text-slate-600">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-          <span className="hidden sm:inline">COLLECTOR: ACTIVE</span>
-          <span className="sm:hidden">COL: ACTIVE</span>
+          {/* Column 2: Session Expiration Countdown | User Role */}
+          <div className="px-2.5 flex flex-col justify-center gap-0.5 pl-2.5">
+            <div
+              title="Dynamic session inactivity timeout countdown"
+              className={`flex items-center gap-1.5 font-semibold ${
+                isTimerUrgent ? 'text-rose-600 font-bold animate-pulse' : isTimerLow ? 'text-amber-600' : 'text-slate-600'
+              }`}
+            >
+              <Timer className={`w-3.5 h-3.5 shrink-0 ${isTimerUrgent ? 'text-rose-500' : 'text-indigo-500'}`} />
+              <span>EXPIRY: {formatCountdown(secondsRemaining)}</span>
+            </div>
+            <button
+              onClick={handleRoleClick}
+              title="Click to toggle between Admin and View-Only role"
+              className="flex items-center gap-1.5 font-semibold hover:opacity-80 transition-opacity cursor-pointer text-left"
+            >
+              {userRole === 'ADMIN' ? (
+                <>
+                  <Shield className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <span className="text-indigo-600 font-bold">ROLE: ADMIN</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span className="text-emerald-600 font-bold">ROLE: VIEWER</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
-
-        {/* Timezone Badge */}
-        <div className="px-2.5 py-0.5 flex items-center gap-1.5 font-mono text-[10px] font-semibold text-slate-600">
-          <Clock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-          <span className="hidden md:inline">TZ: Asia/Ho_Chi_Minh (UTC+7)</span>
-          <span className="md:hidden">TZ: UTC+7</span>
-        </div>
-
-        {/* Dynamic Session Expiration Countdown */}
-        <div
-          title="Dynamic session inactivity timeout countdown"
-          className={`px-2.5 py-0.5 flex items-center gap-1.5 font-mono text-[10px] font-semibold ${
-            isTimerUrgent ? 'text-rose-600 font-bold animate-pulse' : isTimerLow ? 'text-amber-600' : 'text-slate-600'
-          }`}
-        >
-          <Timer className={`w-3.5 h-3.5 shrink-0 ${isTimerUrgent ? 'text-rose-500' : 'text-indigo-500'}`} />
-          <span>EXPIRY: {formatCountdown(secondsRemaining)}</span>
-        </div>
-
-        {/* Compact User Role Switcher */}
-        <button
-          onClick={handleRoleClick}
-          title="Click to toggle between Admin and View-Only role"
-          className="px-2.5 py-0.5 flex items-center gap-1.5 font-mono text-[10px] font-bold hover:bg-slate-100 rounded-r-md transition-colors cursor-pointer text-slate-700"
-        >
-          {userRole === 'ADMIN' ? (
-            <>
-              <Shield className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-              <span className="text-indigo-600 text-[10px]">ROLE: ADMIN</span>
-            </>
-          ) : (
-            <>
-              <Eye className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-              <span className="text-emerald-600 text-[10px]">ROLE: VIEWER</span>
-            </>
-          )}
-        </button>
       </div>
     </header>
   );

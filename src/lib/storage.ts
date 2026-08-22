@@ -337,6 +337,7 @@ export const INITIAL_SYSTEM_SETTINGS: SystemSettingsEntity = {
   maxRetryAttempts: 3,
   notificationDispatchIntervalSeconds: 30,
   defaultTimezone: 'Asia/Ho_Chi_Minh (UTC+7)',
+  timestampFormat: 'HH24:MI:SS DD/MM/YYYY',
   dataRetentionDays: 90,
   autoClearResolvedAlerts: true,
   centralDbSyncEnabled: true,

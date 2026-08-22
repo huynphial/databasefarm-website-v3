@@ -31,6 +31,7 @@ interface RawMeasurementsViewProps {
   databases: DatabaseEntity[];
   metrics: MetricEntity[];
   databaseEngines?: DatabaseEngineEntity[];
+  timestampFormat?: string;
   onRefresh: () => void;
   onSimulatePoll?: () => void;
   showInfoTips?: boolean;
@@ -41,6 +42,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   databases,
   metrics,
   databaseEngines = [],
+  timestampFormat = 'HH24:MI:SS DD/MM/YYYY',
   onRefresh,
   onSimulatePoll,
   showInfoTips = true,
@@ -189,16 +191,22 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     if (!isoStr) return '-';
     try {
       const d = new Date(isoStr);
-      return d.toLocaleString('en-US', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      }) + ' (UTC+7)';
+      if (isNaN(d.getTime())) return isoStr;
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const seconds = String(d.getSeconds()).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+
+      const fmt = timestampFormat || 'HH24:MI:SS DD/MM/YYYY';
+      if (fmt === 'DD/MM/YYYY HH24:MI:SS') {
+        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+      }
+      if (fmt === 'YYYY-MM-DD HH:mm:ss') {
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      }
+      return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
     } catch {
       return isoStr;
     }
@@ -511,22 +519,20 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           <table className="w-full text-left border-collapse text-xs min-w-[980px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-2.5 px-3">DB Type</th>
-                <th className="py-2.5 px-3">DB Name</th>
+                <th className="py-2.5 px-3">Timestamp</th>
+                <th className="py-2.5 px-3 text-center">Status</th>
+                <th className="py-2.5 px-3">Database</th>
                 <th className="py-2.5 px-3">Metric Name</th>
-                <th className="py-2.5 px-3">Object Name</th>
-                <th className="py-2.5 px-3">Attribute</th>
+                <th className="py-2.5 px-3">Object Attribute</th>
                 <th className="py-2.5 px-3">Measured Value</th>
                 <th className="py-2.5 px-3">Triggered Threshold</th>
                 <th className="py-2.5 px-3 text-center">Freq</th>
-                <th className="py-2.5 px-3 text-center">Status</th>
-                <th className="py-2.5 px-3">Timestamp (UTC+7)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-500">
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
                     <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="font-semibold text-slate-700">No telemetry measurements found.</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
@@ -536,41 +542,98 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 </tr>
               ) : (
                 paginatedData.map((item) => {
+                  const db = databases.find((d) => d.id === item.dbId);
+                  const ipPort = db ? `${db.host}:${db.port}` : '127.0.0.1:3306';
                   const badgeClass = getDbEngineBadgeClass(item.dbType);
                   const hexColor = getDbEngineHexColor(item.dbType, databaseEngines);
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      {/* 1. DB Type */}
+                      {/* 1. Timestamp */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}`}
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: hexColor }} />
-                          {item.dbType}
-                        </span>
+                        <div className="font-mono text-[11px] text-slate-800 font-semibold">
+                          {formatExactTime(item.measuredAt)}
+                        </div>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                          <Clock className="w-2.5 h-2.5" />
+                          <span>{formatRelativeTime(item.measuredAt)}</span>
+                        </div>
                       </td>
 
-                      {/* 2. DB Name */}
-                      <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">
-                        {item.dbName}
+                      {/* 2. Status */}
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        {item.status === 'NORMAL' && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            NORMAL
+                          </span>
+                        )}
+                        {item.status === 'WARNING' && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                            <AlertTriangle className="w-3 h-3 text-amber-600" />
+                            WARNING
+                          </span>
+                        )}
+                        {item.status === 'CRITICAL' && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                            <XCircle className="w-3 h-3 text-rose-600" />
+                            CRITICAL
+                          </span>
+                        )}
+                        {item.status === 'DOWN' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white border border-rose-700 shadow-md animate-pulse">
+                            <XCircle className="w-3.5 h-3.5 text-white" />
+                            DOWN
+                          </span>
+                        )}
                       </td>
 
-                      {/* 3. Metric Name */}
-                      <td className="py-2.5 px-3 font-medium text-slate-800 whitespace-nowrap">
-                        {item.metricName}
+                      {/* 3. Database & Entity */}
+                      <td className="py-2.5 px-3">
+                        <div className="space-y-0.5">
+                          {/* Line 1: Database Name (Bold, larger font size) */}
+                          <div className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                            <Database className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                            {item.dbName}
+                          </div>
+                          {/* Line 2: IP Address : Port */}
+                          <div className="text-[11px] text-slate-400 font-mono">
+                            {ipPort}
+                          </div>
+                        </div>
                       </td>
 
-                      {/* 4. Object Name */}
-                      <td className="py-2.5 px-3 whitespace-nowrap font-mono text-[11px]">
-                        <span className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200 font-semibold">
-                          {item.objectName || 'INSTANCE'}
-                        </span>
+                      {/* 4. Metric Name Column */}
+                      <td className="py-2.5 px-3">
+                        <div className="space-y-1">
+                          {/* Line 1: Metric Name */}
+                          <div className="text-xs font-bold text-slate-900">
+                            {item.metricName}
+                          </div>
+                          {/* Line 2: Database Type brand tag */}
+                          <div>
+                            <span
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold border ${badgeClass}`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: hexColor }} />
+                              {item.dbType}
+                            </span>
+                          </div>
+                        </div>
                       </td>
 
-                      {/* 5. Attribute Name */}
-                      <td className="py-2.5 px-3 whitespace-nowrap font-mono text-[11px] text-slate-700 font-semibold">
-                        {item.attributeName || 'value'}
+                      {/* 5. Object Attribute Column */}
+                      <td className="py-2.5 px-3 font-mono">
+                        <div className="space-y-0.5">
+                          {/* Line 1: Object Name */}
+                          <div className="text-xs font-semibold text-slate-800">
+                            {item.objectName || 'INSTANCE'}
+                          </div>
+                          {/* Line 2: Attribute Name */}
+                          <div className="text-[11px] text-slate-500">
+                            {item.attributeName || 'value'}
+                          </div>
+                        </div>
                       </td>
 
                       {/* 6. Measured Value */}
@@ -607,45 +670,6 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                         <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold">
                           {item.frequencyMinutes || 5}m
                         </span>
-                      </td>
-
-                      {/* 9. Status */}
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        {item.status === 'NORMAL' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            NORMAL
-                          </span>
-                        )}
-                        {item.status === 'WARNING' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
-                            <AlertTriangle className="w-3 h-3 text-amber-600" />
-                            WARNING
-                          </span>
-                        )}
-                        {item.status === 'CRITICAL' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                            <XCircle className="w-3 h-3 text-rose-600" />
-                            CRITICAL
-                          </span>
-                        )}
-                        {item.status === 'DOWN' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                            <XCircle className="w-3 h-3 text-purple-600" />
-                            DOWN
-                          </span>
-                        )}
-                      </td>
-
-                      {/* 10. Timestamp */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <div className="font-mono text-[11px] text-slate-800 font-semibold">
-                          {formatExactTime(item.measuredAt)}
-                        </div>
-                        <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                          <Clock className="w-2.5 h-2.5" />
-                          <span>{formatRelativeTime(item.measuredAt)}</span>
-                        </div>
                       </td>
                     </tr>
                   );

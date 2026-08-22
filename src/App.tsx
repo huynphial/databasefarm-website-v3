@@ -709,6 +709,7 @@ function MainAppContent() {
               databases={databases}
               metrics={metrics}
               databaseEngines={databaseEngines}
+              timestampFormat={systemSettings.timestampFormat}
               onRefresh={loadData}
               showInfoTips={systemSettings.showInfoTips !== false}
             />

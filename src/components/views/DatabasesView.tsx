@@ -170,7 +170,9 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
 
     // Get all metrics belonging to these compatible templates
     return metrics.filter(
-      (m) => m.templateId && compatibleTemplateIds.has(m.templateId) && m.isEnabled !== false
+      (m) =>
+        (m.templateIds?.some((id) => compatibleTemplateIds.has(id)) || (m.templateId && compatibleTemplateIds.has(m.templateId))) &&
+        m.isEnabled !== false
     );
   }, [formData.groupIds, formData.dbType, groups, templates, metrics]);
 

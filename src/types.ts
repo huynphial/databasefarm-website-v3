@@ -80,6 +80,7 @@ export interface SystemSettingsEntity {
   maxRetryAttempts: number;
   notificationDispatchIntervalSeconds: number;
   defaultTimezone: string;
+  timestampFormat?: string; // e.g. "HH24:MI:SS DD/MM/YYYY"
   dataRetentionDays: number;
   autoClearResolvedAlerts: boolean;
   centralDbSyncEnabled: boolean;
@@ -134,6 +135,7 @@ export interface MetricEntity {
   frequencyMinutes: number;
   templateId?: string | null;
   templateName?: string | null;
+  templateIds?: string[]; // Multiple templates assigned
   isEnabled: boolean; // Active monitoring toggle state within template
   noAlertRequired?: boolean; // When true, probe collects data only without firing threshold alert notifications
   metricQueryType?: 1 | 2 | 3; // Redesigned query types: Type 1, 2, or 3
@@ -210,6 +212,7 @@ export interface ActiveAlertEntity {
   metricId: string;
   metricName: string;
   objectName?: string; // Measured object name e.g. 'TS_DATA', 'payment_ledger', 'replica_01'
+  attributeName?: string | null;
   alertLevel: AlertSeverity;
   message: string;
   status?: ActiveAlertStatus; // 'OPEN' | 'ACKNOWLEDGED'
@@ -227,6 +230,7 @@ export interface AlertHistoryEntity {
   metricId: string;
   metricName: string;
   objectName?: string; // Measured object name
+  attributeName?: string | null;
   alertLevel: AlertSeverity;
   message: string;
   resolutionStatus?: AlertResolutionStatus; // 'CLOSED' | 'CLEARED_BY_USER' | 'AUTO_RESOLVED'

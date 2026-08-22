@@ -289,31 +289,21 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       },
     },
     {
-      header: 'Active Alerts',
-      width: '160px',
+      header: 'Active Alerts (C/H/W)',
+      width: '150px',
       cell: (row) => {
         const assignedDbIds = row.databaseIds || [];
         const groupAlerts = activeAlerts.filter((a) => assignedDbIds.includes(a.dbId));
 
-        const downCount = groupAlerts.filter((a) => a.alertLevel === 'DOWN').length;
-        const criticalCount = groupAlerts.filter((a) => a.alertLevel === 'CRITICAL').length;
+        const criticalCount = groupAlerts.filter((a) => a.alertLevel === 'CRITICAL' || a.alertLevel === 'DOWN').length;
         const highCount = groupAlerts.filter((a) => a.alertLevel === 'HIGH').length;
         const warningCount = groupAlerts.filter((a) => a.alertLevel === 'WARN').length;
 
-        const labelText = `D/C/H/W ${downCount}/${criticalCount}/${highCount}/${warningCount}`;
-
-        if (downCount > 0) {
-          return (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2 py-0.5 rounded border border-purple-200 text-purple-700 bg-purple-50 font-mono animate-pulse">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-              {labelText}
-            </span>
-          );
-        }
+        const labelText = `${criticalCount}/${highCount}/${warningCount}`;
 
         if (criticalCount > 0) {
           return (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2 py-0.5 rounded border border-rose-200 text-rose-700 bg-rose-50 font-mono animate-pulse">
+            <span title="Critical / High / Warning (C/H/W)" className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2 py-0.5 rounded border border-rose-200 text-rose-700 bg-rose-50 font-mono animate-pulse">
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
               {labelText}
             </span>
@@ -322,7 +312,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
         if (highCount > 0) {
           return (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded border border-orange-200 text-orange-700 bg-orange-50 font-mono">
+            <span title="Critical / High / Warning (C/H/W)" className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded border border-orange-200 text-orange-700 bg-orange-50 font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
               {labelText}
             </span>
@@ -331,7 +321,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
         if (warningCount > 0) {
           return (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded border border-amber-200 text-amber-700 bg-amber-50 font-mono">
+            <span title="Critical / High / Warning (C/H/W)" className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded border border-amber-200 text-amber-700 bg-amber-50 font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
               {labelText}
             </span>
@@ -339,7 +329,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         }
 
         return (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded border border-emerald-200 text-emerald-700 bg-emerald-50/50 font-mono">
+          <span title="Critical / High / Warning (C/H/W)" className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded border border-emerald-200 text-emerald-700 bg-emerald-50/50 font-mono">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
             {labelText}
           </span>

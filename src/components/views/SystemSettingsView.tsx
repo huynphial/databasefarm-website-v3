@@ -84,6 +84,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   const defaultUrl = settings.collectorEndpoint || 'http://localhost:3000/api/collector/mock-health';
   const [collectorUrl, setCollectorUrl] = useState<string>(defaultUrl);
   const [showInfoTips, setShowInfoTips] = useState<boolean>(settings.showInfoTips !== false);
+  const [timestampFormat, setTimestampFormat] = useState<string>(settings.timestampFormat || 'HH24:MI:SS DD/MM/YYYY');
   const [isCheckingHealth, setIsCheckingHealth] = useState<boolean>(false);
   const [healthResult, setHealthResult] = useState<HealthCheckResult | null>(null);
 
@@ -306,6 +307,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       ...settings,
       collectorEndpoint: collectorUrl,
       showInfoTips: showInfoTips,
+      timestampFormat: timestampFormat,
       updatedAt: new Date().toISOString(),
       updatedBy: 'admin',
     };
@@ -689,6 +691,32 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 <span className={`text-xs font-bold font-mono ${showInfoTips ? 'text-indigo-700' : 'text-slate-500'}`}>
                   {showInfoTips ? 'VISIBLE (ON)' : 'HIDDEN (OFF)'}
                 </span>
+              </div>
+            </div>
+
+            {/* Global Timestamp Format Card */}
+            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-indigo-600" />
+                  <span>Global Timestamp Format</span>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Select system-wide default datetime display format strictly (e.g. HH24:MI:SS DD/MM/YYYY).
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <select
+                  disabled={!isAdmin}
+                  value={timestampFormat}
+                  onChange={(e) => setTimestampFormat(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:border-indigo-500 disabled:opacity-60 shadow-2xs"
+                >
+                  <option value="HH24:MI:SS DD/MM/YYYY">HH24:MI:SS DD/MM/YYYY (14:30:15 22/08/2026)</option>
+                  <option value="DD/MM/YYYY HH24:MI:SS">DD/MM/YYYY HH24:MI:SS (22/08/2026 14:30:15)</option>
+                  <option value="YYYY-MM-DD HH:mm:ss">YYYY-MM-DD HH:mm:ss (2026-08-22 14:30:15)</option>
+                </select>
               </div>
             </div>
           </div>

@@ -51,7 +51,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
 
   // Quick Assign Template Modal State
   const [assignMetricModal, setAssignMetricModal] = useState<MetricEntity | null>(null);
-  const [selectedAssignTemplateId, setSelectedAssignTemplateId] = useState<string>('');
+  const [selectedAssignTemplateIds, setSelectedAssignTemplateIds] = useState<Set<string>>(new Set());
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
 
   // Top 3 Recently Updated Templates
@@ -232,16 +232,18 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
   const handleAssignToTemplateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!assignMetricModal) return;
-    const tpl = templates.find((t) => t.id === selectedAssignTemplateId);
+    const tplIds = Array.from(selectedAssignTemplateIds);
+    const firstTpl = templates.find((t) => t.id === tplIds[0]);
     onSaveMetric({
       ...assignMetricModal,
-      templateId: selectedAssignTemplateId || undefined,
-      templateName: tpl?.name || undefined,
+      templateId: tplIds[0] || null,
+      templateName: firstTpl?.name || null,
+      templateIds: tplIds,
     });
     setAssignMetricModal(null);
     toast({
-      title: 'Template Assigned',
-      description: `Metric "${assignMetricModal.name}" assigned to template "${tpl?.name || 'Standalone'}".`,
+      title: 'Template Associations Updated',
+      description: `Metric "${assignMetricModal.name}" updated with ${tplIds.length} template assignment(s).`,
       type: 'success',
     });
   };
@@ -446,11 +448,24 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     },
     {
       header: 'Template Bundle',
-      cell: (row) => (
-        <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-          {row.templateName || 'Standalone'}
-        </span>
-      ),
+      width: '110px',
+      cell: (row) => {
+        const templateCount = row.templateIds?.length || (row.templateId ? 1 : 0);
+        return (
+          <button
+            type="button"
+            onClick={() => {
+              setAssignMetricModal(row);
+              setSelectedAssignTemplateIds(new Set(row.templateIds || (row.templateId ? [row.templateId] : [])));
+              setTemplateSearchQuery('');
+            }}
+            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+            title="Click to manage template association"
+          >
+            {templateCount}
+          </button>
+        );
+      },
     },
     {
       header: 'Actions',
@@ -462,7 +477,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             <button
               onClick={() => {
                 setAssignMetricModal(row);
-                setSelectedAssignTemplateId(row.templateId || '');
+                setSelectedAssignTemplateIds(new Set(row.templateIds || (row.templateId ? [row.templateId] : [])));
                 setTemplateSearchQuery('');
               }}
               className="p-1.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition-colors cursor-pointer"
@@ -1119,12 +1134,20 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {top3Templates.map((t) => {
-                  const isSelected = selectedAssignTemplateId === t.id;
+                  const isSelected = selectedAssignTemplateIds.has(t.id);
                   return (
                     <button
                       key={t.id}
                       type="button"
-                      onClick={() => setSelectedAssignTemplateId(t.id)}
+                      onClick={() => {
+                        const nextSet = new Set(selectedAssignTemplateIds);
+                        if (nextSet.has(t.id)) {
+                          nextSet.delete(t.id);
+                        } else {
+                          nextSet.add(t.id);
+                        }
+                        setSelectedAssignTemplateIds(nextSet);
+                      }}
                       className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
                         isSelected
                           ? 'bg-indigo-50 border-indigo-500 text-indigo-900 ring-1 ring-indigo-500 shadow-2xs'
@@ -1148,11 +1171,16 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             </div>
           )}
 
-          {/* Search Bar & Dropdown */}
+          {/* Search Bar & Multi-Select Checkbox List */}
           <div className="space-y-1.5">
-            <label className="block text-slate-700 font-semibold mb-1">
-              Search & Filter Target Template *
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-slate-700 font-semibold mb-1">
+                Select Target Templates (Multi-Select) *
+              </label>
+              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                {selectedAssignTemplateIds.size} Selected
+              </span>
+            </div>
             <div className="relative mb-2">
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <input
@@ -1164,21 +1192,50 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               />
             </div>
 
-            <select
-              value={selectedAssignTemplateId}
-              onChange={(e) => setSelectedAssignTemplateId(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
-            >
-              <option value="">-- Standalone (Unlink from Template) --</option>
-              {filteredAssignTemplates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} [{t.targetDbType || 'Universal'}]
-                </option>
-              ))}
-            </select>
-            {filteredAssignTemplates.length === 0 && (
-              <p className="text-[11px] text-amber-600 italic mt-1">No templates match search query "{templateSearchQuery}".</p>
-            )}
+            <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white">
+              {filteredAssignTemplates.map((t) => {
+                const isChecked = selectedAssignTemplateIds.has(t.id);
+                return (
+                  <label
+                    key={t.id}
+                    className={`flex items-center justify-between p-2.5 hover:bg-slate-50 cursor-pointer transition-colors ${
+                      isChecked ? 'bg-indigo-50/50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          const nextSet = new Set(selectedAssignTemplateIds);
+                          if (e.target.checked) {
+                            nextSet.add(t.id);
+                          } else {
+                            nextSet.delete(t.id);
+                          }
+                          setSelectedAssignTemplateIds(nextSet);
+                        }}
+                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
+                      />
+                      <div>
+                        <div className="font-bold text-slate-900">{t.name}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">Engine: {t.targetDbType || 'Universal'}</div>
+                      </div>
+                    </div>
+                    {isChecked && (
+                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
+                        Assigned
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+              {filteredAssignTemplates.length === 0 && (
+                <div className="p-4 text-center text-slate-500 italic">
+                  No templates match search query "{templateSearchQuery}".
+                </div>
+              )}
+            </div>
           </div>
 
           <p className="text-[11px] text-slate-500 leading-relaxed bg-indigo-50/60 p-3 rounded-lg border border-indigo-100">
