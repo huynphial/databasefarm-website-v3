@@ -103,6 +103,8 @@ async function main() {
       thresholdCritical: '95',
       frequencyMinutes: 5,
       templateId: 'tpl-ora-01',
+      templateIds: ['tpl-ora-01'],
+      noAlertRequired: false,
       isEnabled: true,
     },
     {
@@ -115,6 +117,8 @@ async function main() {
       thresholdCritical: '500',
       frequencyMinutes: 1,
       templateId: 'tpl-ora-01',
+      templateIds: ['tpl-ora-01'],
+      noAlertRequired: false,
       isEnabled: true,
     },
     {
@@ -127,6 +131,8 @@ async function main() {
       thresholdCritical: '95',
       frequencyMinutes: 2,
       templateId: 'tpl-pg-01',
+      templateIds: ['tpl-pg-01'],
+      noAlertRequired: false,
       isEnabled: true,
     },
     {
@@ -139,6 +145,8 @@ async function main() {
       thresholdCritical: '80',
       frequencyMinutes: 5,
       templateId: 'tpl-pg-01',
+      templateIds: ['tpl-pg-01'],
+      noAlertRequired: false,
       isEnabled: true,
     },
     {
@@ -151,6 +159,8 @@ async function main() {
       thresholdCritical: '800',
       frequencyMinutes: 1,
       templateId: 'tpl-my-01',
+      templateIds: ['tpl-my-01'],
+      noAlertRequired: false,
       isEnabled: true,
     },
     {
@@ -163,6 +173,8 @@ async function main() {
       thresholdCritical: '100',
       frequencyMinutes: 5,
       templateId: 'tpl-my-01',
+      templateIds: ['tpl-my-01'],
+      noAlertRequired: false,
       isEnabled: true,
     },
     {
@@ -175,6 +187,8 @@ async function main() {
       thresholdCritical: '60',
       frequencyMinutes: 2,
       templateId: 'tpl-ms-01',
+      templateIds: ['tpl-ms-01'],
+      noAlertRequired: false,
       isEnabled: true,
     },
   ];
@@ -311,6 +325,9 @@ async function main() {
       message: 'Threads Connected (212) breached Warning threshold (200). Host: 10.0.20.102:3306.',
       value: '212',
       threshold: '200',
+      objectName: 'Threads_connected',
+      attributeName: 'threads',
+      status: 'OPEN',
       createdAt: new Date(Date.now() - 15 * 60000),
     },
     {
@@ -321,6 +338,9 @@ async function main() {
       message: 'Database Endpoint unreachable on TCP 10.0.40.72:3306. Connection refused.',
       value: '0',
       threshold: '1',
+      objectName: 'INSTANCE',
+      attributeName: 'connectivity',
+      status: 'OPEN',
       createdAt: new Date(Date.now() - 45 * 60000),
     },
     {
@@ -331,6 +351,9 @@ async function main() {
       message: 'Tablespace TS_DATA_PRD usage (91.40%) breached High threshold (90.00%).',
       value: '91.40',
       threshold: '90.00',
+      objectName: 'TS_DATA_PRD',
+      attributeName: 'used_space_pct',
+      status: 'OPEN',
       createdAt: new Date(Date.now() - 120 * 60000),
     },
   ];
@@ -345,6 +368,10 @@ async function main() {
       message: 'Connection Saturation % (87.50%) breached High threshold (85.00%).',
       value: '87.50',
       threshold: '85.00',
+      objectName: 'payment_gateway',
+      attributeName: 'active_connections_pct',
+      resolutionStatus: 'CLEARED_BY_USER',
+      dispatchStatus: 'DISPATCHED',
       createdAt: new Date(Date.now() - 180 * 60000),
       clearedAt: new Date(Date.now() - 120 * 60000),
       clearedById: 'usr-admin-01',
@@ -357,6 +384,10 @@ async function main() {
       message: 'Active Sessions Count (512) breached Critical threshold (500).',
       value: '512',
       threshold: '500',
+      objectName: 'SYSDBA',
+      attributeName: 'active_sessions',
+      resolutionStatus: 'CLEARED_BY_USER',
+      dispatchStatus: 'DISPATCHED',
       createdAt: new Date(Date.now() - 360 * 60000),
       clearedAt: new Date(Date.now() - 240 * 60000),
       clearedById: 'usr-admin-01',
@@ -369,6 +400,10 @@ async function main() {
       message: 'Page Life Expectancy (280s) dropped below Warning threshold (300s).',
       value: '280',
       threshold: '300',
+      objectName: 'GLOBAL',
+      attributeName: 'ple_seconds',
+      resolutionStatus: 'CLEARED_BY_USER',
+      dispatchStatus: 'DISPATCHED',
       createdAt: new Date(Date.now() - 720 * 60000),
       clearedAt: new Date(Date.now() - 500 * 60000),
       clearedById: 'usr-viewer-02',
@@ -379,7 +414,7 @@ async function main() {
   const metricDataPointsData = [
     {
       id: 'dp-01',
-      databaseId: 'db-01',
+      dbId: 'db-01',
       metricId: 'met-01',
       objectName: 'TS_DATA_PRD',
       attributeName: 'used_space_pct',
@@ -388,7 +423,7 @@ async function main() {
     },
     {
       id: 'dp-02',
-      databaseId: 'db-01',
+      dbId: 'db-01',
       metricId: 'met-02',
       objectName: 'SYSDBA',
       attributeName: 'active_sessions',
@@ -397,7 +432,7 @@ async function main() {
     },
     {
       id: 'dp-03',
-      databaseId: 'db-02',
+      dbId: 'db-02',
       metricId: 'met-03',
       objectName: 'payment_gateway',
       attributeName: 'active_connections_pct',
@@ -406,7 +441,7 @@ async function main() {
     },
     {
       id: 'dp-04',
-      databaseId: 'db-02',
+      dbId: 'db-02',
       metricId: 'met-04',
       objectName: 'replica_standby_01',
       attributeName: 'lag_seconds',
@@ -415,7 +450,7 @@ async function main() {
     },
     {
       id: 'dp-05',
-      databaseId: 'db-03',
+      dbId: 'db-03',
       metricId: 'met-05',
       objectName: 'Threads_connected',
       attributeName: 'threads',
