@@ -8,7 +8,7 @@ import { MetricsView } from './components/views/MetricsView';
 import { TemplatesView } from './components/views/TemplatesView';
 import { GroupsView } from './components/views/GroupsView';
 import { AlertHistoryView } from './components/views/AlertHistoryView';
-import { AnalyticsView } from './components/views/AnalyticsView';
+import { AnalyticsDatabaseView } from './components/views/AnalyticsDatabaseView';
 import { SystemSettingsView } from './components/views/SystemSettingsView';
 import { AuditLogsView } from './components/views/AuditLogsView';
 import { RawMeasurementsView } from './components/views/RawMeasurementsView';
@@ -412,6 +412,9 @@ function MainAppContent() {
           dbType: dbData.dbType || 'POSTGRES',
           host: dbData.host || '127.0.0.1',
           port: dbData.port || 5432,
+          tags: dbData.tags || [],
+          pollIntervalMinutes: dbData.pollIntervalMinutes ?? 5,
+          note: dbData.note || '',
           username: dbData.username || 'dbmon_reader',
           password: dbData.password || '',
           connectionConfig: dbData.connectionConfig || {},
@@ -477,7 +480,7 @@ function MainAppContent() {
           thresholdWarn: metricData.thresholdWarn,
           thresholdHigh: metricData.thresholdHigh,
           thresholdCritical: metricData.thresholdCritical,
-          frequencyMinutes: metricData.frequencyMinutes || 5,
+          cycle: metricData.cycle ?? 1,
           templateId: metricData.templateId,
           templateName: metricData.templateName,
           isEnabled: metricData.isEnabled !== false,
@@ -649,8 +652,8 @@ function MainAppContent() {
     }
   };
 
-  const handleSelectTab = (tab: NavigationTab) => {
-    setAnalyticsInitialDbId(undefined);
+  const handleSelectTab = (tab: NavigationTab, initialDbId?: string) => {
+    setAnalyticsInitialDbId(initialDbId);
     setActiveTab(tab);
 
     if (currentUser) {
@@ -659,7 +662,7 @@ function MainAppContent() {
         actionType: 'PAGE_VIEW',
         targetEntity: 'NAVIGATION',
         targetId: tab,
-        details: `Navigated to tab "${tab}"`,
+        details: `Navigated to tab "${tab}"${initialDbId ? ` for database "${initialDbId}"` : ''}`,
       }).catch(() => {});
     }
   };
@@ -693,10 +696,7 @@ function MainAppContent() {
               onRefresh={loadData}
               userRole={currentUser.role}
               onNavigateToDatabases={() => handleSelectTab('databases')}
-              onNavigateToAnalytics={(dbId) => {
-                setAnalyticsInitialDbId(dbId);
-                handleSelectTab('analytics');
-              }}
+              onNavigateToAnalytics={(dbId) => handleSelectTab('analytics-database', dbId)}
               onNavigateToActiveAlerts={() => handleSelectTab('active-alerts')}
             />
           )}
@@ -734,6 +734,7 @@ function MainAppContent() {
               showInfoTips={systemSettings.showInfoTips !== false}
               onSaveDatabase={handleSaveDatabase}
               onDeleteDatabase={handleDeleteDatabase}
+              onNavigateToAnalytics={(dbId) => handleSelectTab('analytics-database', dbId)}
             />
           )}
 
@@ -765,6 +766,7 @@ function MainAppContent() {
             <TemplatesView
               templates={templates}
               metrics={metrics}
+              databaseEngines={databaseEngines}
               userRole={currentUser.role}
               showInfoTips={systemSettings.showInfoTips !== false}
               onSaveTemplate={handleSaveTemplate}
@@ -796,12 +798,21 @@ function MainAppContent() {
             />
           )}
 
-          {activeTab === 'analytics' && (
-            <AnalyticsView
+          {activeTab === 'analytics-database' && (
+            <AnalyticsDatabaseView
               databases={databases}
               metrics={metrics}
+              rawMeasurements={rawMeasurements}
               metricHistory={metricHistory}
+              activeAlerts={activeAlerts}
+              databaseEngines={databaseEngines}
+              systemSettings={systemSettings}
+              userRole={currentUser.role}
               initialDbId={analyticsInitialDbId}
+              onRefresh={loadData}
+              onClearAlert={handleClearAlert}
+              onAcknowledgeAlert={handleAcknowledgeAlert}
+              showInfoTips={systemSettings.showInfoTips !== false}
             />
           )}
 
@@ -809,6 +820,7 @@ function MainAppContent() {
             <SystemSettingsView
               settings={systemSettings}
               userRole={currentUser.role}
+              databases={databases}
               databaseEngines={databaseEngines}
               alertMethods={alertMethods}
               onSaveSettings={handleSaveSystemSettings}

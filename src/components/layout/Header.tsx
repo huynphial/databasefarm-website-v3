@@ -29,9 +29,9 @@ const titles: Record<NavigationTab, { title: string; subtitle: string }> = {
     title: 'Monitoring Templates',
     subtitle: 'Engine-compatible metric blueprints strictly tailored per database engine',
   },
-  analytics: {
-    title: 'Analytics & Time-Series History',
-    subtitle: 'Query metric historical trends, compare performance, and export CSV',
+  'analytics-database': {
+    title: 'Analytics Database',
+    subtitle: 'Single-instance deep performance dashboard, multi-type metric breakdowns, and interactive telemetry charts',
   },
   metrics: {
     title: 'Metrics Management',

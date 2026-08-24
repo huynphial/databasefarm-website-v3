@@ -18,10 +18,76 @@ import {
 import { IStorageRepository } from './types';
 
 export class MemoryRepository implements IStorageRepository {
-  private userPasswords: Record<string, string> = {
-    'usr-admin-01': '$2a$10$tZ2M9t6z3lWq6lV9X/90XOhX1C6kK5lH7vRjQ6ZlK2C1c8kS5n2K6', // AdminPassword#2026
-    'usr-viewer-02': '$2a$10$h9XlK8rYl5XqV6lX2g90XOhX1C6kK5lH7vRjQ6ZlK2C1c8kS5n2K6', // ViewerPassword#2026
-  };
+  private userPasswords: Record<string, string> = {};
+  private users: User[] = [];
+
+  constructor() {
+    this.initUsersFromEnv();
+  }
+
+  private initUsersFromEnv() {
+    const adminUser = (process.env.ADMIN_USERNAME || process.env.SEED_ADMIN_USERNAME || 'admin').trim();
+    const adminPass = (process.env.ADMIN_PASSWORD || process.env.SEED_ADMIN_PASSWORD || 'AdminPassword#2026').trim();
+
+    const viewerUser = (process.env.VIEWER_USERNAME || process.env.SEED_VIEWER_USERNAME || 'viewer').trim();
+    const viewerPass = (process.env.VIEWER_PASSWORD || process.env.SEED_VIEWER_PASSWORD || 'ViewerPassword#2026').trim();
+
+    this.users = [
+      {
+        id: 'usr-admin-01',
+        username: adminUser,
+        role: 'ADMIN',
+        createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+      },
+      {
+        id: 'usr-viewer-02',
+        username: viewerUser,
+        role: 'VIEWER',
+        createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+      },
+    ];
+
+    this.userPasswords = {
+      'usr-admin-01': bcrypt.hashSync(adminPass, 10),
+      'usr-viewer-02': bcrypt.hashSync(viewerPass, 10),
+    };
+
+    // Support additional users configured in AUTH_USERS environment variable
+    if (process.env.AUTH_USERS) {
+      try {
+        const parsed = JSON.parse(process.env.AUTH_USERS);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((u: any, idx: number) => {
+            if (u.username && u.password) {
+              const uId = `usr-env-${idx + 1}`;
+              this.users.push({
+                id: uId,
+                username: u.username.trim(),
+                role: u.role === 'ADMIN' ? 'ADMIN' : 'VIEWER',
+                createdAt: new Date().toISOString(),
+              });
+              this.userPasswords[uId] = bcrypt.hashSync(u.password.trim(), 10);
+            }
+          });
+        }
+      } catch (e) {
+        const items = process.env.AUTH_USERS.split(',');
+        items.forEach((item: string, idx: number) => {
+          const parts = item.split(':');
+          if (parts.length >= 2) {
+            const uId = `usr-env-${idx + 1}`;
+            this.users.push({
+              id: uId,
+              username: parts[0].trim(),
+              role: parts[2]?.trim().toUpperCase() === 'ADMIN' ? 'ADMIN' : 'VIEWER',
+              createdAt: new Date().toISOString(),
+            });
+            this.userPasswords[uId] = bcrypt.hashSync(parts[1].trim(), 10);
+          }
+        });
+      }
+    }
+  }
 
   private auditLogs: AuditLogEntity[] = [
     {
@@ -33,21 +99,6 @@ export class MemoryRepository implements IStorageRepository {
       targetId: 'usr-admin-01',
       details: 'Administrator session initiated successfully',
       createdAt: new Date(Date.now() - 3600000).toISOString(),
-    },
-  ];
-
-  private users: User[] = [
-    {
-      id: 'usr-admin-01',
-      username: 'admin',
-      role: 'ADMIN',
-      createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
-    },
-    {
-      id: 'usr-viewer-02',
-      username: 'viewer',
-      role: 'VIEWER',
-      createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
     },
   ];
 
@@ -206,6 +257,7 @@ export class MemoryRepository implements IStorageRepository {
       id: 'tpl-ora-01',
       name: 'Oracle Enterprise Standard',
       targetDbType: 'ORACLE',
+      databaseEngineId: 'eng-01',
       description: 'Standard health checks for Oracle Database instances (Tablespace, Active Sessions, Buffer Cache Hit Ratio).',
       metricIds: ['met-01', 'met-02'],
       createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
@@ -215,6 +267,7 @@ export class MemoryRepository implements IStorageRepository {
       id: 'tpl-pg-01',
       name: 'PostgreSQL Core Health',
       targetDbType: 'POSTGRES',
+      databaseEngineId: 'eng-03',
       description: 'Connection saturation, cache hit ratio, and replication lag metrics for PostgreSQL.',
       metricIds: ['met-03', 'met-04'],
       createdAt: new Date(Date.now() - 18 * 86400000).toISOString(),
@@ -224,6 +277,7 @@ export class MemoryRepository implements IStorageRepository {
       id: 'tpl-my-01',
       name: 'MySQL Server Metrics',
       targetDbType: 'MYSQL',
+      databaseEngineId: 'eng-02',
       description: 'Thread concurrency, InnoDB buffer pool, and slow queries.',
       metricIds: ['met-05', 'met-06'],
       createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
@@ -233,6 +287,7 @@ export class MemoryRepository implements IStorageRepository {
       id: 'tpl-ms-01',
       name: 'SQL Server Enterprise Baseline',
       targetDbType: 'MSSQL',
+      databaseEngineId: 'eng-04',
       description: 'Page Life Expectancy, buffer cache ratio, and batch requests per second.',
       metricIds: ['met-07'],
       createdAt: new Date(Date.now() - 12 * 86400000).toISOString(),
@@ -242,6 +297,7 @@ export class MemoryRepository implements IStorageRepository {
       id: 'tpl-multi-01',
       name: 'Database Storage & Capacity Overview (Type 3)',
       targetDbType: 'POSTGRES',
+      databaseEngineId: 'eng-03',
       description: 'Multi-attribute storage and tablespace analytics with per-attribute return value types and custom thresholds.',
       metricIds: ['met-08'],
       createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
@@ -260,7 +316,7 @@ export class MemoryRepository implements IStorageRepository {
       thresholdWarn: '80',
       thresholdHigh: '90',
       thresholdCritical: '95',
-      frequencyMinutes: 5,
+      cycle: 1,
       metricQueryType: 2,
       templateId: 'tpl-ora-01',
       templateName: 'Oracle Enterprise Standard',
@@ -278,7 +334,7 @@ export class MemoryRepository implements IStorageRepository {
       thresholdWarn: '150',
       thresholdHigh: '300',
       thresholdCritical: '500',
-      frequencyMinutes: 1,
+      cycle: 1,
       metricQueryType: 2,
       templateId: 'tpl-ora-01',
       templateName: 'Oracle Enterprise Standard',
@@ -296,7 +352,7 @@ export class MemoryRepository implements IStorageRepository {
       thresholdWarn: '75',
       thresholdHigh: '85',
       thresholdCritical: '95',
-      frequencyMinutes: 2,
+      cycle: 1,
       metricQueryType: 2,
       templateId: 'tpl-pg-01',
       templateName: 'PostgreSQL Core Health',
@@ -314,7 +370,7 @@ export class MemoryRepository implements IStorageRepository {
       thresholdWarn: '30',
       thresholdHigh: '60',
       thresholdCritical: '120',
-      frequencyMinutes: 1,
+      cycle: 1,
       metricQueryType: 2,
       templateId: 'tpl-pg-01',
       templateName: 'PostgreSQL Core Health',
@@ -332,7 +388,7 @@ export class MemoryRepository implements IStorageRepository {
       thresholdWarn: '200',
       thresholdHigh: '400',
       thresholdCritical: '800',
-      frequencyMinutes: 1,
+      cycle: 1,
       metricQueryType: 1,
       templateId: 'tpl-my-01',
       templateName: 'MySQL Server Metrics',
@@ -350,7 +406,7 @@ export class MemoryRepository implements IStorageRepository {
       thresholdWarn: 'ON',
       thresholdHigh: null,
       thresholdCritical: null,
-      frequencyMinutes: 10,
+      cycle: 1,
       metricQueryType: 1,
       templateId: 'tpl-my-01',
       templateName: 'MySQL Server Metrics',
@@ -368,7 +424,7 @@ export class MemoryRepository implements IStorageRepository {
       thresholdWarn: '300',
       thresholdHigh: '150',
       thresholdCritical: '60',
-      frequencyMinutes: 5,
+      cycle: 1,
       metricQueryType: 1,
       templateId: 'tpl-ms-01',
       templateName: 'SQL Server Enterprise Baseline',
@@ -388,7 +444,7 @@ export class MemoryRepository implements IStorageRepository {
 FROM pg_tablespace`,
       valueType: 'NUMBER',
       relationalOperator: '>=',
-      frequencyMinutes: 5,
+      cycle: 1,
       metricQueryType: 3,
       thresholdsConfig: {
         type: 'PER_ATTRIBUTE',
@@ -464,6 +520,9 @@ FROM pg_tablespace`,
       dbType: 'ORACLE',
       host: '10.0.10.45',
       port: 1521,
+      tags: ['PRODUCTION', 'CRITICAL', 'PRIMARY'],
+      pollIntervalMinutes: 5,
+      note: 'Primary ERP transactional Oracle cluster. High availability database node.',
       authMethod: 'PASSWORD',
       username: 'dbmon_user',
       password: 'enc_password_sec_01',
@@ -484,6 +543,9 @@ FROM pg_tablespace`,
       dbType: 'POSTGRES',
       host: '10.0.12.88',
       port: 5432,
+      tags: ['PRODUCTION', 'FINANCE', 'CRITICAL'],
+      pollIntervalMinutes: 2,
+      note: 'PCI-DSS compliant payment gateway core ledger database.',
       authMethod: 'PASSWORD',
       username: 'pg_monitor',
       password: 'enc_password_sec_02',
@@ -504,6 +566,9 @@ FROM pg_tablespace`,
       dbType: 'MYSQL',
       host: '10.0.20.102',
       port: 3306,
+      tags: ['STAGING', 'ANALYTICS'],
+      pollIntervalMinutes: 5,
+      note: 'Customer relationship portal staging replica.',
       authMethod: 'PASSWORD',
       username: 'mysql_collector',
       password: 'enc_password_sec_03',
@@ -524,6 +589,9 @@ FROM pg_tablespace`,
       dbType: 'MSSQL',
       host: '10.0.30.55',
       port: 1433,
+      tags: ['LAB', 'ANALYTICS'],
+      pollIntervalMinutes: 10,
+      note: 'Data warehouse batch reporting engine for executive dashboards.',
       authMethod: 'PASSWORD',
       username: 'sql_mon',
       password: 'enc_password_sec_04',
@@ -544,6 +612,9 @@ FROM pg_tablespace`,
       dbType: 'MYSQL',
       host: '10.0.40.72',
       port: 3306,
+      tags: ['DEV', 'LAB'],
+      pollIntervalMinutes: 5,
+      note: 'Inventory management development integration server.',
       authMethod: 'PASSWORD',
       username: 'stg_reader',
       password: 'enc_password_sec_05',
@@ -560,9 +631,12 @@ FROM pg_tablespace`,
     },
   ];
 
+  private nextActiveAlertId = 4;
+  private nextAlertHistoryId = 3;
+
   private activeAlerts: ActiveAlertEntity[] = [
     {
-      id: 'alt-01',
+      id: '1',
       dbId: 'db-03',
       dbName: 'CRM_PORTAL_MY',
       metricId: 'met-05',
@@ -573,7 +647,7 @@ FROM pg_tablespace`,
       createdAt: new Date(Date.now() - 15 * 60000).toISOString(),
     },
     {
-      id: 'alt-02',
+      id: '2',
       dbId: 'db-05',
       dbName: 'INVENTORY_STG_MY',
       metricId: 'met-06',
@@ -584,7 +658,7 @@ FROM pg_tablespace`,
       createdAt: new Date(Date.now() - 45 * 60000).toISOString(),
     },
     {
-      id: 'alt-03',
+      id: '3',
       dbId: 'db-01',
       dbName: 'ERP_PROD_ORA',
       metricId: 'met-01',
@@ -598,7 +672,7 @@ FROM pg_tablespace`,
 
   private alertHistory: AlertHistoryEntity[] = [
     {
-      id: 'h-01',
+      id: '1',
       dbId: 'db-02',
       dbName: 'PAYMENT_API_PG',
       metricId: 'met-03',
@@ -612,7 +686,7 @@ FROM pg_tablespace`,
       clearedByName: 'admin',
     },
     {
-      id: 'h-02',
+      id: '2',
       dbId: 'db-01',
       dbName: 'ERP_PROD_ORA',
       metricId: 'met-02',
@@ -767,7 +841,7 @@ FROM pg_tablespace`,
       valueType: 'NUMBER',
       thresholdOperator: '>=',
       triggeredThreshold: 'Warn: 80 / High: 90 / Crit: 95 (>=)',
-      frequencyMinutes: 5,
+      cycle: 1,
       status: 'HIGH' as any,
       measuredAt: new Date(Date.now() - 2 * 60000).toISOString(),
     },
@@ -784,7 +858,7 @@ FROM pg_tablespace`,
       valueType: 'NUMBER',
       thresholdOperator: '>=',
       triggeredThreshold: 'Warn: 150 / High: 300 / Crit: 500 (>=)',
-      frequencyMinutes: 1,
+      cycle: 1,
       status: 'WARNING',
       measuredAt: new Date(Date.now() - 3 * 60000).toISOString(),
     },
@@ -801,7 +875,7 @@ FROM pg_tablespace`,
       valueType: 'NUMBER',
       thresholdOperator: '>=',
       triggeredThreshold: null,
-      frequencyMinutes: 2,
+      cycle: 1,
       status: 'NORMAL',
       measuredAt: new Date(Date.now() - 4 * 60000).toISOString(),
     },
@@ -818,7 +892,7 @@ FROM pg_tablespace`,
       valueType: 'NUMBER',
       thresholdOperator: '>=',
       triggeredThreshold: null,
-      frequencyMinutes: 1,
+      cycle: 1,
       status: 'NORMAL',
       measuredAt: new Date(Date.now() - 5 * 60000).toISOString(),
     },
@@ -835,7 +909,7 @@ FROM pg_tablespace`,
       valueType: 'NUMBER',
       thresholdOperator: '>=',
       triggeredThreshold: null,
-      frequencyMinutes: 5,
+      cycle: 1,
       status: 'NORMAL',
       measuredAt: new Date(Date.now() - 6 * 60000).toISOString(),
     },
@@ -852,7 +926,7 @@ FROM pg_tablespace`,
       valueType: 'STRING',
       thresholdOperator: '!=',
       triggeredThreshold: null,
-      frequencyMinutes: 5,
+      cycle: 1,
       status: 'NORMAL',
       measuredAt: new Date(Date.now() - 6 * 60000).toISOString(),
     },
@@ -869,7 +943,7 @@ FROM pg_tablespace`,
       valueType: 'NUMBER',
       thresholdOperator: '>=',
       triggeredThreshold: 'Warn: 200 / High: 400 / Crit: 800 (>=)',
-      frequencyMinutes: 1,
+      cycle: 1,
       status: 'WARNING',
       measuredAt: new Date(Date.now() - 8 * 60000).toISOString(),
     },
@@ -886,7 +960,7 @@ FROM pg_tablespace`,
       valueType: 'NUMBER',
       thresholdOperator: '<=',
       triggeredThreshold: null,
-      frequencyMinutes: 5,
+      cycle: 1,
       status: 'NORMAL',
       measuredAt: new Date(Date.now() - 10 * 60000).toISOString(),
     },
@@ -903,7 +977,7 @@ FROM pg_tablespace`,
       valueType: 'STRING',
       thresholdOperator: '!=',
       triggeredThreshold: 'Connection refused on TCP port 3306',
-      frequencyMinutes: 1,
+      cycle: 1,
       status: 'DOWN',
       measuredAt: new Date(Date.now() - 12 * 60000).toISOString(),
     },
@@ -979,27 +1053,44 @@ FROM pg_tablespace`,
   }
 
   async verifyUserPassword(username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> {
-    const user = this.users.find((u) => u.username.toLowerCase() === username.toLowerCase());
+    const trimmedUsername = (username || '').trim();
+    const trimmedPassword = (password || '').trim();
+    const user = this.users.find((u) => u.username.toLowerCase() === trimmedUsername.toLowerCase());
     if (!user) {
       return { success: false, message: 'Invalid username. No matching account found.' };
     }
     if (user.isLocked) {
       return { success: false, message: 'This account is locked. Please contact your system administrator.' };
     }
-    const hash = this.userPasswords[user.id];
-    if (!hash) {
-      // If we don't have password set in memory repository, allow matching default credentials or use plaintext fallback
-      if (password === 'AdminPassword#2026' || password === 'ViewerPassword#2026') {
-        return { success: true, user };
-      }
-      return { success: false, message: 'No credentials configured for this account.' };
-    }
+
+    const normUser = user.username.toLowerCase();
+    
+    // Check against current environment variables
+    const adminUser = (process.env.ADMIN_USERNAME || process.env.SEED_ADMIN_USERNAME || 'admin').trim().toLowerCase();
+    const adminPass = (process.env.ADMIN_PASSWORD || process.env.SEED_ADMIN_PASSWORD || 'AdminPassword#2026').trim();
+
+    const viewerUser = (process.env.VIEWER_USERNAME || process.env.SEED_VIEWER_USERNAME || 'viewer').trim().toLowerCase();
+    const viewerPass = (process.env.VIEWER_PASSWORD || process.env.SEED_VIEWER_PASSWORD || 'ViewerPassword#2026').trim();
 
     let isMatch = false;
-    if (hash.startsWith('$2') || hash.startsWith('$2a$') || hash.startsWith('$2b$')) {
-      isMatch = await bcrypt.compare(password, hash);
+
+    if (normUser === adminUser && trimmedPassword === adminPass) {
+      isMatch = true;
+    } else if (normUser === viewerUser && trimmedPassword === viewerPass) {
+      isMatch = true;
     } else {
-      isMatch = hash === password;
+      const hash = this.userPasswords[user.id];
+      if (hash) {
+        try {
+          if (hash.startsWith('$2') || hash.startsWith('$2a$') || hash.startsWith('$2b$')) {
+            isMatch = await bcrypt.compare(trimmedPassword, hash);
+          } else {
+            isMatch = hash === trimmedPassword;
+          }
+        } catch {
+          isMatch = hash === trimmedPassword;
+        }
+      }
     }
 
     if (!isMatch) {
@@ -1185,7 +1276,7 @@ FROM pg_tablespace`,
       thresholdWarn: metricData.thresholdWarn || null,
       thresholdHigh: metricData.thresholdHigh || null,
       thresholdCritical: metricData.thresholdCritical || null,
-      frequencyMinutes: metricData.frequencyMinutes || 5,
+      cycle: metricData.cycle ?? 1,
       templateId: firstTemplateId,
       templateName: firstTemplateName,
       templateIds,
@@ -1210,36 +1301,70 @@ FROM pg_tablespace`,
 
   // --- Templates ---
   async getTemplates(): Promise<TemplateEntity[]> {
-    return this.templates;
+    return this.templates.map((t) => {
+      const dbEngine = t.databaseEngineId
+        ? (this.databaseEngines.find((e) => e.id === t.databaseEngineId) || null)
+        : (t.targetDbType ? (this.databaseEngines.find((e) => e.dbCode.toUpperCase() === t.targetDbType?.toUpperCase()) || null) : null);
+      return {
+        ...t,
+        databaseEngine: dbEngine,
+        targetDbType: dbEngine ? (dbEngine.dbCode as any) : t.targetDbType,
+      };
+    });
   }
 
   async getTemplateById(id: string): Promise<TemplateEntity | null> {
-    return this.templates.find((t) => t.id === id) || null;
+    const t = this.templates.find((tpl) => tpl.id === id);
+    if (!t) return null;
+    const dbEngine = t.databaseEngineId
+      ? (this.databaseEngines.find((e) => e.id === t.databaseEngineId) || null)
+      : (t.targetDbType ? (this.databaseEngines.find((e) => e.dbCode.toUpperCase() === t.targetDbType?.toUpperCase()) || null) : null);
+    return {
+      ...t,
+      databaseEngine: dbEngine,
+      targetDbType: dbEngine ? (dbEngine.dbCode as any) : t.targetDbType,
+    };
   }
 
   async saveTemplate(tplData: Partial<TemplateEntity>): Promise<TemplateEntity> {
+    const matchedEngine = tplData.databaseEngineId
+      ? this.databaseEngines.find((e) => e.id === tplData.databaseEngineId)
+      : (tplData.targetDbType ? this.databaseEngines.find((e) => e.dbCode.toUpperCase() === tplData.targetDbType?.toUpperCase()) : null);
+
+    const targetDbType = matchedEngine ? (matchedEngine.dbCode as any) : (tplData.targetDbType || 'ALL');
+    const databaseEngineId = matchedEngine ? matchedEngine.id : (tplData.databaseEngineId || null);
+
     if (tplData.id) {
       const idx = this.templates.findIndex((t) => t.id === tplData.id);
       if (idx !== -1) {
         this.templates[idx] = {
           ...this.templates[idx],
           ...tplData,
+          targetDbType,
+          databaseEngineId,
           updatedAt: new Date().toISOString(),
         } as TemplateEntity;
-        return this.templates[idx];
+        return {
+          ...this.templates[idx],
+          databaseEngine: matchedEngine || null,
+        };
       }
     }
     const newTemplate: TemplateEntity = {
       id: tplData.id || `tpl-${Date.now().toString().slice(-4)}`,
       name: tplData.name || 'New Template',
       description: tplData.description || null,
-      targetDbType: tplData.targetDbType || 'ALL',
+      targetDbType,
+      databaseEngineId,
       metricIds: tplData.metricIds || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     this.templates = [newTemplate, ...this.templates];
-    return newTemplate;
+    return {
+      ...newTemplate,
+      databaseEngine: matchedEngine || null,
+    };
   }
 
   async deleteTemplate(id: string): Promise<boolean> {
@@ -1328,7 +1453,7 @@ FROM pg_tablespace`,
       }
     }
     const newAlert: ActiveAlertEntity = {
-      id: alertData.id || `alt-${Date.now().toString().slice(-4)}`,
+      id: alertData.id || String(this.nextActiveAlertId++),
       dbId: alertData.dbId || '',
       dbName: alertData.dbName || '',
       metricId: alertData.metricId || '',
@@ -1336,10 +1461,21 @@ FROM pg_tablespace`,
       objectName: alertData.objectName || 'INSTANCE',
       alertLevel: alertData.alertLevel || 'WARN',
       message: alertData.message || 'System threshold alert',
+      status: alertData.status || 'OPEN',
       createdAt: alertData.createdAt || new Date().toISOString(),
     };
     this.activeAlerts = [newAlert, ...this.activeAlerts];
     return newAlert;
+  }
+
+  async acknowledgeActiveAlert(alertId: string, acknowledgedById?: string | null, acknowledgedByName?: string): Promise<boolean> {
+    const target = this.activeAlerts.find((a) => a.id === alertId);
+    if (!target) return false;
+    target.status = 'ACKNOWLEDGED';
+    target.acknowledgedAt = new Date().toISOString();
+    target.acknowledgedById = acknowledgedById || null;
+    target.acknowledgedByName = acknowledgedByName || 'User';
+    return true;
   }
 
   async clearActiveAlert(alertId: string, clearedById?: string | null, clearedByName?: string): Promise<boolean> {
@@ -1349,7 +1485,7 @@ FROM pg_tablespace`,
     this.activeAlerts = this.activeAlerts.filter((a) => a.id !== alertId);
 
     const historyEntry: AlertHistoryEntity = {
-      id: `hist-${Date.now()}`,
+      id: String(this.nextAlertHistoryId++),
       dbId: target.dbId,
       dbName: target.dbName,
       metricId: target.metricId,
@@ -1373,7 +1509,7 @@ FROM pg_tablespace`,
 
   async addAlertHistory(historyData: Partial<AlertHistoryEntity>): Promise<AlertHistoryEntity> {
     const entry: AlertHistoryEntity = {
-      id: historyData.id || `hist-${Date.now()}`,
+      id: historyData.id || String(this.nextAlertHistoryId++),
       dbId: historyData.dbId || '',
       dbName: historyData.dbName || '',
       metricId: historyData.metricId || '',
@@ -1436,7 +1572,7 @@ FROM pg_tablespace`,
       valueType: data.valueType || 'NUMBER',
       thresholdOperator: data.thresholdOperator || '>=',
       triggeredThreshold: data.triggeredThreshold || null,
-      frequencyMinutes: data.frequencyMinutes || 5,
+      cycle: data.cycle || 1,
       status: data.status || 'NORMAL',
       measuredAt: data.measuredAt || new Date().toISOString(),
     };
@@ -1480,6 +1616,67 @@ FROM pg_tablespace`,
     };
     this.auditLogs = [entry, ...this.auditLogs];
     return entry;
+  }
+
+  async cleanAllMonitorData(daysToKeep = 0, dbId = 'ALL') {
+    const cutoffTime = daysToKeep <= 0 ? Date.now() : Date.now() - daysToKeep * 86400000;
+    const matchesDb = (targetDbId: string) => dbId === 'ALL' || targetDbId === dbId;
+
+    const initActive = this.activeAlerts.length;
+    this.activeAlerts = this.activeAlerts.filter((a) => {
+      if (!matchesDb(a.dbId)) return true;
+      return new Date(a.createdAt).getTime() > cutoffTime;
+    });
+
+    const initHistory = this.alertHistory.length;
+    this.alertHistory = this.alertHistory.filter((a) => {
+      if (!matchesDb(a.dbId)) return true;
+      return new Date(a.createdAt).getTime() > cutoffTime;
+    });
+
+    const initMetrics = this.metricHistory.length;
+    this.metricHistory = this.metricHistory.filter((m) => {
+      if (!matchesDb(m.dbId)) return true;
+      return new Date(m.createdAt).getTime() > cutoffTime;
+    });
+
+    this.rawMeasurements = this.rawMeasurements.filter((m) => {
+      if (!matchesDb(m.dbId)) return true;
+      return new Date(m.measuredAt).getTime() > cutoffTime;
+    });
+
+    const initLogs = this.alertNotificationLogs.length;
+    this.alertNotificationLogs = this.alertNotificationLogs.filter((l) => {
+      if (!matchesDb(l.dbId)) return true;
+      return new Date(l.timestamp).getTime() > cutoffTime;
+    });
+
+    return {
+      activeAlertsDeleted: initActive - this.activeAlerts.length,
+      alertHistoryDeleted: initHistory - this.alertHistory.length,
+      metricDataPointsDeleted: initMetrics - this.metricHistory.length,
+      notificationLogsDeleted: initLogs - this.alertNotificationLogs.length,
+    };
+  }
+
+  async cleanRawQueryHistory(daysToKeep = 0, dbId = 'ALL') {
+    const cutoffTime = daysToKeep <= 0 ? Date.now() : Date.now() - daysToKeep * 86400000;
+    const matchesDb = (targetDbId: string) => dbId === 'ALL' || targetDbId === dbId;
+
+    const initMetrics = this.metricHistory.length;
+    this.metricHistory = this.metricHistory.filter((m) => {
+      if (!matchesDb(m.dbId)) return true;
+      return new Date(m.createdAt).getTime() > cutoffTime;
+    });
+
+    this.rawMeasurements = this.rawMeasurements.filter((m) => {
+      if (!matchesDb(m.dbId)) return true;
+      return new Date(m.measuredAt).getTime() > cutoffTime;
+    });
+
+    return {
+      metricDataPointsDeleted: initMetrics - this.metricHistory.length,
+    };
   }
 
   async resetData(): Promise<void> {

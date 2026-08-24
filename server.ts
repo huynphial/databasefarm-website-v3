@@ -504,6 +504,16 @@ async function startServer() {
     }
   });
 
+  app.post('/api/active-alerts/:id/acknowledge', async (req, res) => {
+    try {
+      const { acknowledgedById, acknowledgedByName } = req.body || {};
+      const ok = await repo.acknowledgeActiveAlert(req.params.id, acknowledgedById, acknowledgedByName);
+      res.json({ success: ok, alertId: req.params.id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post('/api/active-alerts/:id/clear', async (req, res) => {
     try {
       const { clearedById, clearedByName } = req.body || {};
@@ -759,6 +769,46 @@ async function startServer() {
         details: 'Performed global system settings reset (purged all databases, groups, templates, metrics, alerts, and histories)',
       });
       res.json({ status: 'ok', message: 'All transient and monitoring data has been successfully reset.' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/danger-zone/clean-all-monitor-data', async (req, res) => {
+    try {
+      const { daysToKeep = 0, dbId = 'ALL' } = req.body || {};
+      const result = await repo.cleanAllMonitorData(Number(daysToKeep) || 0, dbId);
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req, 'admin');
+      await repo.addAuditLog({
+        userId,
+        clientIp,
+        actionType: 'DELETE',
+        targetEntity: 'SYSTEM',
+        targetId: dbId,
+        details: `Cleaned all monitor data older than ${daysToKeep} day(s) for database scope "${dbId}". Deleted: ${result.activeAlertsDeleted} active alerts, ${result.alertHistoryDeleted} alert history records, ${result.metricDataPointsDeleted} metric points, ${result.notificationLogsDeleted} notification logs.`,
+      });
+      res.json({ status: 'ok', ...result });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/danger-zone/clean-raw-query-history', async (req, res) => {
+    try {
+      const { daysToKeep = 0, dbId = 'ALL' } = req.body || {};
+      const result = await repo.cleanRawQueryHistory(Number(daysToKeep) || 0, dbId);
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req, 'admin');
+      await repo.addAuditLog({
+        userId,
+        clientIp,
+        actionType: 'DELETE',
+        targetEntity: 'SYSTEM',
+        targetId: dbId,
+        details: `Cleaned raw query history older than ${daysToKeep} day(s) for database scope "${dbId}". Deleted ${result.metricDataPointsDeleted} metric measurement points.`,
+      });
+      res.json({ status: 'ok', ...result });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

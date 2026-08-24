@@ -18,7 +18,7 @@ import {
   Sparkles,
   Search
 } from 'lucide-react';
-import { DbEngine, MetricEntity, TemplateEntity, UserRole } from '../../types';
+import { DbEngine, MetricEntity, TemplateEntity, UserRole, DatabaseEngineEntity } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
@@ -26,6 +26,7 @@ import { useToast } from '../ui/Toast';
 interface TemplatesViewProps {
   templates: TemplateEntity[];
   metrics: MetricEntity[];
+  databaseEngines?: DatabaseEngineEntity[];
   userRole: UserRole;
   showInfoTips?: boolean;
   onSaveTemplate: (template: Partial<TemplateEntity>) => void;
@@ -36,6 +37,7 @@ interface TemplatesViewProps {
 export const TemplatesView: React.FC<TemplatesViewProps> = ({
   templates,
   metrics,
+  databaseEngines = [],
   userRole,
   showInfoTips = true,
   onSaveTemplate,
@@ -58,30 +60,39 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
     id?: string;
     name: string;
     description: string;
-    targetDbType: DbEngine | 'ALL';
+    databaseEngineId: string;
+    targetDbType: DbEngine | 'ALL' | string;
   }>({
     name: '',
     description: '',
+    databaseEngineId: '',
     targetDbType: 'POSTGRES',
   });
 
   const openCreateDialog = () => {
     setEditingTemplate(null);
+    const activeEngine = databaseEngines.find((e) => e.statusOnOff === 'ACTIVE') || databaseEngines[0];
     setFormData({
       name: '',
       description: '',
-      targetDbType: 'POSTGRES',
+      databaseEngineId: activeEngine ? activeEngine.id : '',
+      targetDbType: activeEngine ? (activeEngine.dbCode as any) : 'POSTGRES',
     });
     setIsDialogOpen(true);
   };
 
   const openEditDialog = (tpl: TemplateEntity) => {
     setEditingTemplate(tpl);
+    const matchedEngine = tpl.databaseEngineId
+      ? databaseEngines.find((e) => e.id === tpl.databaseEngineId)
+      : (tpl.targetDbType ? databaseEngines.find((e) => e.dbCode.toUpperCase() === tpl.targetDbType?.toUpperCase()) : null);
+
     setFormData({
       id: tpl.id,
       name: tpl.name,
       description: tpl.description || '',
-      targetDbType: tpl.targetDbType || 'ALL',
+      databaseEngineId: matchedEngine ? matchedEngine.id : (tpl.databaseEngineId || (tpl.targetDbType === 'ALL' ? 'ALL' : '')),
+      targetDbType: matchedEngine ? (matchedEngine.dbCode as any) : (tpl.targetDbType || 'ALL'),
     });
     setIsDialogOpen(true);
   };
@@ -93,16 +104,20 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       return;
     }
 
+    const selectedEng = databaseEngines.find((e) => e.id === formData.databaseEngineId);
+    const resolvedDbType = selectedEng ? selectedEng.dbCode : (formData.databaseEngineId === 'ALL' ? 'ALL' : (formData.targetDbType || 'ALL'));
+
     onSaveTemplate({
       id: formData.id,
       name: formData.name.trim(),
       description: formData.description.trim() || null,
-      targetDbType: formData.targetDbType,
+      databaseEngineId: selectedEng ? selectedEng.id : (formData.databaseEngineId !== 'ALL' ? formData.databaseEngineId || null : null),
+      targetDbType: resolvedDbType,
     });
     setIsDialogOpen(false);
     toast({
       title: formData.id ? 'Template Updated' : 'Template Created',
-      description: `Monitoring template "${formData.name}" [${formData.targetDbType}] saved successfully.`,
+      description: `Monitoring template "${formData.name}" [${selectedEng ? selectedEng.dbName : resolvedDbType}] saved successfully.`,
       type: 'success',
     });
   };
@@ -148,6 +163,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
   const filteredAvailableMetrics = useMemo(() => {
     if (!metricManagerTemplate) return [];
     const templateDbType = metricManagerTemplate.targetDbType; // e.g. "POSTGRES", "MYSQL", "ALL", etc.
+    const templateEngineId = metricManagerTemplate.databaseEngineId;
 
     const unassignedAndCompatible = metrics.filter((m) => {
       // 1. Must not be already assigned to this template
@@ -158,8 +174,13 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       // If template is universal ('ALL' or empty)
       if (!templateDbType || templateDbType === 'ALL') return true;
 
+      // If metric matches exact databaseEngineId
+      if (templateEngineId && m.databaseEngineId && templateEngineId === m.databaseEngineId) {
+        return true;
+      }
+
       // If metric is universal (no engine assigned, or engine id is null, or engine code is universal)
-      const metricDbCode = m.databaseEngine?.dbCode;
+      const metricDbCode = m.databaseEngine?.dbCode || (databaseEngines.find((e) => e.id === m.databaseEngineId)?.dbCode);
       if (!m.databaseEngineId || !metricDbCode || metricDbCode === 'ALL') return true;
 
       // Otherwise, database engine codes must match
@@ -169,7 +190,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
     if (!metricSearchQuery.trim()) return unassignedAndCompatible;
     const q = metricSearchQuery.toLowerCase().trim();
     return unassignedAndCompatible.filter((m) => m.name.toLowerCase().includes(q) || m.sqlQuery.toLowerCase().includes(q));
-  }, [metrics, metricManagerTemplate, metricSearchQuery]);
+  }, [metrics, metricManagerTemplate, metricSearchQuery, databaseEngines]);
 
   // Add selected metrics to template
   const handleAddSelectedMetricsToTemplate = () => {
@@ -199,14 +220,6 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
     });
   };
 
-  const engineColors: Record<string, string> = {
-    ORACLE: 'text-red-700 bg-red-50 border-red-200',
-    POSTGRES: 'text-blue-700 bg-blue-50 border-blue-200',
-    MYSQL: 'text-cyan-700 bg-cyan-50 border-cyan-200',
-    MSSQL: 'text-purple-700 bg-purple-50 border-purple-200',
-    ALL: 'text-slate-700 bg-slate-100 border-slate-200',
-  };
-
   const columns: Column<TemplateEntity>[] = [
     {
       header: 'Template Name & Scope',
@@ -224,14 +237,26 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       ),
     },
     {
-      header: 'Engine Compatibility',
+      header: 'Database Engine',
       accessorKey: 'targetDbType',
-      width: '160px',
+      width: '150px',
       cell: (row) => {
-        const engine = row.targetDbType || 'ALL';
+        const engine = row.databaseEngine || databaseEngines.find((e) => e.id === row.databaseEngineId || e.dbCode.toUpperCase() === row.targetDbType?.toUpperCase());
+        const dbCode = engine ? engine.dbCode : (row.targetDbType || 'ALL');
+        const dbColor = engine?.dbColor || '#64748B';
+
         return (
-          <span className={`px-2 py-0.5 border rounded text-[10px] font-bold tracking-wider ${engineColors[engine] || engineColors.ALL}`}>
-            {engine === 'ALL' ? 'UNIVERSAL' : `${engine} ONLY`}
+          <span
+            className="px-2.5 py-1 rounded-md text-xs font-bold font-mono flex items-center gap-1.5 max-w-fit uppercase shadow-2xs"
+            title={engine ? `${engine.dbName} (${engine.dbCode})` : dbCode}
+            style={{
+              backgroundColor: dbColor + '15',
+              color: dbColor,
+              border: `1px solid ${dbColor}35`,
+            }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dbColor }} />
+            {dbCode}
           </span>
         );
       },
@@ -413,9 +438,25 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
                 <Layers className="w-4 h-4 text-indigo-600" />
                 <span className="font-bold text-slate-900">{metricManagerTemplate.name}</span>
               </div>
-              <span className={`px-2 py-0.5 border rounded text-[10px] font-bold tracking-wider ${engineColors[metricManagerTemplate.targetDbType || 'ALL']}`}>
-                {metricManagerTemplate.targetDbType || 'UNIVERSAL'}
-              </span>
+              {(() => {
+                const engine = metricManagerTemplate.databaseEngine || databaseEngines.find((e) => e.id === metricManagerTemplate.databaseEngineId || e.dbCode.toUpperCase() === metricManagerTemplate.targetDbType?.toUpperCase());
+                const dbName = engine ? engine.dbName : (metricManagerTemplate.targetDbType === 'ALL' ? 'Universal / All' : (metricManagerTemplate.targetDbType || 'Universal / All'));
+                const dbColor = engine?.dbColor || '#64748B';
+
+                return (
+                  <span
+                    className="px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5"
+                    style={{
+                      backgroundColor: dbColor + '15',
+                      color: dbColor,
+                      border: `1px solid ${dbColor}30`,
+                    }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dbColor }} />
+                    {dbName}
+                  </span>
+                );
+              })()}
             </div>
 
             {/* Searchable Multi-Select Checkbox Attach Section */}
@@ -530,7 +571,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
                               {isActive ? 'Active' : 'Disabled'}
                             </span>
                             <span className="text-[10px] text-slate-400 font-mono">
-                              every {m.frequencyMinutes}m
+                              Cycle {m.cycle ?? 1}
                             </span>
                           </div>
                           <div className="text-[11px] font-mono text-slate-500 truncate mt-0.5 max-w-md">
@@ -618,19 +659,33 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              Target Database Engine Compatibility *
+              Database Engine (from Database Engines Table) *
             </label>
             <select
-              value={formData.targetDbType}
-              onChange={(e) => setFormData({ ...formData, targetDbType: e.target.value as DbEngine | 'ALL' })}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-semibold"
+              value={formData.databaseEngineId || (formData.targetDbType === 'ALL' ? 'ALL' : '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                const eng = databaseEngines.find((item) => item.id === val);
+                setFormData({
+                  ...formData,
+                  databaseEngineId: val,
+                  targetDbType: eng ? eng.dbCode : (val === 'ALL' ? 'ALL' : 'POSTGRES'),
+                });
+              }}
+              required
+              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
             >
-              <option value="POSTGRES">PostgreSQL (Compatible with Postgres instances)</option>
-              <option value="ORACLE">Oracle Database (Compatible with Oracle instances)</option>
-              <option value="MYSQL">MySQL Server (Compatible with MySQL instances)</option>
-              <option value="MSSQL">Microsoft SQL Server (Compatible with SQL Server instances)</option>
+              <option value="" disabled>-- Select Database Engine from database_engine --</option>
+              {databaseEngines.map((eng) => (
+                <option key={eng.id} value={eng.id}>
+                  {eng.dbName} ({eng.dbCode}) {eng.statusOnOff === 'INACTIVE' ? '— [Inactive]' : ''}
+                </option>
+              ))}
               <option value="ALL">Universal (Compatible with all engines)</option>
             </select>
+            <p className="text-[10px] text-slate-400 mt-1">
+              Selected engine is bound to the registered database engine in the database_engine catalog.
+            </p>
           </div>
 
           <div>

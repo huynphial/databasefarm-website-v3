@@ -23,6 +23,10 @@ import {
   ArrowUpDown,
   Clock,
   RefreshCw,
+  BarChart3,
+  Tag,
+  FileText,
+  X,
 } from 'lucide-react';
 import { ActiveAlertEntity, DatabaseEntity, DatabaseEngineEntity, DbEngine, GroupEntity, MetricEntity, TemplateEntity, UserRole } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
@@ -41,6 +45,7 @@ interface DatabasesViewProps {
   showInfoTips?: boolean;
   onSaveDatabase: (database: Partial<DatabaseEntity>) => void;
   onDeleteDatabase: (id: string) => void;
+  onNavigateToAnalytics?: (dbId: string) => void;
 }
 
 export const DatabasesView: React.FC<DatabasesViewProps> = ({
@@ -54,6 +59,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   showInfoTips = true,
   onSaveDatabase,
   onDeleteDatabase,
+  onNavigateToAnalytics,
 }) => {
   const { toast } = useToast();
   
@@ -89,12 +95,19 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const [editingDb, setEditingDb] = useState<DatabaseEntity | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
+  const RECOMMENDED_TAGS = ['PRODUCTION', 'STAGING', 'LAB', 'DEV', 'CRITICAL', 'ANALYTICS', 'PRIMARY', 'REPLICA', 'FINANCE'];
+
+  const [customTagInput, setCustomTagInput] = useState('');
+
   const [formData, setFormData] = useState<{
     id?: string;
     name: string;
     dbType: DbEngine;
     host: string;
     port: number;
+    tags: string[];
+    pollIntervalMinutes: number;
+    note: string;
     username: string;
     password: string;
     databaseNameOrSid: string;
@@ -106,6 +119,9 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     dbType: DB_ENGINES[0]?.code || 'POSTGRES',
     host: '',
     port: 5432,
+    tags: ['PRODUCTION'],
+    pollIntervalMinutes: 5,
+    note: '',
     username: '',
     password: '',
     databaseNameOrSid: '',
@@ -202,12 +218,16 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const openCreateDialog = () => {
     setEditingDb(null);
     setShowPassword(false);
+    setCustomTagInput('');
     const defaultEng = DB_ENGINES[0];
     setFormData({
       name: '',
       dbType: defaultEng?.code || 'POSTGRES',
       host: '10.0.14.90',
       port: defaultEng?.defaultPort || 5432,
+      tags: ['PRODUCTION'],
+      pollIntervalMinutes: 5,
+      note: '',
       username: 'dbmon_reader',
       password: 'SecureClusterPassword#2026',
       databaseNameOrSid: 'app_production',
@@ -221,12 +241,16 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const openEditDialog = (db: DatabaseEntity) => {
     setEditingDb(db);
     setShowPassword(false);
+    setCustomTagInput('');
     setFormData({
       id: db.id,
       name: db.name,
       dbType: db.dbType,
       host: db.host,
       port: db.port,
+      tags: db.tags || [],
+      pollIntervalMinutes: db.pollIntervalMinutes ?? 5,
+      note: db.note || '',
       username: db.username || db.connectionConfig?.username || '',
       password: db.password || '',
       databaseNameOrSid: db.connectionConfig?.databaseName || db.connectionConfig?.serviceName || '',
@@ -274,6 +298,9 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       dbType: formData.dbType,
       host: formData.host.trim(),
       port: Number(formData.port),
+      tags: formData.tags,
+      pollIntervalMinutes: Number(formData.pollIntervalMinutes) || 5,
+      note: formData.note.trim(),
       username: formData.username.trim(),
       password: formData.password,
       isEnabled: formData.isEnabled,
@@ -364,7 +391,9 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             db.name.toLowerCase().includes(term) ||
             db.host.toLowerCase().includes(term) ||
             db.dbType.toLowerCase().includes(term) ||
-            (db.username && db.username.toLowerCase().includes(term));
+            (db.username && db.username.toLowerCase().includes(term)) ||
+            (db.note && db.note.toLowerCase().includes(term)) ||
+            (db.tags && db.tags.some((t) => t.toLowerCase().includes(term)));
           if (!match) return false;
         }
 
@@ -419,9 +448,29 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             <Server className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
             <span className="truncate">{row.name}</span>
           </div>
-          <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-            {row.host}:{row.port}
+          <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-2 flex-wrap">
+            <span>{row.host}:{row.port}</span>
+            <span className="text-[10px] text-slate-700 font-semibold bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200" title="Auto-created Poll ID (Read-only)">
+              Poll ID: {row.pollId ?? 0}
+            </span>
+            {row.pollIntervalMinutes && (
+              <span className="text-[10px] text-indigo-700 font-semibold bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100">
+                {row.pollIntervalMinutes}m freq
+              </span>
+            )}
           </div>
+          {row.tags && row.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {row.tags.map((t) => (
+                <span
+                  key={t}
+                  className="text-[9px] font-bold tracking-wider uppercase bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       ),
     },
@@ -562,16 +611,15 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       },
     },
     {
-      header: 'Inherited Probes',
+      header: 'Assigned Metrics',
       accessorKey: 'probeCount',
-      width: '125px',
+      width: '120px',
       sortable: true,
+      align: 'center',
       cell: (row) => {
-        const count = row.probeCount;
         return (
-          <span className="text-xs text-slate-700 flex items-center gap-1.5 font-medium font-mono">
-            <Gauge className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-            <span>{count} probe{count !== 1 ? 's' : ''}</span>
+          <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200 inline-block">
+            {row.probeCount}
           </span>
         );
       },
@@ -579,9 +627,18 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     {
       header: 'Actions',
       align: 'right',
-      width: '90px',
+      width: '110px',
       cell: (row) => (
         <div className="flex items-center justify-end gap-1">
+          {onNavigateToAnalytics && (
+            <button
+              onClick={() => onNavigateToAnalytics(row.id)}
+              className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+              title="Open in Analytics Database"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+            </button>
+          )}
           {userRole === 'ADMIN' ? (
             <>
               <button
@@ -600,7 +657,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               </button>
             </>
           ) : (
-            <span className="text-slate-400 text-xs italic">Read-only</span>
+            !onNavigateToAnalytics && <span className="text-slate-400 text-xs italic">Read-only</span>
           )}
         </div>
       ),
@@ -823,6 +880,154 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             </div>
           </div>
 
+          {/* Tags Selection & Custom Input */}
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-indigo-600" />
+                Tags / Classification Array
+              </span>
+              <span className="text-[10px] text-slate-500 font-normal">Click recommended or type custom tag</span>
+            </label>
+
+            {/* Recommended Tags Buttons */}
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {RECOMMENDED_TAGS.map((recTag) => {
+                const isSelected = formData.tags.includes(recTag);
+                return (
+                  <button
+                    key={recTag}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        setFormData({ ...formData, tags: formData.tags.filter((t) => t !== recTag) });
+                      } else {
+                        setFormData({ ...formData, tags: [...formData.tags, recTag] });
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide transition-all cursor-pointer border ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {isSelected ? '✓ ' : '+ '}
+                    {recTag}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Active Selected Tags Display & Add Tag Input */}
+            <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+              <div className="flex flex-wrap gap-1.5 min-h-[26px] items-center">
+                {formData.tags.length > 0 ? (
+                  formData.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-900 border border-indigo-200 text-[11px] font-bold px-2 py-0.5 rounded-md"
+                    >
+                      <span>{tag}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, tags: formData.tags.filter((t) => t !== tag) })}
+                        className="text-indigo-500 hover:text-indigo-800 cursor-pointer ml-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-slate-400 italic">No tags selected</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
+                <input
+                  type="text"
+                  placeholder="Type custom tag name and press Enter..."
+                  value={customTagInput}
+                  onChange={(e) => setCustomTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const tagVal = customTagInput.trim().toUpperCase();
+                      if (tagVal && !formData.tags.includes(tagVal)) {
+                        setFormData({ ...formData, tags: [...formData.tags, tagVal] });
+                      }
+                      setCustomTagInput('');
+                    }
+                  }}
+                  className="flex-1 bg-white border border-slate-300 text-xs rounded-md px-2.5 py-1 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tagVal = customTagInput.trim().toUpperCase();
+                    if (tagVal && !formData.tags.includes(tagVal)) {
+                      setFormData({ ...formData, tags: [...formData.tags, tagVal] });
+                    }
+                    setCustomTagInput('');
+                  }}
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer"
+                >
+                  Add Tag
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Query Frequency & Operational Note */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-1">
+              <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                  Query Frequency *
+                </span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  required
+                  value={formData.pollIntervalMinutes}
+                  onChange={(e) => setFormData({ ...formData, pollIntervalMinutes: Math.max(1, Number(e.target.value)) })}
+                  className="w-full bg-white border border-slate-300 rounded-lg pl-3 pr-10 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
+                  min
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">Default polling frequency (5 minutes)</p>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-slate-700 font-semibold mb-1 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                Operational Note (Long Text)
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Instance documentation, architecture details, maintenance window, on-call contacts..."
+                value={formData.note}
+                onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Read-Only Auto-Created Poll ID */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+            <div>
+              <span className="font-bold text-slate-900 block text-xs">Poll Sequence ID (Read-Only)</span>
+              <span className="text-[10px] text-slate-500">Auto-created database polling sequence attribute (default = 0)</span>
+            </div>
+            <div className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded border border-indigo-200">
+              pollId: {editingDb?.pollId ?? 0}
+            </div>
+          </div>
+
           {/* Monitoring Active Toggle */}
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
             <div>
@@ -972,7 +1177,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                       <div>
                         <span className="font-semibold text-slate-900">{m.name}</span>
                         <span className="text-[10px] text-slate-500 block">
-                          Template: {m.templateName || 'Template Bundle'} ({m.frequencyMinutes}m poll)
+                          Template: {m.templateName || 'Template Bundle'} (Cycle {m.cycle ?? 1})
                         </span>
                       </div>
                     </div>

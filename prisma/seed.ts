@@ -225,7 +225,8 @@ async function main() {
       name: 'Tablespace Usage %',
       sqlQuery: 'SELECT tablespace_name AS name, ROUND((used_space/total_space)*100, 2) AS value FROM dba_tablespace_usage_metrics',
       valueType: ValueType.NUMBER,
-      frequencyMinutes: 5,
+      relationalOperator: '>=',
+      cycle: 1,
       noAlertRequired: false,
       isEnabled: true,
       metricQueryType: 1,
@@ -239,7 +240,8 @@ async function main() {
       name: 'Active Sessions Count',
       sqlQuery: "SELECT username AS name, COUNT(*) AS value FROM v$session WHERE status = 'ACTIVE' AND type != 'BACKGROUND' GROUP BY username",
       valueType: ValueType.NUMBER,
-      frequencyMinutes: 1,
+      relationalOperator: '>=',
+      cycle: 1,
       noAlertRequired: false,
       isEnabled: true,
       metricQueryType: 1,
@@ -253,7 +255,8 @@ async function main() {
       name: 'Connection Saturation %',
       sqlQuery: "SELECT ROUND((count(*)::numeric / current_setting('max_connections')::numeric) * 100, 2) AS value FROM pg_stat_activity",
       valueType: ValueType.NUMBER,
-      frequencyMinutes: 2,
+      relationalOperator: '>=',
+      cycle: 1,
       noAlertRequired: false,
       isEnabled: true,
       metricQueryType: 1,
@@ -267,7 +270,8 @@ async function main() {
       name: 'Cache Hit Ratio %',
       sqlQuery: 'SELECT ROUND(sum(heap_blks_hit) / (sum(heap_blks_hit) + sum(heap_blks_read)) * 100, 2) AS value FROM pg_statio_user_tables',
       valueType: ValueType.NUMBER,
-      frequencyMinutes: 5,
+      relationalOperator: '<=',
+      cycle: 1,
       noAlertRequired: false,
       isEnabled: true,
       metricQueryType: 1,
@@ -281,7 +285,8 @@ async function main() {
       name: 'Threads Connected',
       sqlQuery: "SHOW GLOBAL STATUS LIKE 'Threads_connected'",
       valueType: ValueType.NUMBER,
-      frequencyMinutes: 1,
+      relationalOperator: '>=',
+      cycle: 1,
       noAlertRequired: false,
       isEnabled: true,
       metricQueryType: 1,
@@ -295,7 +300,8 @@ async function main() {
       name: 'Slow Queries Rate',
       sqlQuery: "SHOW GLOBAL STATUS LIKE 'Slow_queries'",
       valueType: ValueType.NUMBER,
-      frequencyMinutes: 5,
+      relationalOperator: '>=',
+      cycle: 1,
       noAlertRequired: false,
       isEnabled: true,
       metricQueryType: 1,
@@ -309,7 +315,8 @@ async function main() {
       name: 'Page Life Expectancy (s)',
       sqlQuery: "SELECT [cntr_value] FROM sys.dm_os_performance_counters WHERE [counter_name] = 'Page life expectancy'",
       valueType: ValueType.NUMBER,
-      frequencyMinutes: 2,
+      relationalOperator: '<=',
+      cycle: 1,
       noAlertRequired: false,
       isEnabled: true,
       metricQueryType: 1,
@@ -363,6 +370,7 @@ async function main() {
       dbType: DbType.ORACLE,
       host: '10.0.12.44',
       port: 1521,
+      pollId: 0,
       username: 'SYSTEM',
       passwordEncrypted: 'Encrypted(P@ssw0rd123!)',
       connectionConfig: { sid: 'ORCLPRD', serviceName: 'orclprd.internal', sslMode: 'REQUIRED' },
@@ -376,6 +384,7 @@ async function main() {
       dbType: DbType.POSTGRES,
       host: '10.0.14.88',
       port: 5432,
+      pollId: 0,
       username: 'pay_service',
       passwordEncrypted: 'Encrypted(PaySecure#2026)',
       connectionConfig: { databaseName: 'payment_ledger', sslMode: 'PREFER' },
@@ -389,6 +398,7 @@ async function main() {
       dbType: DbType.MYSQL,
       host: '10.0.20.102',
       port: 3306,
+      pollId: 0,
       username: 'crm_admin',
       passwordEncrypted: 'Encrypted(CrmAdmin!99)',
       connectionConfig: { databaseName: 'crm_production', maxConnections: 500 },
@@ -402,6 +412,7 @@ async function main() {
       dbType: DbType.MSSQL,
       host: '10.0.30.15',
       port: 1433,
+      pollId: 0,
       username: 'sa_readonly',
       passwordEncrypted: 'Encrypted(DwhReadonly#123)',
       connectionConfig: { databaseName: 'DWH_Analytics', encrypt: true },
@@ -415,6 +426,7 @@ async function main() {
       dbType: DbType.MYSQL,
       host: '10.0.40.72',
       port: 3306,
+      pollId: 0,
       username: 'stg_user',
       passwordEncrypted: 'Encrypted(StgUserPass!)',
       connectionConfig: { databaseName: 'inventory_staging' },
@@ -533,7 +545,7 @@ async function main() {
   // 9. Prepare Active Alerts
   const activeAlertsData = [
     {
-      id: 'alt-f8319a2b',
+      id: 1,
       dbId: dbMyId,
       metricId: metThreadsId,
       alertLevel: AlertLevel.WARN,
@@ -546,7 +558,7 @@ async function main() {
       createdAt: new Date(Date.now() - 15 * 60000),
     },
     {
-      id: 'alt-d09f7a11',
+      id: 2,
       dbId: dbStgMyId,
       metricId: metSlowQueriesId,
       alertLevel: AlertLevel.DOWN,
@@ -559,7 +571,7 @@ async function main() {
       createdAt: new Date(Date.now() - 45 * 60000),
     },
     {
-      id: 'alt-e9a11c82',
+      id: 3,
       dbId: dbOraId,
       metricId: metTablespaceId,
       alertLevel: AlertLevel.HIGH,
@@ -576,7 +588,7 @@ async function main() {
   // 10. Prepare Alert History Records
   const alertHistoryData = [
     {
-      id: 'h-67a21f8e',
+      id: 1,
       dbId: dbPgId,
       metricId: metSaturationId,
       alertLevel: AlertLevel.HIGH,
@@ -592,7 +604,7 @@ async function main() {
       clearedById: adminUserId,
     },
     {
-      id: 'h-0a911e2f',
+      id: 2,
       dbId: dbOraId,
       metricId: metActiveSessionsId,
       alertLevel: AlertLevel.CRITICAL,
@@ -608,7 +620,7 @@ async function main() {
       clearedById: adminUserId,
     },
     {
-      id: 'h-de938a1f',
+      id: 3,
       dbId: dbMsId,
       metricId: metPageLifeId,
       alertLevel: AlertLevel.WARN,
@@ -831,7 +843,7 @@ async function main() {
         \`d\`.\`port\` AS \`database_port\`, 
         \`mdp\`.\`metric_id\`, 
         \`m\`.\`name\` AS \`metric_name\`, 
-        \`m\`.\`frequencyMinutes\` AS \`frequency\`, 
+        \`m\`.\`cycle\` AS \`cycle\`, 
         \`mdp\`.\`object_name\`, 
         \`mdp\`.\`attribute_name\`, 
         \`mdp\`.\`value\`, 
@@ -839,6 +851,43 @@ async function main() {
       FROM \`metric_data_points\` \`mdp\`
       LEFT JOIN \`databases\` \`d\` ON \`mdp\`.\`database_id\` = \`d\`.\`id\`
       LEFT JOIN \`metrics\` \`m\` ON \`mdp\`.\`metric_id\` = \`m\`.\`id\`;
+    `);
+    await p.$executeRawUnsafe(`
+      CREATE OR REPLACE VIEW \`view_active_database_active_metrics\` AS
+      SELECT 
+        \`d\`.\`id\` AS \`database_id\`,
+        \`d\`.\`name\` AS \`database_name\`,
+        \`d\`.\`dbType\` AS \`database_db_type\`,
+        \`d\`.\`host\` AS \`database_host\`,
+        \`d\`.\`port\` AS \`database_port\`,
+        \`d\`.\`poll_id\` AS \`database_poll_id\`,
+        \`d\`.\`tags\` AS \`database_tags\`,
+        \`d\`.\`poll_interval_minutes\` AS \`database_poll_interval_minutes\`,
+        \`d\`.\`note\` AS \`database_note\`,
+        \`d\`.\`username\` AS \`database_username\`,
+        \`d\`.\`passwordEncrypted\` AS \`database_password_encrypted\`,
+        \`d\`.\`connectionConfig\` AS \`database_connection_config\`,
+        \`d\`.\`status\` AS \`database_status\`,
+        \`d\`.\`lastCheckAt\` AS \`database_last_check_at\`,
+        \`d\`.\`isEnabled\` AS \`database_is_enabled\`,
+        \`d\`.\`createdAt\` AS \`database_created_at\`,
+        \`d\`.\`updatedAt\` AS \`database_updated_at\`,
+        \`m\`.\`id\` AS \`metric_id\`,
+        \`m\`.\`name\` AS \`metric_name\`,
+        \`m\`.\`sqlQuery\` AS \`metric_sql_query\`,
+        \`m\`.\`valueType\` AS \`metric_value_type\`,
+        \`m\`.\`relational_operator\` AS \`metric_relational_operator\`,
+        \`m\`.\`metric_query_type\` AS \`metric_query_type\`,
+        \`m\`.\`thresholds_config\` AS \`metric_thresholds_config\`,
+        \`m\`.\`cycle\` AS \`metric_cycle\`,
+        \`m\`.\`no_alert_required\` AS \`metric_no_alert_required\`,
+        \`m\`.\`isEnabled\` AS \`metric_is_enabled\`,
+        \`m\`.\`createdAt\` AS \`metric_created_at\`,
+        \`m\`.\`updatedAt\` AS \`metric_updated_at\`
+      FROM \`databases\` \`d\`
+      JOIN \`database_metric_mappings\` \`dmm\` ON \`d\`.\`id\` = \`dmm\`.\`databaseId\`
+      JOIN \`metrics\` \`m\` ON \`dmm\`.\`metricId\` = \`m\`.\`id\`
+      WHERE \`d\`.\`isEnabled\` = true AND \`m\`.\`isEnabled\` = true;
     `);
     console.log('✅ Analytical views created successfully.');
   } catch (err: any) {

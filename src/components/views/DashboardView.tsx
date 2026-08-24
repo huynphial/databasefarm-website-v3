@@ -450,35 +450,59 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div
                   key={db.id}
                   onClick={() => onNavigateToAnalytics(db.id)}
-                  className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-slate-100 transition-all cursor-pointer flex flex-col justify-between"
+                  title={`Open ${db.name} (${db.host}:${db.port}) in Analytics Database`}
+                  className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/20 transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="min-w-0 flex-1 pr-2">
-                      <div className="text-xs font-bold text-slate-900 tracking-tight truncate">{db.name}</div>
-                      <div className="flex flex-wrap items-center gap-1 mt-1.5">
-                        <span className={cn('px-1.5 py-0.5 text-[9px] uppercase tracking-wider rounded border', getDbEngineTagStyle(db.dbType))}>
-                          {db.dbType}
-                        </span>
-                        <span className="text-[9px] text-slate-400 font-mono">:{db.port}</span>
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-slate-900 tracking-tight truncate group-hover:text-indigo-600 transition-colors">
+                          {db.name}
+                        </div>
+                        {/* Host/IP:Port connection */}
+                        <div className="text-[11px] text-slate-500 font-mono truncate mt-0.5" title={`${db.host}:${db.port}`}>
+                          {db.host}:{db.port}
+                        </div>
                       </div>
+                      <span
+                        className={cn(
+                          'w-2.5 h-2.5 rounded-full shrink-0 mt-1',
+                          db.derivedStatus === 'UP' && 'bg-emerald-500 shadow-2xs shadow-emerald-500/50',
+                          db.derivedStatus === 'WARN' && 'bg-amber-500 shadow-2xs shadow-amber-500/50 animate-pulse',
+                          db.derivedStatus === 'DOWN' && 'bg-rose-500 shadow-2xs shadow-rose-500/50 animate-pulse'
+                        )}
+                        title={`Status: ${db.derivedStatus}`}
+                      />
                     </div>
-                    <span className={cn(
-                      'w-2.5 h-2.5 rounded-full mt-1 shrink-0',
-                      db.derivedStatus === 'UP' && 'bg-emerald-500 shadow-2xs shadow-emerald-500/50',
-                      db.derivedStatus === 'WARN' && 'bg-amber-500 shadow-2xs shadow-amber-500/50 animate-pulse',
-                      db.derivedStatus === 'DOWN' && 'bg-rose-500 shadow-2xs shadow-rose-500/50 animate-pulse'
-                    )} />
+
+                    {/* Engine Code and Environment Badge */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={cn(
+                          'px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-md border shadow-2xs',
+                          getDbEngineBadgeClass(db.dbType)
+                        )}
+                      >
+                        {db.dbType}
+                      </span>
+                      {db.environment && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase rounded bg-slate-100 text-slate-600 border border-slate-200">
+                          {db.environment}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500 font-medium">Alerts (C/H/W):</span>
+
+                  <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500 font-medium text-[10px] uppercase tracking-wider">Alerts (C/H/W)</span>
                     <span className={cn(
-                      'font-mono font-bold',
+                      'font-mono font-bold text-xs',
                       db.alertCount > 0 ? 'text-slate-800' : 'text-slate-400'
                     )}>
                       <span className={cn(cCount > 0 ? 'text-rose-600 font-extrabold' : 'text-slate-400')}>{cCount}</span>
-                      <span className="text-slate-300 mx-0.5">/</span>
+                      <span className="text-slate-300 mx-1">/</span>
                       <span className={cn(hCount > 0 ? 'text-orange-500 font-extrabold' : 'text-slate-400')}>{hCount}</span>
-                      <span className="text-slate-300 mx-0.5">/</span>
+                      <span className="text-slate-300 mx-1">/</span>
                       <span className={cn(wCount > 0 ? 'text-amber-500 font-extrabold' : 'text-slate-400')}>{wCount}</span>
                     </span>
                   </div>

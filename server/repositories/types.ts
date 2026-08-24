@@ -62,6 +62,7 @@ export interface IStorageRepository {
   // Active Alerts
   getActiveAlerts(): Promise<ActiveAlertEntity[]>;
   saveActiveAlert(alertData: Partial<ActiveAlertEntity>): Promise<ActiveAlertEntity>;
+  acknowledgeActiveAlert(alertId: string, acknowledgedById?: string | null, acknowledgedByName?: string): Promise<boolean>;
   clearActiveAlert(alertId: string, clearedById?: string | null, clearedByName?: string): Promise<boolean>;
 
   // Alert History
@@ -83,6 +84,8 @@ export interface IStorageRepository {
   getAuditLogs(limit?: number): Promise<AuditLogEntity[]>;
   addAuditLog(logData: Partial<AuditLogEntity>): Promise<AuditLogEntity>;
 
-  // Reset Data
+  // Reset & Maintenance Data
+  cleanAllMonitorData(daysToKeep?: number, dbId?: string): Promise<{ activeAlertsDeleted: number; alertHistoryDeleted: number; metricDataPointsDeleted: number; notificationLogsDeleted: number }>;
+  cleanRawQueryHistory(daysToKeep?: number, dbId?: string): Promise<{ metricDataPointsDeleted: number }>;
   resetData(): Promise<void>;
 }

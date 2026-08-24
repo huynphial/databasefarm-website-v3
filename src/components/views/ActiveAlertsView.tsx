@@ -29,6 +29,19 @@ interface ActiveAlertsViewProps {
   showInfoTips?: boolean;
 }
 
+const SEVERITY_RANK: Record<string, number> = {
+  DOWN: 1,
+  CRITICAL: 2,
+  HIGH: 3,
+  WARN: 4,
+};
+
+const STATE_RANK: Record<string, number> = {
+  OPEN: 0,
+  ACK: 1,
+  ACKNOWLEDGED: 1,
+};
+
 export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
   databases,
   activeAlerts,
@@ -40,12 +53,14 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
 }) => {
   const { toast } = useToast();
 
-  // Filters State
+  // Filters & Sorting State
   const [selectedDbType, setSelectedDbType] = useState<string>('ALL');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [sortField, setSortField] = useState<string>('status');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Auto Refresh State (1-Minute Timer = 60 Seconds)
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState<boolean>(true);
@@ -149,7 +164,19 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     })
     .filter((d) => d.count > 0);
 
-  // Filter & Sort Active Alerts (OPEN alerts sort above ACKNOWLEDGED alerts, then newest first)
+  const handleSortChange = (field: string) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'createdAt' ? 'desc' : 'asc');
+    }
+    setCurrentPage(1);
+  };
+
+  // Filter & Sort Active Alerts
+  // Default order: status (OPEN to ACK), second order: detected time desc
+  // Severity order: DOWN -> CRITICAL -> HIGH -> WARN
   const filteredAlerts = activeAlerts
     .filter((alert) => {
       const dbObj = databases.find((d) => d.id === alert.dbId);
@@ -165,11 +192,49 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       return matchesDbType && matchesSeverity && matchesSearch;
     })
     .sort((a, b) => {
-      const statusA = a.status || 'OPEN';
-      const statusB = b.status || 'OPEN';
-      if (statusA === 'OPEN' && statusB === 'ACKNOWLEDGED') return -1;
-      if (statusA === 'ACKNOWLEDGED' && statusB === 'OPEN') return 1;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      let primaryCmp = 0;
+
+      if (sortField === 'status') {
+        const rankA = STATE_RANK[a.status || 'OPEN'] ?? 0;
+        const rankB = STATE_RANK[b.status || 'OPEN'] ?? 0;
+        primaryCmp = rankA - rankB;
+      } else if (sortField === 'alertLevel') {
+        const rankA = SEVERITY_RANK[a.alertLevel] ?? 99;
+        const rankB = SEVERITY_RANK[b.alertLevel] ?? 99;
+        primaryCmp = rankA - rankB;
+      } else if (sortField === 'createdAt') {
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        primaryCmp = timeA - timeB;
+      } else if (sortField === 'dbName') {
+        primaryCmp = a.dbName.localeCompare(b.dbName);
+      } else if (sortField === 'metricName') {
+        primaryCmp = a.metricName.localeCompare(b.metricName);
+      } else if (sortField === 'message') {
+        primaryCmp = a.message.localeCompare(b.message);
+      }
+
+      if (sortOrder === 'desc') {
+        primaryCmp = -primaryCmp;
+      }
+
+      if (primaryCmp !== 0) return primaryCmp;
+
+      // Secondary Tie-Breaker 1: State OPEN to ACK
+      if (sortField !== 'status') {
+        const rankA = STATE_RANK[a.status || 'OPEN'] ?? 0;
+        const rankB = STATE_RANK[b.status || 'OPEN'] ?? 0;
+        const stateCmp = rankA - rankB;
+        if (stateCmp !== 0) return stateCmp;
+      }
+
+      // Secondary Tie-Breaker 2: Detected time desc
+      if (sortField !== 'createdAt') {
+        const timeCmp = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        if (timeCmp !== 0) return timeCmp;
+      }
+
+      return 0;
     });
 
   const totalPages = Math.ceil(filteredAlerts.length / pageSize) || 1;
@@ -180,7 +245,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       onAcknowledgeAlert(alert.id);
       toast({
         title: 'Alert Acknowledged',
-        description: `Alert for "${alert.metricName}" on "${alert.dbName}" marked as ACKNOWLEDGED.`,
+        description: `Alert for "${alert.metricName}" on "${alert.dbName}" updated from OPEN to ACK.`,
         type: 'info',
       });
     }
@@ -207,6 +272,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     {
       header: 'State',
       accessorKey: 'status',
+      sortable: true,
       width: '90px',
       cell: (row) => {
         const status = row.status || 'OPEN';
@@ -229,6 +295,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     {
       header: 'Severity',
       accessorKey: 'alertLevel',
+      sortable: true,
       width: '85px',
       cell: (row) => {
         const styles = {
@@ -248,6 +315,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     {
       header: 'Database & Engine',
       accessorKey: 'dbName',
+      sortable: true,
       width: '180px',
       cell: (row) => {
         const dbObj = databases.find((d) => d.id === row.dbId);
@@ -274,6 +342,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     {
       header: 'Metric',
       accessorKey: 'metricName',
+      sortable: true,
       width: '200px',
       cell: (row) => (
         <div className="space-y-0.5">
@@ -296,6 +365,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     {
       header: 'Incident Message',
       accessorKey: 'message',
+      sortable: true,
       cell: (row) => (
         <span className="text-slate-600 text-xs leading-relaxed block w-full pr-4 whitespace-normal break-words">
           {row.message}
@@ -305,6 +375,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     {
       header: 'Detected',
       accessorKey: 'createdAt',
+      sortable: true,
       width: '150px',
       cell: (row) => (
         <span className="text-slate-500 text-xs font-mono">
@@ -678,6 +749,9 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
             setPageSize(newSize);
             setCurrentPage(1);
           }}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          onSortChange={handleSortChange}
           emptyMessage="No active incident alerts detected for the selected filter criteria."
         />
       </div>

@@ -158,7 +158,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       'Attribute Name',
       'Measured Value',
       'Triggered Threshold',
-      'Check Interval (Min)',
+      'Cycle',
       'Health Status',
       'Timestamp (UTC+7)',
     ];
@@ -172,7 +172,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       `"${(m.attributeName || 'value').replace(/"/g, '""')}"`,
       `"${m.value.replace(/"/g, '""')}"`,
       `"${(m.triggeredThreshold || 'Normal / In Bounds').replace(/"/g, '""')}"`,
-      m.frequencyMinutes || 5,
+      m.cycle ?? 1,
       m.status,
       formatExactTime(m.measuredAt),
     ]);
@@ -526,7 +526,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 <th className="py-2.5 px-3">Object Attribute</th>
                 <th className="py-2.5 px-3">Measured Value</th>
                 <th className="py-2.5 px-3">Triggered Threshold</th>
-                <th className="py-2.5 px-3 text-center">Freq</th>
+                <th className="py-2.5 px-3 text-center">Cycle</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -665,10 +665,10 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                         )}
                       </td>
 
-                      {/* 8. Frequency */}
+                      {/* 8. Cycle */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap font-mono text-[11px] text-slate-600">
                         <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold">
-                          {item.frequencyMinutes || 5}m
+                          Cycle {item.cycle ?? 1}
                         </span>
                       </td>
                     </tr>

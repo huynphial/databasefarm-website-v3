@@ -18,6 +18,7 @@ import {
   FileText,
   Activity,
   BellRing,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { UserRole } from '../../types';
@@ -28,7 +29,7 @@ export type NavigationTab =
   | 'databases'
   | 'groups'
   | 'templates'
-  | 'analytics'
+  | 'analytics-database'
   | 'metrics'
   | 'active-alerts'
   | 'alert-history'
@@ -57,7 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'active-alerts' as NavigationTab, label: 'Active Alerts', icon: ShieldAlert },
     { id: 'databases' as NavigationTab, label: 'Monitored Databases', icon: Database },
     { id: 'groups' as NavigationTab, label: 'Database Groups', icon: FolderKanban },
-    { id: 'analytics' as NavigationTab, label: 'Analytics & Trends', icon: LineChart },
+    { id: 'analytics-database' as NavigationTab, label: 'Analytics Database', icon: BarChart3 },
     { id: 'raw-measurements' as NavigationTab, label: 'Raw Query History', icon: Activity },
   ];
 

@@ -88,7 +88,7 @@ export const INITIAL_METRICS: MetricEntity[] = [
     thresholdWarn: '80',
     thresholdHigh: '90',
     thresholdCritical: '95',
-    frequencyMinutes: 5,
+    cycle: 1,
     templateId: 'tpl-ora-01',
     templateName: 'Oracle Enterprise Standard',
     isEnabled: true,
@@ -103,7 +103,7 @@ export const INITIAL_METRICS: MetricEntity[] = [
     thresholdWarn: '150',
     thresholdHigh: '300',
     thresholdCritical: '500',
-    frequencyMinutes: 1,
+    cycle: 1,
     templateId: 'tpl-ora-01',
     templateName: 'Oracle Enterprise Standard',
     isEnabled: true,
@@ -118,7 +118,7 @@ export const INITIAL_METRICS: MetricEntity[] = [
     thresholdWarn: '75',
     thresholdHigh: '85',
     thresholdCritical: '95',
-    frequencyMinutes: 2,
+    cycle: 1,
     templateId: 'tpl-pg-01',
     templateName: 'PostgreSQL Core Health',
     isEnabled: true,
@@ -133,7 +133,7 @@ export const INITIAL_METRICS: MetricEntity[] = [
     thresholdWarn: '30',
     thresholdHigh: '60',
     thresholdCritical: '120',
-    frequencyMinutes: 1,
+    cycle: 1,
     templateId: 'tpl-pg-01',
     templateName: 'PostgreSQL Core Health',
     isEnabled: true,
@@ -148,7 +148,7 @@ export const INITIAL_METRICS: MetricEntity[] = [
     thresholdWarn: '200',
     thresholdHigh: '400',
     thresholdCritical: '800',
-    frequencyMinutes: 1,
+    cycle: 1,
     templateId: 'tpl-my-01',
     templateName: 'MySQL Server Metrics',
     isEnabled: true,
@@ -163,7 +163,7 @@ export const INITIAL_METRICS: MetricEntity[] = [
     thresholdWarn: 'ON',
     thresholdHigh: null,
     thresholdCritical: null,
-    frequencyMinutes: 10,
+    cycle: 1,
     templateId: 'tpl-my-01',
     templateName: 'MySQL Server Metrics',
     isEnabled: false,
@@ -178,7 +178,7 @@ export const INITIAL_METRICS: MetricEntity[] = [
     thresholdWarn: '300',
     thresholdHigh: '150',
     thresholdCritical: '60',
-    frequencyMinutes: 5,
+    cycle: 1,
     templateId: 'tpl-ms-01',
     templateName: 'SQL Server Enterprise Baseline',
     isEnabled: true,
@@ -230,6 +230,9 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     dbType: 'ORACLE',
     host: '10.0.12.44',
     port: 1521,
+    tags: ['PRODUCTION', 'CRITICAL', 'PRIMARY'],
+    pollIntervalMinutes: 5,
+    note: 'Primary ERP transactional Oracle cluster. High availability database node.',
     username: 'dbmon_ro',
     password: 'EncryptedPassword998#',
     connectionConfig: {
@@ -250,6 +253,9 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     dbType: 'POSTGRES',
     host: '10.0.14.88',
     port: 5432,
+    tags: ['PRODUCTION', 'FINANCE', 'CRITICAL'],
+    pollIntervalMinutes: 2,
+    note: 'PCI-DSS compliant payment gateway core ledger database.',
     username: 'pg_readonly_mon',
     password: 'SecurePostgresPass#44',
     connectionConfig: {
@@ -270,6 +276,9 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     dbType: 'MYSQL',
     host: '10.0.18.22',
     port: 3306,
+    tags: ['STAGING', 'ANALYTICS'],
+    pollIntervalMinutes: 5,
+    note: 'Customer relationship portal staging replica.',
     username: 'app_monitor',
     password: 'MySQLMonitorPass_77',
     connectionConfig: {
@@ -289,6 +298,9 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     dbType: 'MSSQL',
     host: '10.0.22.105',
     port: 1433,
+    tags: ['LAB', 'ANALYTICS'],
+    pollIntervalMinutes: 10,
+    note: 'Data warehouse batch reporting engine for executive dashboards.',
     username: 'mssql_reader',
     password: 'MSSQLVaultKey#2026',
     connectionConfig: {
@@ -309,6 +321,9 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     dbType: 'POSTGRES',
     host: '10.0.30.50',
     port: 5432,
+    tags: ['DEV', 'LAB'],
+    pollIntervalMinutes: 5,
+    note: 'Inventory management development integration server.',
     username: 'dw_mon',
     password: 'DataWarehousePass#88',
     connectionConfig: {
@@ -772,8 +787,7 @@ export const storage = {
         return JSON.parse(raw);
       } catch (e) {}
     }
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(INITIAL_USER));
-    return INITIAL_USER;
+    return null;
   },
   setUser(user: User | null) {
     if (!user) {

@@ -4,7 +4,7 @@ import { Skeleton } from '../ui/Skeleton';
 import { cn } from '../../lib/utils';
 
 export interface Column<T> {
-  header: string;
+  header: string | React.ReactNode;
   accessorKey?: keyof T | string;
   cell?: (row: T) => React.ReactNode;
   align?: 'left' | 'center' | 'right';

@@ -120,6 +120,15 @@ model Database {
   /// TCP listening port.
   port   Int
 
+  /// Auto-created poll sequence identifier (default: 0)
+  pollId              Int       @default(0) @map("poll_id")
+  /// Array of metadata tags stored as JSON array (e.g. ["PRODUCTION", "STAGING", "LAB"]).
+  tags                Json?     @map("tags")
+  /// Query frequency polling interval in minutes (default: 5).
+  pollIntervalMinutes Int       @default(5) @map("poll_interval_minutes")
+  /// Operational notes and comments long text.
+  note                String?   @db.Text
+
   /// DB account username.
   username          String?
   /// AES-256 encrypted database password string.
@@ -160,6 +169,9 @@ model Template {
   /// Target database engine compatibility (ORACLE | MYSQL | POSTGRES | MSSQL or null for universal).
   targetDbType DbType?
 
+  databaseEngineId String?         @map("database_engine_id")
+  databaseEngine   DatabaseEngine? @relation("EngineTemplates", fields: [databaseEngineId], references: [id], onDelete: SetNull)
+
   /// Timestamp of template creation.
   createdAt DateTime @default(now())
   /// Timestamp of last template update.
@@ -188,8 +200,9 @@ model Metric {
   metricQueryType    Int?      @default(1) @map("metric_query_type")
   /// Reorganized JSON thresholds configuration.
   thresholdsConfig   Json?     @map("thresholds_config")
-  /// Polling frequency interval in minutes.
-  frequencyMinutes   Int       @default(5)
+  /// Execution cycle count multiplier per database polling run (default: 1).
+  /// E.g., cycle = 1 executes query on every database poll; cycle = 3 executes every 3rd database poll run.
+  cycle              Int       @default(1)
   noAlertRequired    Boolean   @default(false) @map("no_alert_required")
   /// Toggle state to enable or disable metric evaluation.
   isEnabled          Boolean   @default(true)
@@ -288,8 +301,8 @@ model DatabaseMetricMapping {
 
 /// ActiveAlert Model: Un-cleared active threshold breaches and connectivity failures.
 model ActiveAlert {
-  /// Unique identifier UUID for active alert.
-  id             String     @id @default(uuid())
+  /// Unique integer identifier for active alert (auto-increment starting from 1).
+  id             Int        @id @default(autoincrement())
   /// FK referencing Database ID.
   dbId           String
   /// FK referencing Metric ID.
@@ -319,8 +332,8 @@ model ActiveAlert {
 
 /// AlertHistory Model: Historical resolved or manually cleared alerts log.
 model AlertHistory {
-  /// Unique identifier UUID for alert history log.
-  id               String     @id @default(uuid())
+  /// Unique integer identifier for alert history log (auto-increment starting from 1).
+  id               Int        @id @default(autoincrement())
   /// FK referencing Database ID.
   dbId             String
   /// FK referencing Metric ID.
@@ -453,7 +466,8 @@ model DatabaseEngine {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  metrics     Metric[] @relation("EngineMetrics")
+  metrics     Metric[]   @relation("EngineMetrics")
+  templates   Template[] @relation("EngineTemplates")
 
   @@map("database_engines")
 }

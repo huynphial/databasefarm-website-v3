@@ -16,7 +16,7 @@ import {
 } from '../types';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const currentUserJson = localStorage.getItem('dbm_current_user');
+  const currentUserJson = localStorage.getItem('dbmon_current_user') || localStorage.getItem('dbm_current_user');
   let currentUsername = 'admin';
   if (currentUserJson) {
     try {
@@ -171,6 +171,27 @@ export const api = {
       method: 'POST',
     });
   },
+  async cleanAllMonitorData(data: { daysToKeep: number; dbId: string }): Promise<{
+    status: string;
+    activeAlertsDeleted: number;
+    alertHistoryDeleted: number;
+    metricDataPointsDeleted: number;
+    notificationLogsDeleted: number;
+  }> {
+    return fetchJson('/api/danger-zone/clean-all-monitor-data', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  async cleanRawQueryHistory(data: { daysToKeep: number; dbId: string }): Promise<{
+    status: string;
+    metricDataPointsDeleted: number;
+  }> {
+    return fetchJson('/api/danger-zone/clean-raw-query-history', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 
   // Health Check
   async checkCollectorHealth(url?: string): Promise<{
@@ -278,10 +299,20 @@ export const api = {
     });
   },
   async login(credentials: Record<string, string>): Promise<{ success: boolean; user?: User & { fullName: string; email: string }; message?: string }> {
-    return fetchJson('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Username': credentials.username || 'admin',
+        },
+        body: JSON.stringify(credentials),
+      });
+      const data = await res.json();
+      return data;
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Authentication request failed' };
+    }
   },
 };
 

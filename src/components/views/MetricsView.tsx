@@ -90,7 +90,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     thresholdWarn: string;
     thresholdHigh: string;
     thresholdCritical: string;
-    frequencyMinutes: number;
+    cycle: number;
     templateId: string;
     templateIds: string[];
     isEnabled: boolean;
@@ -106,7 +106,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     thresholdWarn: '80',
     thresholdHigh: '90',
     thresholdCritical: '95',
-    frequencyMinutes: 5,
+    cycle: 1,
     templateId: '',
     templateIds: [],
     isEnabled: true,
@@ -130,7 +130,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       thresholdWarn: '80',
       thresholdHigh: '90',
       thresholdCritical: '95',
-      frequencyMinutes: 5,
+      cycle: 1,
       templateId: '',
       templateIds: [],
       isEnabled: true,
@@ -188,7 +188,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       thresholdWarn: metric.thresholdWarn || '',
       thresholdHigh: metric.thresholdHigh || '',
       thresholdCritical: metric.thresholdCritical || '',
-      frequencyMinutes: metric.frequencyMinutes,
+      cycle: metric.cycle ?? 1,
       templateId: metric.templateId || '',
       templateIds: metric.templateIds || (metric.templateId ? [metric.templateId] : []),
       isEnabled: metric.isEnabled !== false,
@@ -345,7 +345,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       thresholdWarn: formData.metricQueryType === 3 ? null : (formData.thresholdWarn ? formData.thresholdWarn.trim() : null),
       thresholdHigh: formData.metricQueryType === 3 ? null : (formData.thresholdHigh ? formData.thresholdHigh.trim() : null),
       thresholdCritical: formData.metricQueryType === 3 ? null : (formData.thresholdCritical ? formData.thresholdCritical.trim() : null),
-      frequencyMinutes: Number(formData.frequencyMinutes),
+      cycle: Math.max(1, Number(formData.cycle) || 1),
       templateId: firstTemplateId,
       templateName: selectedTemplate?.name || null,
       templateIds: formData.templateIds || [],
@@ -395,19 +395,25 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     },
     {
       header: 'Database Engine',
-      width: '150px',
+      accessorKey: 'databaseEngineId',
+      width: '140px',
       cell: (row) => {
-        const engine = row.databaseEngine;
+        const engine = row.databaseEngine || (row.databaseEngineId ? databaseEngines.find((e) => e.id === row.databaseEngineId) : null);
+        const engineCode = engine ? engine.dbCode : 'ALL';
+        const dbColor = engine?.dbColor || '#64748B';
+
         return (
           <span
-            className="text-xs font-semibold px-2 py-1 rounded flex items-center gap-1.5 self-start max-w-fit"
+            className="text-xs font-bold font-mono px-2.5 py-1 rounded-md flex items-center gap-1.5 self-start max-w-fit uppercase shadow-2xs"
+            title={engine ? `${engine.dbName} (${engine.dbCode})` : 'ALL (Universal / All Engines)'}
             style={{
-              backgroundColor: (engine?.dbColor || '#64748B') + '15',
-              color: engine?.dbColor || '#64748B',
-              border: `1px solid ${(engine?.dbColor || '#64748B') + '30'}`,
+              backgroundColor: dbColor + '15',
+              color: dbColor,
+              border: `1px solid ${dbColor}35`,
             }}
           >
-            {engine?.dbName || 'Universal / All'}
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dbColor }} />
+            {engineCode}
           </span>
         );
       },
@@ -498,13 +504,24 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       },
     },
     {
-      header: 'Interval',
-      accessorKey: 'frequencyMinutes',
-      width: '90px',
+      header: (
+        <span
+          className="flex items-center justify-center gap-1 cursor-help"
+          title="Execution frequency per database polling run. E.g., Cycle = 1 executes every query run, Cycle = 3 executes every 3rd query run."
+        >
+          Cycle
+          <Info className="w-3 h-3 text-slate-400" />
+        </span>
+      ),
+      accessorKey: 'cycle',
+      width: '75px',
+      align: 'center',
       cell: (row) => (
-        <span className="text-xs text-slate-700 flex items-center gap-1 font-mono">
-          <Clock className="w-3 h-3 text-slate-400" />
-          {row.frequencyMinutes}m
+        <span
+          className="text-xs text-slate-700 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block"
+          title={`Cycle ${row.cycle ?? 1}: Executed every ${row.cycle ?? 1} database polling run(s).`}
+        >
+          {row.cycle ?? 1}
         </span>
       ),
     },
@@ -722,9 +739,9 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               <select
                 value={formData.databaseEngineId}
                 onChange={(e) => setFormData({ ...formData, databaseEngineId: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
               >
-                <option value="">Universal / All Engines</option>
+                <option value="">ALL (All Database Engines)</option>
                 {databaseEngines.map((eng) => (
                   <option key={eng.id} value={eng.id}>
                     {eng.dbName} ({eng.dbCode})
@@ -732,7 +749,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 ))}
               </select>
               <p className="text-[10px] text-slate-400 mt-1">
-                Specify which database engine type this metric query belongs to.
+                Specify which database engine type this metric query belongs to, or choose ALL.
               </p>
             </div>
           </div>
@@ -781,8 +798,8 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                     />
                     <div className="truncate flex-1">
                       <div className="font-semibold truncate text-[11px]">{tpl.name}</div>
-                      <div className="text-[9px] text-slate-500 font-mono">
-                        {tpl.targetDbType || 'Universal'}
+                      <div className="text-[9px] text-slate-500 font-mono font-bold">
+                        {tpl.targetDbType || 'ALL'}
                       </div>
                     </div>
                   </label>
@@ -864,16 +881,28 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Polling Frequency (Minutes)</label>
+              <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  Cycle (Default: 1)
+                  <span
+                    className="cursor-help text-slate-400 hover:text-slate-600 transition-colors"
+                    title="Execution frequency multiplier per database poll run. Cycle = 1 queries on every poll run; Cycle = 3 queries every 3rd poll run."
+                  >
+                    <Info className="w-3.5 h-3.5 inline" />
+                  </span>
+                </span>
+              </label>
               <input
                 type="number"
                 min={1}
-                max={1440}
                 required
-                value={formData.frequencyMinutes}
-                onChange={(e) => setFormData({ ...formData, frequencyMinutes: Number(e.target.value) })}
+                value={formData.cycle}
+                onChange={(e) => setFormData({ ...formData, cycle: Math.max(1, Number(e.target.value)) })}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
               />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Execution frequency per database polling run (e.g., Cycle = 1 queries every run, Cycle = 3 queries every 3rd run).
+              </p>
             </div>
           </div>
 

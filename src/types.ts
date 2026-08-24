@@ -50,6 +50,10 @@ export interface DatabaseEntity {
   dbType: DbEngine;
   host: string;
   port: number;
+  pollId?: number; // Auto-created poll sequence identifier (default: 0), view-only in UI
+  tags?: string[]; // Array of tags e.g., ['PRODUCTION', 'STAGING', 'LAB']
+  pollIntervalMinutes?: number; // Query frequency polling interval in minutes (default: 5)
+  note?: string; // Operational notes or comments
   authMethod?: AuthMethod; // 'PASSWORD' | 'AUTH_KEY' | 'TRUST'
   username?: string;
   password?: string;
@@ -135,7 +139,7 @@ export interface MetricEntity {
   thresholdWarn?: string | null;
   thresholdHigh?: string | null;
   thresholdCritical?: string | null;
-  frequencyMinutes: number;
+  cycle: number;
   templateId?: string | null;
   templateName?: string | null;
   templateIds?: string[]; // Multiple templates assigned
@@ -172,7 +176,7 @@ export interface RawMeasurementEntity {
   valueType?: MetricValueType;
   thresholdOperator?: string;
   triggeredThreshold?: string | null; // e.g. "Warn: 80 / High: 90 / Crit: 95"
-  frequencyMinutes?: number;
+  cycle?: number;
   status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'DOWN';
   measuredAt: string;
 }
@@ -181,7 +185,9 @@ export interface TemplateEntity {
   id: string;
   name: string;
   description?: string | null;
-  targetDbType?: DbEngine | 'ALL'; // Engine Compatibility: strictly matches specific DB engine
+  targetDbType?: DbEngine | 'ALL' | string; // Engine Compatibility: strictly matches specific DB engine
+  databaseEngineId?: string | null;
+  databaseEngine?: DatabaseEngineEntity | null;
   metricIds?: string[]; // Bound metric IDs in this template
   createdAt: string;
   updatedAt: string;
