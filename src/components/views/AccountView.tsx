@@ -33,9 +33,10 @@ import { Dialog } from '../ui/Dialog';
 
 interface AccountViewProps {
   currentUser: User;
+  sessionTimeoutMinutes?: number;
 }
 
-export const AccountView: React.FC<AccountViewProps> = ({ currentUser }) => {
+export const AccountView: React.FC<AccountViewProps> = ({ currentUser, sessionTimeoutMinutes }) => {
   const { toast } = useToast();
   const isAdmin = currentUser.role === 'ADMIN';
 
@@ -497,7 +498,7 @@ export const AccountView: React.FC<AccountViewProps> = ({ currentUser }) => {
   const totalLocked = users.filter((u) => u.isLocked).length;
   const totalActive = users.filter((u) => !u.isLocked).length;
 
-  const inactivityMinutes = AUTH_CONFIG.session?.inactivityTimeoutMinutes ?? 30;
+  const inactivityMinutes = sessionTimeoutMinutes && sessionTimeoutMinutes > 0 ? sessionTimeoutMinutes : (AUTH_CONFIG.session?.inactivityTimeoutMinutes ?? 30);
 
   // Format Helper for Last Login
   const formatTimestamp = (dateStr?: string) => {

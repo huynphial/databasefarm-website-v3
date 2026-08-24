@@ -3,11 +3,13 @@ import { Clock, Shield, Eye, Timer, Database, Server } from 'lucide-react';
 import { NavigationTab } from './Sidebar';
 import { UserRole } from '../../types';
 import { AUTH_CONFIG } from '../../config/authConfig';
+import { storage } from '../../lib/storage';
 
 interface HeaderProps {
   activeTab: NavigationTab;
   userRole: UserRole;
   storageType?: 'prisma' | 'memory';
+  sessionTimeoutMinutes?: number;
 }
 
 const titles: Record<NavigationTab, { title: string; subtitle: string }> = {
@@ -69,27 +71,38 @@ const titles: Record<NavigationTab, { title: string; subtitle: string }> = {
   },
 };
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, userRole, storageType = 'memory' }) => {
+export const Header: React.FC<HeaderProps> = ({
+  activeTab,
+  userRole,
+  storageType = 'memory',
+  sessionTimeoutMinutes,
+}) => {
   const currentInfo = titles[activeTab] || {
     title: 'Dashboard',
     subtitle: 'Database Monitoring System',
   };
 
-  // Real-time Expiration Countdown
-  const initialSeconds = (AUTH_CONFIG.session?.inactivityTimeoutMinutes ?? 30) * 60;
-  const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
+  // Real-time Expiration Countdown from systemSettings & user activity
+  const timeoutMins = sessionTimeoutMinutes && sessionTimeoutMinutes > 0 ? sessionTimeoutMinutes : 30;
+  const timeoutMs = timeoutMins * 60 * 1000;
+
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
+    const last = storage.getLastActivity();
+    const remainingMs = Math.max(0, last + timeoutMs - Date.now());
+    return Math.floor(remainingMs / 1000);
+  });
 
   useEffect(() => {
-    const timerId = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          return initialSeconds; // reset on expire to simulate continuous user session or loop
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const updateCountdown = () => {
+      const last = storage.getLastActivity();
+      const remainingMs = Math.max(0, last + timeoutMs - Date.now());
+      setSecondsRemaining(Math.floor(remainingMs / 1000));
+    };
+
+    updateCountdown();
+    const timerId = setInterval(updateCountdown, 1000);
     return () => clearInterval(timerId);
-  }, [initialSeconds]);
+  }, [timeoutMs]);
 
   const formatCountdown = (totalSecs: number) => {
     const mins = Math.floor(totalSecs / 60);

@@ -11,6 +11,7 @@ import {
   MetricHistoryEntity,
   RawMeasurementEntity,
   SystemSettingsEntity,
+  SystemSettingItem,
   AuditLogEntity,
   AlertNotificationLogEntity,
   DatabasePollQueueEntity,
@@ -85,6 +86,9 @@ export interface IStorageRepository {
   // System Settings
   getSystemSettings(): Promise<SystemSettingsEntity>;
   saveSystemSettings(settings: Partial<SystemSettingsEntity>): Promise<SystemSettingsEntity>;
+  getSystemSettingsList(): Promise<SystemSettingItem[]>;
+  saveSystemSettingItem(item: Partial<SystemSettingItem>): Promise<SystemSettingItem>;
+  deleteSystemSettingItem(id: string): Promise<boolean>;
 
   // Audit Logs
   getAuditLogs(limit?: number): Promise<AuditLogEntity[]>;

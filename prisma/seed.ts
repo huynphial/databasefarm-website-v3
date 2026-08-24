@@ -159,26 +159,24 @@ async function main() {
     { id: viewerUserId, username: viewerUsername, passwordHash: viewerHash, role: Role.VIEWER },
   ];
 
-  // 3. Prepare System Settings Record
-  const systemSettingsData = {
-    id: 'default',
-    apiCollectorEnabled: true,
-    collectorEndpoint: process.env.COLLECTOR_HEALTH_CHECK_URL || 'http://localhost:3000/api/collector/mock-health',
-    collectorApiKey: 'dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3',
-    collectorPollIntervalSeconds: 60,
-    collectorBatchSize: 250,
-    collectorTimeoutMs: 5000,
-    collectorRetryPolicy: 'Exponential Backoff (Max 5 retries)',
-    globalAlertThresholdMode: 'STANDARD',
-    maxRetryAttempts: 3,
-    notificationDispatchIntervalSeconds: 30,
-    defaultTimezone: process.env.DEFAULT_TIMEZONE || 'Asia/Ho_Chi_Minh (UTC+7)',
-    dataRetentionDays: 90,
-    autoClearResolvedAlerts: true,
-    centralDbSyncEnabled: true,
-    centralDbConnectionString: process.env.DATABASE_URL || 'mysql://dbmon_user:secret_storage_password@127.0.0.1:3306/db_monitoring_system',
-    updatedBy: 'admin',
-  };
+  // 3. Prepare System Settings Key-Value Records
+  const systemSettingsData = [
+    { id: 'ss-01', name: 'apiCollectorEnabled', value: 'true', updatedBy: 'admin' },
+    { id: 'ss-02', name: 'collectorEndpoint', value: process.env.COLLECTOR_HEALTH_CHECK_URL || 'http://localhost:3000/api/collector/mock-health', updatedBy: 'admin' },
+    { id: 'ss-03', name: 'collectorApiKey', value: 'dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3', updatedBy: 'admin' },
+    { id: 'ss-04', name: 'collectorPollIntervalSeconds', value: '60', updatedBy: 'admin' },
+    { id: 'ss-05', name: 'collectorBatchSize', value: '250', updatedBy: 'admin' },
+    { id: 'ss-06', name: 'collectorTimeoutMs', value: '5000', updatedBy: 'admin' },
+    { id: 'ss-07', name: 'collectorRetryPolicy', value: 'Exponential Backoff (Max 5 retries)', updatedBy: 'admin' },
+    { id: 'ss-08', name: 'globalAlertThresholdMode', value: 'STANDARD', updatedBy: 'admin' },
+    { id: 'ss-09', name: 'maxRetryAttempts', value: '3', updatedBy: 'admin' },
+    { id: 'ss-10', name: 'notificationDispatchIntervalSeconds', value: '30', updatedBy: 'admin' },
+    { id: 'ss-11', name: 'defaultTimezone', value: process.env.DEFAULT_TIMEZONE || 'Asia/Ho_Chi_Minh (UTC+7)', updatedBy: 'admin' },
+    { id: 'ss-12', name: 'dataRetentionDays', value: '90', updatedBy: 'admin' },
+    { id: 'ss-13', name: 'autoClearResolvedAlerts', value: 'true', updatedBy: 'admin' },
+    { id: 'ss-14', name: 'showInfoTips', value: 'true', updatedBy: 'admin' },
+    { id: 'ss-15', name: 'SESSION_TIMEOUT_MINUTES', value: '30', updatedBy: 'admin' },
+  ];
 
   // 4. Random UUID templates
   const tplOracleId = 'bc8e612f-682b-4e1b-b78c-023a7bbd326f';
@@ -375,7 +373,7 @@ async function main() {
       port: 1521,
       pollId: 0,
       username: 'SYSTEM',
-      passwordEncrypted: 'Encrypted(P@ssw0rd123!)',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
       connectionConfig: { sid: 'ORCLPRD', serviceName: 'orclprd.internal', sslMode: 'REQUIRED' },
       status: 'UP',
       lastCheckAt: new Date(Date.now() - 3 * 60000),
@@ -389,7 +387,7 @@ async function main() {
       port: 5432,
       pollId: 0,
       username: 'pay_service',
-      passwordEncrypted: 'Encrypted(PaySecure#2026)',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
       connectionConfig: { databaseName: 'payment_ledger', sslMode: 'PREFER' },
       status: 'UP',
       lastCheckAt: new Date(Date.now() - 1 * 60000),
@@ -403,7 +401,7 @@ async function main() {
       port: 3306,
       pollId: 0,
       username: 'crm_admin',
-      passwordEncrypted: 'Encrypted(CrmAdmin!99)',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
       connectionConfig: { databaseName: 'crm_production', maxConnections: 500 },
       status: 'WARNING',
       lastCheckAt: new Date(Date.now() - 5 * 60000),
@@ -417,7 +415,7 @@ async function main() {
       port: 1433,
       pollId: 0,
       username: 'sa_readonly',
-      passwordEncrypted: 'Encrypted(DwhReadonly#123)',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
       connectionConfig: { databaseName: 'DWH_Analytics', encrypt: true },
       status: 'UP',
       lastCheckAt: new Date(Date.now() - 12 * 60000),
@@ -431,7 +429,7 @@ async function main() {
       port: 3306,
       pollId: 0,
       username: 'stg_user',
-      passwordEncrypted: 'Encrypted(StgUserPass!)',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
       connectionConfig: { databaseName: 'inventory_staging' },
       status: 'DOWN',
       lastCheckAt: new Date(Date.now() - 2 * 60000),
@@ -853,7 +851,7 @@ async function main() {
   console.log('⚡ Executing optimized batch insertions...');
   await p.$transaction([
     p.user.createMany({ data: usersData, skipDuplicates: true }),
-    p.systemSettings.create({ data: systemSettingsData }),
+    p.systemSettings.createMany({ data: systemSettingsData, skipDuplicates: true }),
     p.template.createMany({ data: templatesData, skipDuplicates: true }),
     p.metric.createMany({ data: metricsData, skipDuplicates: true }),
     p.databaseGroup.createMany({ data: groupsData, skipDuplicates: true }),

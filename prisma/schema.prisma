@@ -388,46 +388,18 @@ model MetricDataPoint {
 // System Settings Model
 // -----------------------------------------------------------------------------
 
-/// SystemSettings Model: Global system configuration, collector parameters, and UI preferences.
+/// SystemSettings Model: Global system configuration key-value store.
 model SystemSettings {
-  /// Primary key string identifier ("default").
-  id                                  String   @id @default("default")
-  /// Collector API service toggle.
-  apiCollectorEnabled                 Boolean  @default(true)
-  /// Target endpoint URL for Collector API health checks.
-  collectorEndpoint                   String   @default("http://localhost:3000/api/collector/mock-health")
-  /// Security API key header for collector ingest.
-  collectorApiKey                     String   @default("dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3")
-  /// Collector polling frequency interval in seconds.
-  collectorPollIntervalSeconds        Int      @default(60)
-  /// Ingest batch size limit.
-  collectorBatchSize                  Int      @default(250)
-  /// Timeout limit for collector requests in milliseconds.
-  collectorTimeoutMs                  Int      @default(5000)
-  /// Retry policy string.
-  collectorRetryPolicy                String   @default("Exponential Backoff (Max 5 retries)")
-  /// Global alert threshold calculation mode (STRICT | STANDARD | RELAXED).
-  globalAlertThresholdMode            String   @default("STANDARD")
-  /// Maximum query execution retry attempts.
-  maxRetryAttempts                    Int      @default(3)
-  /// Notification dispatch batch interval in seconds.
-  notificationDispatchIntervalSeconds Int      @default(30)
-  /// Default timezone string for display and logs.
-  defaultTimezone                     String   @default("Asia/Ho_Chi_Minh (UTC+7)")
-  /// Telemetry data retention period in days.
-  dataRetentionDays                   Int      @default(90)
-  /// Flag to automatically clear active alerts when status recovers to normal.
-  autoClearResolvedAlerts             Boolean  @default(true)
-  /// Central MySQL DB sync toggle.
-  centralDbSyncEnabled                Boolean  @default(true)
-  /// Connection string for central MySQL sync database.
-  centralDbConnectionString           String   @db.Text
-  /// Global UI Preference: Toggle visibility of Info/Tips boxes across the web interface (default: true).
-  showInfoTips                        Boolean  @default(true) @map("show_info_tips")
-  /// Timestamp when settings were last updated.
-  updatedAt                           DateTime @updatedAt
+  /// Unique string identifier for setting record (UUID).
+  id        String   @id @default(uuid())
+  /// Unique key/setting name (e.g. "SESSION_TIMEOUT_MINUTES", "collectorEndpoint").
+  name      String   @unique
+  /// Setting value string.
+  value     String   @db.Text
+  /// Timestamp when setting was last updated.
+  updatedAt DateTime @updatedAt @map("updated_at")
   /// Username or identifier of user who performed last update.
-  updatedBy                           String?
+  updatedBy String?  @map("updated_by")
 
   @@map("system_settings")
 }
@@ -510,42 +482,32 @@ model AlertNotificationLog {
   @@map("alert_notification_logs")
 }
 
-enum PollQueueStatus {
-  pending
-  processing
-}
-
-enum PollLogStatus {
-  success
-  failed
-}
-
 model DatabasePollQueue {
-  id          BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
-  dbId        String          @map("db_id")
-  dbName      String          @map("db_name") @db.VarChar(255)
-  status      PollQueueStatus @default(pending)
-  lockedBy    String?         @map("locked_by") @db.VarChar(100)
-  lockedAt    DateTime?       @map("locked_at")
-  scheduledAt DateTime        @default(now()) @map("scheduled_at")
-  createdAt   DateTime        @default(now()) @map("created_at")
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  dbId        String    @map("db_id")
+  dbName      String    @map("db_name") @db.VarChar(255)
+  status      String    @default("pending") @db.VarChar(255)
+  lockedBy    String?   @map("locked_by") @db.VarChar(100)
+  lockedAt    DateTime? @map("locked_at")
+  scheduledAt DateTime  @default(now()) @map("scheduled_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
-  database    Database        @relation(fields: [dbId], references: [id], onDelete: Cascade)
+  database    Database  @relation(fields: [dbId], references: [id], onDelete: Cascade)
 
   @@index([status, scheduledAt], map: "idx_status_scheduled")
   @@map("database_poll_queue")
 }
 
 model DatabasePollLog {
-  id           BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
-  dbId         String        @map("db_id")
-  dbName       String        @map("db_name") @db.VarChar(255)
-  status       PollLogStatus
-  errorMessage String?       @map("error_message") @db.Text
-  startedAt    DateTime      @map("started_at")
-  finishedAt   DateTime      @default(now()) @map("finished_at")
+  id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  dbId         String   @map("db_id")
+  dbName       String   @map("db_name") @db.VarChar(255)
+  status       String   @db.VarChar(255)
+  errorMessage String?  @map("error_message") @db.Text
+  startedAt    DateTime @map("started_at")
+  finishedAt   DateTime @default(now()) @map("finished_at")
 
-  database     Database      @relation(fields: [dbId], references: [id], onDelete: Cascade)
+  database     Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
 
   @@index([dbId, finishedAt], map: "idx_db_finished")
   @@map("database_poll_log")

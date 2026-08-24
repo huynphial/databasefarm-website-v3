@@ -12,6 +12,7 @@ import {
   MetricHistoryEntity,
   RawMeasurementEntity,
   SystemSettingsEntity,
+  SystemSettingItem,
   AuditLogEntity,
   AlertNotificationLogEntity,
   DatabasePollQueueEntity,
@@ -357,10 +358,10 @@ export class MemoryRepository implements IStorageRepository {
     defaultTimezone: 'Asia/Ho_Chi_Minh',
     dataRetentionDays: 90,
     autoClearResolvedAlerts: true,
-    centralDbSyncEnabled: true,
-    centralDbConnectionString: 'mysql://dbmon_central:******@10.0.10.50:3306/db_monitoring_system',
 
     showInfoTips: true,
+    sessionTimeoutMinutes: 30,
+    SESSION_TIMEOUT_MINUTES: '30',
     updatedAt: new Date().toISOString(),
     updatedBy: 'admin',
   };
@@ -1721,7 +1722,66 @@ FROM pg_tablespace`,
       ...settings,
       updatedAt: new Date().toISOString(),
     };
+    if (settings.sessionTimeoutMinutes !== undefined) {
+      this.systemSettings.SESSION_TIMEOUT_MINUTES = String(settings.sessionTimeoutMinutes);
+    }
+    if (settings.SESSION_TIMEOUT_MINUTES !== undefined) {
+      this.systemSettings.sessionTimeoutMinutes = parseInt(String(settings.SESSION_TIMEOUT_MINUTES), 10) || 30;
+    }
     return this.systemSettings;
+  }
+
+  async getSystemSettingsList(): Promise<SystemSettingItem[]> {
+    const s = this.systemSettings;
+    return [
+      { id: 'ss-01', name: 'apiCollectorEnabled', value: String(s.apiCollectorEnabled), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-02', name: 'collectorEndpoint', value: s.collectorEndpoint, updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-03', name: 'collectorApiKey', value: s.collectorApiKey, updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-04', name: 'collectorPollIntervalSeconds', value: String(s.collectorPollIntervalSeconds), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-05', name: 'collectorBatchSize', value: String(s.collectorBatchSize), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-06', name: 'collectorTimeoutMs', value: String(s.collectorTimeoutMs), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-07', name: 'collectorRetryPolicy', value: s.collectorRetryPolicy, updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-08', name: 'globalAlertThresholdMode', value: s.globalAlertThresholdMode, updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-09', name: 'maxRetryAttempts', value: String(s.maxRetryAttempts), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-10', name: 'notificationDispatchIntervalSeconds', value: String(s.notificationDispatchIntervalSeconds), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-11', name: 'defaultTimezone', value: s.defaultTimezone, updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-12', name: 'dataRetentionDays', value: String(s.dataRetentionDays), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-13', name: 'autoClearResolvedAlerts', value: String(s.autoClearResolvedAlerts), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-14', name: 'showInfoTips', value: String(s.showInfoTips ?? true), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-15', name: 'SESSION_TIMEOUT_MINUTES', value: String(s.SESSION_TIMEOUT_MINUTES || s.sessionTimeoutMinutes || '30'), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+    ];
+  }
+
+  async saveSystemSettingItem(item: Partial<SystemSettingItem>): Promise<SystemSettingItem> {
+    const name = item.name || 'customSetting';
+    const value = item.value ?? '';
+    const updatedBy = item.updatedBy || 'admin';
+    const updatedAt = new Date().toISOString();
+
+    if (name === 'SESSION_TIMEOUT_MINUTES') {
+      const minutes = parseInt(value, 10) || 30;
+      this.systemSettings.sessionTimeoutMinutes = minutes;
+      this.systemSettings.SESSION_TIMEOUT_MINUTES = String(minutes);
+    } else if (name === 'collectorEndpoint') {
+      this.systemSettings.collectorEndpoint = value;
+    } else if (name === 'showInfoTips') {
+      this.systemSettings.showInfoTips = value !== 'false';
+    }
+
+    this.systemSettings.updatedAt = updatedAt;
+    this.systemSettings.updatedBy = updatedBy;
+
+    return {
+      id: item.id || `ss-${Date.now()}`,
+      name,
+      value,
+      updatedAt,
+      updatedBy,
+    };
+  }
+
+  async deleteSystemSettingItem(id: string): Promise<boolean> {
+    return true;
   }
 
   // --- Audit Logs ---

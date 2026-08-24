@@ -89,14 +89,23 @@ export interface SystemSettingsEntity {
   timestampFormat?: string; // e.g. "HH24:MI:SS DD/MM/YYYY"
   dataRetentionDays: number;
   autoClearResolvedAlerts: boolean;
-  centralDbSyncEnabled: boolean;
-  centralDbConnectionString: string;
+  centralDbConnectionString?: string;
+  sessionTimeoutMinutes?: number;
+  SESSION_TIMEOUT_MINUTES?: string | number;
 
   // Global UI Customization
   showInfoTips?: boolean;
 
   updatedAt: string;
   updatedBy?: string;
+}
+
+export interface SystemSettingItem {
+  id: string;
+  name: string;
+  value: string;
+  updatedAt: string;
+  updatedBy?: string | null;
 }
 
 export type MetricValueType = 'NUMBER' | 'STRING' | 'BOOLEAN';

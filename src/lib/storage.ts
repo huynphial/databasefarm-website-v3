@@ -361,8 +361,8 @@ export const INITIAL_SYSTEM_SETTINGS: SystemSettingsEntity = {
   timestampFormat: 'HH24:MI:SS DD/MM/YYYY',
   dataRetentionDays: 90,
   autoClearResolvedAlerts: true,
-  centralDbSyncEnabled: true,
-  centralDbConnectionString: 'mysql://dbmon_user:secret_storage_password@127.0.0.1:3306/db_monitoring_system',
+  sessionTimeoutMinutes: 30,
+  SESSION_TIMEOUT_MINUTES: '30',
 
   updatedAt: new Date(Date.now() - 3600000).toISOString(),
   updatedBy: 'admin',

@@ -262,6 +262,13 @@ function MainAppContent() {
   // Session Inactivity & Auto-Expiry Management
   const lastActivityRef = useRef<number>(Date.now());
 
+  const getActiveSessionTimeoutMinutes = useCallback(() => {
+    const fromVal = systemSettings.sessionTimeoutMinutes ?? systemSettings.SESSION_TIMEOUT_MINUTES;
+    const num = Number(fromVal);
+    if (!isNaN(num) && num > 0) return num;
+    return getSessionTimeoutMs() / 60000;
+  }, [systemSettings]);
+
   const updateActivity = useCallback(() => {
     const now = Date.now();
     if (now - lastActivityRef.current > 2000) {
@@ -273,16 +280,18 @@ function MainAppContent() {
   useEffect(() => {
     if (!currentUser) return;
 
+    const timeoutMinutes = getActiveSessionTimeoutMinutes();
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+
     // Initial check on load/mount
     const initialLast = storage.getLastActivity();
-    const timeoutMs = getSessionTimeoutMs();
     if (Date.now() - initialLast >= timeoutMs) {
       setCurrentUser(null);
       storage.setUser(null);
       storage.clearLastActivity();
       toast({
         title: 'Session Expired',
-        description: `Your session expired after ${AUTH_CONFIG.session?.inactivityTimeoutMinutes ?? 30} minutes of inactivity.`,
+        description: `Your session expired after ${timeoutMinutes} minutes of inactivity.`,
         type: 'error',
       });
       return;
@@ -305,13 +314,13 @@ function MainAppContent() {
 
     const timerId = setInterval(() => {
       const currentLast = storage.getLastActivity();
-      if (Date.now() - currentLast >= getSessionTimeoutMs()) {
+      if (Date.now() - currentLast >= timeoutMs) {
         setCurrentUser(null);
         storage.setUser(null);
         storage.clearLastActivity();
         toast({
           title: 'Session Expired',
-          description: `You have been logged out due to ${AUTH_CONFIG.session?.inactivityTimeoutMinutes ?? 30} minutes of inactivity.`,
+          description: `You have been logged out due to ${timeoutMinutes} minutes of inactivity.`,
           type: 'error',
         });
       }
@@ -323,7 +332,7 @@ function MainAppContent() {
       });
       clearInterval(timerId);
     };
-  }, [currentUser, updateActivity, toast]);
+  }, [currentUser, updateActivity, toast, getActiveSessionTimeoutMinutes]);
 
   // Switch role handler
   const handleRoleChange = (newRole: UserRole) => {
@@ -707,7 +716,12 @@ function MainAppContent() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50">
         {/* Top Header */}
-        <Header activeTab={activeTab} userRole={currentUser.role} storageType={storageType} />
+        <Header
+          activeTab={activeTab}
+          userRole={currentUser.role}
+          storageType={storageType}
+          sessionTimeoutMinutes={getActiveSessionTimeoutMinutes()}
+        />
 
         {/* Tab View Routing */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50">
@@ -870,7 +884,10 @@ function MainAppContent() {
           )}
 
           {activeTab === 'account' && (
-            <AccountView currentUser={currentUser} />
+            <AccountView
+              currentUser={currentUser}
+              sessionTimeoutMinutes={getActiveSessionTimeoutMinutes()}
+            />
           )}
 
           {activeTab === 'audit-logs' && (

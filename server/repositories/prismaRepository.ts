@@ -15,6 +15,7 @@ import {
   MetricHistoryEntity,
   RawMeasurementEntity,
   SystemSettingsEntity,
+  SystemSettingItem,
   AuditLogEntity,
   AlertNotificationLogEntity,
   DatabasePollQueueEntity,
@@ -969,121 +970,202 @@ export class PrismaRepository implements IStorageRepository {
 
   // --- System Settings ---
   async getSystemSettings(): Promise<SystemSettingsEntity> {
-    let settings = await (this.prisma as any).systemSettings.findUnique({
-      where: { id: 'default' },
-    });
+    try {
+      const rows = await (this.prisma as any).systemSettings.findMany();
+      if (rows && rows.length > 0) {
+        const map: Record<string, string> = {};
+        let latestDate = new Date(0);
+        let latestBy = 'admin';
 
-    if (!settings) {
-      settings = await (this.prisma as any).systemSettings.create({
-        data: {
-          id: 'default',
-          apiCollectorEnabled: true,
-          collectorEndpoint: 'https://api-collector.dbfarm.internal/v2/ingest',
-          collectorApiKey: 'dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3',
-          collectorPollIntervalSeconds: 60,
-          collectorBatchSize: 250,
-          collectorTimeoutMs: 5000,
-          collectorRetryPolicy: 'Exponential Backoff (Max 5 retries)',
-          globalAlertThresholdMode: 'STANDARD',
-          maxRetryAttempts: 3,
-          notificationDispatchIntervalSeconds: 30,
-          defaultTimezone: 'Asia/Ho_Chi_Minh (UTC+7)',
-          dataRetentionDays: 90,
-          autoClearResolvedAlerts: true,
-          centralDbSyncEnabled: true,
-          centralDbConnectionString: 'mysql://dbmon_user:secret_storage_password@127.0.0.1:3306/db_monitoring_system',
-          showInfoTips: true,
-          updatedBy: 'admin',
-        },
-      });
+        for (const row of rows) {
+          if (row.name) {
+            map[row.name] = row.value ?? '';
+          }
+          if (row.updatedAt && new Date(row.updatedAt) > latestDate) {
+            latestDate = new Date(row.updatedAt);
+            if (row.updatedBy) latestBy = row.updatedBy;
+          }
+        }
+
+        const sessionTimeoutMinutes = parseInt(map['SESSION_TIMEOUT_MINUTES'] || map['sessionTimeoutMinutes'] || '30', 10) || 30;
+
+        return {
+          apiCollectorEnabled: map['apiCollectorEnabled'] !== 'false',
+          collectorEndpoint: map['collectorEndpoint'] || 'http://localhost:3000/api/collector/mock-health',
+          collectorApiKey: map['collectorApiKey'] || 'dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3',
+          collectorPollIntervalSeconds: parseInt(map['collectorPollIntervalSeconds'] || '60', 10) || 60,
+          collectorBatchSize: parseInt(map['collectorBatchSize'] || '250', 10) || 250,
+          collectorTimeoutMs: parseInt(map['collectorTimeoutMs'] || '5000', 10) || 5000,
+          collectorRetryPolicy: map['collectorRetryPolicy'] || 'Exponential Backoff (Max 5 retries)',
+          globalAlertThresholdMode: (map['globalAlertThresholdMode'] as any) || 'STANDARD',
+          maxRetryAttempts: parseInt(map['maxRetryAttempts'] || '3', 10) || 3,
+          notificationDispatchIntervalSeconds: parseInt(map['notificationDispatchIntervalSeconds'] || '30', 10) || 30,
+          defaultTimezone: map['defaultTimezone'] || 'Asia/Ho_Chi_Minh (UTC+7)',
+          dataRetentionDays: parseInt(map['dataRetentionDays'] || '90', 10) || 90,
+          autoClearResolvedAlerts: map['autoClearResolvedAlerts'] !== 'false',
+          showInfoTips: map['showInfoTips'] !== 'false',
+          sessionTimeoutMinutes,
+          SESSION_TIMEOUT_MINUTES: String(sessionTimeoutMinutes),
+          updatedAt: latestDate.getTime() > 0 ? latestDate.toISOString() : new Date().toISOString(),
+          updatedBy: latestBy,
+        };
+      }
+    } catch (e) {
+      console.warn('Prisma getSystemSettings failed, returning fallback:', e);
     }
 
     return {
-      apiCollectorEnabled: settings.apiCollectorEnabled,
-      collectorEndpoint: settings.collectorEndpoint,
-      collectorApiKey: settings.collectorApiKey,
-      collectorPollIntervalSeconds: settings.collectorPollIntervalSeconds,
-      collectorBatchSize: settings.collectorBatchSize,
-      collectorTimeoutMs: settings.collectorTimeoutMs,
-      collectorRetryPolicy: settings.collectorRetryPolicy,
-      globalAlertThresholdMode: settings.globalAlertThresholdMode as any,
-      maxRetryAttempts: settings.maxRetryAttempts,
-      notificationDispatchIntervalSeconds: settings.notificationDispatchIntervalSeconds,
-      defaultTimezone: settings.defaultTimezone,
-      dataRetentionDays: settings.dataRetentionDays,
-      autoClearResolvedAlerts: settings.autoClearResolvedAlerts,
-      centralDbSyncEnabled: settings.centralDbSyncEnabled,
-      centralDbConnectionString: settings.centralDbConnectionString,
-      showInfoTips: settings.showInfoTips ?? true,
-      updatedAt: settings.updatedAt.toISOString(),
-      updatedBy: settings.updatedBy || 'admin',
+      apiCollectorEnabled: true,
+      collectorEndpoint: 'http://localhost:3000/api/collector/mock-health',
+      collectorApiKey: 'dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3',
+      collectorPollIntervalSeconds: 60,
+      collectorBatchSize: 250,
+      collectorTimeoutMs: 5000,
+      collectorRetryPolicy: 'Exponential Backoff (Max 5 retries)',
+      globalAlertThresholdMode: 'STANDARD',
+      maxRetryAttempts: 3,
+      notificationDispatchIntervalSeconds: 30,
+      defaultTimezone: 'Asia/Ho_Chi_Minh (UTC+7)',
+      dataRetentionDays: 90,
+      autoClearResolvedAlerts: true,
+      showInfoTips: true,
+      sessionTimeoutMinutes: 30,
+      SESSION_TIMEOUT_MINUTES: '30',
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'admin',
     };
   }
 
   async saveSystemSettings(settingsData: Partial<SystemSettingsEntity>): Promise<SystemSettingsEntity> {
-    const settings = await (this.prisma as any).systemSettings.upsert({
-      where: { id: 'default' },
-      update: {
-        apiCollectorEnabled: settingsData.apiCollectorEnabled,
-        collectorEndpoint: settingsData.collectorEndpoint,
-        collectorApiKey: settingsData.collectorApiKey,
-        collectorPollIntervalSeconds: settingsData.collectorPollIntervalSeconds,
-        collectorBatchSize: settingsData.collectorBatchSize,
-        collectorTimeoutMs: settingsData.collectorTimeoutMs,
-        collectorRetryPolicy: settingsData.collectorRetryPolicy,
-        globalAlertThresholdMode: settingsData.globalAlertThresholdMode,
-        maxRetryAttempts: settingsData.maxRetryAttempts,
-        notificationDispatchIntervalSeconds: settingsData.notificationDispatchIntervalSeconds,
-        defaultTimezone: settingsData.defaultTimezone,
-        dataRetentionDays: settingsData.dataRetentionDays,
-        autoClearResolvedAlerts: settingsData.autoClearResolvedAlerts,
-        centralDbSyncEnabled: settingsData.centralDbSyncEnabled,
-        centralDbConnectionString: settingsData.centralDbConnectionString,
-        showInfoTips: settingsData.showInfoTips ?? true,
-        updatedBy: settingsData.updatedBy || 'admin',
-      },
-      create: {
-        id: 'default',
-        apiCollectorEnabled: settingsData.apiCollectorEnabled ?? true,
-        collectorEndpoint: settingsData.collectorEndpoint || 'https://api-collector.dbfarm.internal/v2/ingest',
-        collectorApiKey: settingsData.collectorApiKey || 'dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3',
-        collectorPollIntervalSeconds: settingsData.collectorPollIntervalSeconds || 60,
-        collectorBatchSize: settingsData.collectorBatchSize || 250,
-        collectorTimeoutMs: settingsData.collectorTimeoutMs || 5000,
-        collectorRetryPolicy: settingsData.collectorRetryPolicy || 'Exponential Backoff (Max 5 retries)',
-        globalAlertThresholdMode: settingsData.globalAlertThresholdMode || 'STANDARD',
-        maxRetryAttempts: settingsData.maxRetryAttempts || 3,
-        notificationDispatchIntervalSeconds: settingsData.notificationDispatchIntervalSeconds || 30,
-        defaultTimezone: settingsData.defaultTimezone || 'Asia/Ho_Chi_Minh (UTC+7)',
-        dataRetentionDays: settingsData.dataRetentionDays || 90,
-        autoClearResolvedAlerts: settingsData.autoClearResolvedAlerts ?? true,
-        centralDbSyncEnabled: settingsData.centralDbSyncEnabled ?? true,
-        centralDbConnectionString: settingsData.centralDbConnectionString || 'mysql://dbmon_user:secret_storage_password@127.0.0.1:3306/db_monitoring_system',
-        showInfoTips: settingsData.showInfoTips ?? true,
-        updatedBy: settingsData.updatedBy || 'admin',
-      },
-    });
+    const updatedBy = settingsData.updatedBy || 'admin';
+    const entriesToSave: Array<{ name: string; value: string }> = [];
+
+    if (settingsData.apiCollectorEnabled !== undefined) entriesToSave.push({ name: 'apiCollectorEnabled', value: String(settingsData.apiCollectorEnabled) });
+    if (settingsData.collectorEndpoint !== undefined) entriesToSave.push({ name: 'collectorEndpoint', value: settingsData.collectorEndpoint });
+    if (settingsData.collectorApiKey !== undefined) entriesToSave.push({ name: 'collectorApiKey', value: settingsData.collectorApiKey });
+    if (settingsData.collectorPollIntervalSeconds !== undefined) entriesToSave.push({ name: 'collectorPollIntervalSeconds', value: String(settingsData.collectorPollIntervalSeconds) });
+    if (settingsData.collectorBatchSize !== undefined) entriesToSave.push({ name: 'collectorBatchSize', value: String(settingsData.collectorBatchSize) });
+    if (settingsData.collectorTimeoutMs !== undefined) entriesToSave.push({ name: 'collectorTimeoutMs', value: String(settingsData.collectorTimeoutMs) });
+    if (settingsData.collectorRetryPolicy !== undefined) entriesToSave.push({ name: 'collectorRetryPolicy', value: settingsData.collectorRetryPolicy });
+    if (settingsData.globalAlertThresholdMode !== undefined) entriesToSave.push({ name: 'globalAlertThresholdMode', value: settingsData.globalAlertThresholdMode });
+    if (settingsData.maxRetryAttempts !== undefined) entriesToSave.push({ name: 'maxRetryAttempts', value: String(settingsData.maxRetryAttempts) });
+    if (settingsData.notificationDispatchIntervalSeconds !== undefined) entriesToSave.push({ name: 'notificationDispatchIntervalSeconds', value: String(settingsData.notificationDispatchIntervalSeconds) });
+    if (settingsData.defaultTimezone !== undefined) entriesToSave.push({ name: 'defaultTimezone', value: settingsData.defaultTimezone });
+    if (settingsData.dataRetentionDays !== undefined) entriesToSave.push({ name: 'dataRetentionDays', value: String(settingsData.dataRetentionDays) });
+    if (settingsData.autoClearResolvedAlerts !== undefined) entriesToSave.push({ name: 'autoClearResolvedAlerts', value: String(settingsData.autoClearResolvedAlerts) });
+    if (settingsData.showInfoTips !== undefined) entriesToSave.push({ name: 'showInfoTips', value: String(settingsData.showInfoTips) });
+    if (settingsData.sessionTimeoutMinutes !== undefined) entriesToSave.push({ name: 'SESSION_TIMEOUT_MINUTES', value: String(settingsData.sessionTimeoutMinutes) });
+    if (settingsData.SESSION_TIMEOUT_MINUTES !== undefined) entriesToSave.push({ name: 'SESSION_TIMEOUT_MINUTES', value: String(settingsData.SESSION_TIMEOUT_MINUTES) });
+
+    for (const entry of entriesToSave) {
+      await (this.prisma as any).systemSettings.upsert({
+        where: { name: entry.name },
+        update: { value: entry.value, updatedBy },
+        create: { name: entry.name, value: entry.value, updatedBy },
+      }).catch((err: any) => console.warn(`Error upserting setting ${entry.name}:`, err));
+    }
+
+    return this.getSystemSettings();
+  }
+
+  async getSystemSettingsList(): Promise<SystemSettingItem[]> {
+    try {
+      const records = await (this.prisma as any).systemSettings.findMany({
+        orderBy: { name: 'asc' },
+      });
+      if (records && records.length > 0) {
+        return records.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          value: r.value ?? '',
+          updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString(),
+          updatedBy: r.updatedBy || 'admin',
+        }));
+      }
+    } catch (e) {
+      console.warn('Prisma getSystemSettingsList failed, returning defaults:', e);
+    }
+    const defaults = [
+      { name: 'apiCollectorEnabled', value: 'true' },
+      { name: 'collectorEndpoint', value: 'http://localhost:3000/api/collector/mock-health' },
+      { name: 'collectorApiKey', value: 'dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3' },
+      { name: 'collectorPollIntervalSeconds', value: '60' },
+      { name: 'collectorBatchSize', value: '250' },
+      { name: 'collectorTimeoutMs', value: '5000' },
+      { name: 'collectorRetryPolicy', value: 'Exponential Backoff (Max 5 retries)' },
+      { name: 'globalAlertThresholdMode', value: 'STANDARD' },
+      { name: 'maxRetryAttempts', value: '3' },
+      { name: 'notificationDispatchIntervalSeconds', value: '30' },
+      { name: 'defaultTimezone', value: 'Asia/Ho_Chi_Minh (UTC+7)' },
+      { name: 'dataRetentionDays', value: '90' },
+      { name: 'autoClearResolvedAlerts', value: 'true' },
+      { name: 'showInfoTips', value: 'true' },
+      { name: 'SESSION_TIMEOUT_MINUTES', value: '30' },
+    ];
+    return defaults.map((d, i) => ({
+      id: `ss-${i + 1}`,
+      name: d.name,
+      value: d.value,
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'admin',
+    }));
+  }
+
+  async saveSystemSettingItem(item: Partial<SystemSettingItem>): Promise<SystemSettingItem> {
+    const updatedBy = item.updatedBy || 'admin';
+    let record: any;
+    if (item.id) {
+      record = await (this.prisma as any).systemSettings.update({
+        where: { id: item.id },
+        data: {
+          name: item.name,
+          value: item.value ?? '',
+          updatedBy,
+        },
+      }).catch(async () => {
+        if (item.name) {
+          return await (this.prisma as any).systemSettings.upsert({
+            where: { name: item.name },
+            update: { value: item.value ?? '', updatedBy },
+            create: { name: item.name, value: item.value ?? '', updatedBy },
+          });
+        }
+      });
+    } else if (item.name) {
+      record = await (this.prisma as any).systemSettings.upsert({
+        where: { name: item.name },
+        update: { value: item.value ?? '', updatedBy },
+        create: { name: item.name, value: item.value ?? '', updatedBy },
+      });
+    }
+
+    if (!record) {
+      return {
+        id: item.id || `ss-${Date.now()}`,
+        name: item.name || 'customSetting',
+        value: item.value || '',
+        updatedAt: new Date().toISOString(),
+        updatedBy,
+      };
+    }
 
     return {
-      apiCollectorEnabled: settings.apiCollectorEnabled,
-      collectorEndpoint: settings.collectorEndpoint,
-      collectorApiKey: settings.collectorApiKey,
-      collectorPollIntervalSeconds: settings.collectorPollIntervalSeconds,
-      collectorBatchSize: settings.collectorBatchSize,
-      collectorTimeoutMs: settings.collectorTimeoutMs,
-      collectorRetryPolicy: settings.collectorRetryPolicy,
-      globalAlertThresholdMode: settings.globalAlertThresholdMode as any,
-      maxRetryAttempts: settings.maxRetryAttempts,
-      notificationDispatchIntervalSeconds: settings.notificationDispatchIntervalSeconds,
-      defaultTimezone: settings.defaultTimezone,
-      dataRetentionDays: settings.dataRetentionDays,
-      autoClearResolvedAlerts: settings.autoClearResolvedAlerts,
-      centralDbSyncEnabled: settings.centralDbSyncEnabled,
-      centralDbConnectionString: settings.centralDbConnectionString,
-      showInfoTips: settings.showInfoTips ?? true,
-      updatedAt: settings.updatedAt.toISOString(),
-      updatedBy: settings.updatedBy || 'admin',
+      id: record.id,
+      name: record.name,
+      value: record.value ?? '',
+      updatedAt: record.updatedAt ? new Date(record.updatedAt).toISOString() : new Date().toISOString(),
+      updatedBy: record.updatedBy || 'admin',
     };
+  }
+
+  async deleteSystemSettingItem(id: string): Promise<boolean> {
+    try {
+      await (this.prisma as any).systemSettings.delete({ where: { id } });
+      return true;
+    } catch (e) {
+      console.warn('Prisma deleteSystemSettingItem error:', e);
+      return true;
+    }
   }
 
   // --- Audit Logs ---

@@ -84,6 +84,17 @@ export function verifyCredentials(
  * Returns session inactivity timeout in milliseconds from configuration.
  */
 export function getSessionTimeoutMs(): number {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('dbmon_system_settings') : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const val = parsed.SESSION_TIMEOUT_MINUTES ?? parsed.sessionTimeoutMinutes;
+      const num = Number(val);
+      if (!isNaN(num) && num > 0) return num * 60 * 1000;
+    }
+  } catch (e) {
+    // ignore parsing errors
+  }
   const minutes = AUTH_CONFIG.session?.inactivityTimeoutMinutes ?? 30;
   return minutes * 60 * 1000;
 }

@@ -12,6 +12,7 @@ import {
   AlertNotificationLogEntity,
   MetricHistoryEntity,
   SystemSettingsEntity,
+  SystemSettingItem,
   AuditLogEntity,
   AlertNotificationQueueEntity,
   DatabasePollQueueEntity,
@@ -193,6 +194,21 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(settings),
     });
+  },
+  async getSystemSettingsList(): Promise<SystemSettingItem[]> {
+    return fetchJson('/api/system-settings/items');
+  },
+  async saveSystemSettingItem(item: Partial<SystemSettingItem>): Promise<SystemSettingItem> {
+    const method = item.id ? 'PUT' : 'POST';
+    const url = item.id ? `/api/system-settings/items/${item.id}` : '/api/system-settings/items';
+    return fetchJson(url, {
+      method,
+      body: JSON.stringify(item),
+    });
+  },
+  async deleteSystemSettingItem(id: string): Promise<boolean> {
+    await fetchJson(`/api/system-settings/items/${id}`, { method: 'DELETE' });
+    return true;
   },
   async resetData(): Promise<{ status: string; message: string }> {
     return fetchJson('/api/system-settings/reset-data', {

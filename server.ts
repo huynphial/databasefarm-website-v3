@@ -775,6 +775,72 @@ async function startServer() {
     }
   });
 
+  app.get('/api/system-settings/items', async (req, res) => {
+    try {
+      const items = await repo.getSystemSettingsList();
+      res.json(items);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/system-settings/items', async (req, res) => {
+    try {
+      const saved = await repo.saveSystemSettingItem(req.body);
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req, saved.updatedBy || 'admin');
+      await repo.addAuditLog({
+        userId,
+        clientIp,
+        actionType: 'CONFIG_CHANGE',
+        targetEntity: 'SYSTEM_SETTINGS',
+        targetId: saved.id,
+        details: `Created/updated system setting item "${saved.name}" = "${saved.value}"`,
+      });
+      res.json(saved);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put('/api/system-settings/items/:id', async (req, res) => {
+    try {
+      const saved = await repo.saveSystemSettingItem({ ...req.body, id: req.params.id });
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req, saved.updatedBy || 'admin');
+      await repo.addAuditLog({
+        userId,
+        clientIp,
+        actionType: 'CONFIG_CHANGE',
+        targetEntity: 'SYSTEM_SETTINGS',
+        targetId: saved.id,
+        details: `Updated system setting item "${saved.name}" = "${saved.value}"`,
+      });
+      res.json(saved);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/system-settings/items/:id', async (req, res) => {
+    try {
+      await repo.deleteSystemSettingItem(req.params.id);
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req, 'admin');
+      await repo.addAuditLog({
+        userId,
+        clientIp,
+        actionType: 'DELETE',
+        targetEntity: 'SYSTEM_SETTINGS',
+        targetId: req.params.id,
+        details: `Deleted system setting item ID ${req.params.id}`,
+      });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.put('/api/system-settings', async (req, res) => {
     try {
       const saved = await repo.saveSystemSettings(req.body);

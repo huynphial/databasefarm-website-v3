@@ -26,10 +26,12 @@ import {
   Terminal,
   Layers,
   Code,
-  Sparkles
+  Sparkles,
+  Search
 } from 'lucide-react';
 import {
   SystemSettingsEntity,
+  SystemSettingItem,
   UserRole,
   DatabaseEntity,
   DatabaseEngineEntity,
@@ -143,7 +145,119 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'collector' | 'engines' | 'alerts'>('collector');
+  const [activeTab, setActiveTab] = useState<'collector' | 'engines' | 'alerts' | 'kv-settings'>('collector');
+
+  // Key-Value Settings State
+  const [settingItems, setSettingItems] = useState<SystemSettingItem[]>([]);
+  const [isLoadingItems, setIsLoadingItems] = useState<boolean>(false);
+  const [itemSearchQuery, setItemSearchQuery] = useState<string>('');
+  const [isKvModalOpen, setIsKvModalOpen] = useState<boolean>(false);
+  const [editingItem, setEditingItem] = useState<SystemSettingItem | null>(null);
+  const [kvForm, setKvForm] = useState({ id: '', name: '', value: '' });
+
+  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number>(
+    settings.sessionTimeoutMinutes || Number(settings.SESSION_TIMEOUT_MINUTES) || 30
+  );
+
+  const loadSettingItems = async () => {
+    setIsLoadingItems(true);
+    try {
+      const items = await api.getSystemSettingsList();
+      setSettingItems(items);
+    } catch (err: any) {
+      console.error('Failed to fetch setting items:', err);
+    } finally {
+      setIsLoadingItems(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'kv-settings') {
+      loadSettingItems();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (settings.sessionTimeoutMinutes || settings.SESSION_TIMEOUT_MINUTES) {
+      setSessionTimeoutMinutes(
+        settings.sessionTimeoutMinutes || Number(settings.SESSION_TIMEOUT_MINUTES) || 30
+      );
+    }
+  }, [settings.sessionTimeoutMinutes, settings.SESSION_TIMEOUT_MINUTES]);
+
+  const handleOpenAddKv = () => {
+    setEditingItem(null);
+    setKvForm({ id: '', name: '', value: '' });
+    setIsKvModalOpen(true);
+  };
+
+  const handleOpenEditKv = (item: SystemSettingItem) => {
+    setEditingItem(item);
+    setKvForm({ id: item.id, name: item.name, value: item.value });
+    setIsKvModalOpen(true);
+  };
+
+  const handleSaveKvSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!kvForm.name.trim()) {
+      toast({ title: 'Validation Error', description: 'Setting Name is required.', type: 'error' });
+      return;
+    }
+
+    try {
+      const saved = await api.saveSystemSettingItem({
+        id: kvForm.id || undefined,
+        name: kvForm.name.trim(),
+        value: kvForm.value,
+        updatedBy: 'admin',
+      });
+      setIsKvModalOpen(false);
+      toast({
+        title: editingItem ? 'Setting Updated' : 'Setting Created',
+        description: `Setting "${saved.name}" saved successfully.`,
+        type: 'success',
+      });
+      loadSettingItems();
+
+      const nextSettings: SystemSettingsEntity = {
+        ...settings,
+        [saved.name]: saved.value,
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'admin',
+      };
+      if (saved.name === 'SESSION_TIMEOUT_MINUTES') {
+        const timeoutNum = parseInt(saved.value, 10) || 30;
+        nextSettings.sessionTimeoutMinutes = timeoutNum;
+        nextSettings.SESSION_TIMEOUT_MINUTES = saved.value;
+        setSessionTimeoutMinutes(timeoutNum);
+      }
+      onSaveSettings(nextSettings);
+    } catch (err: any) {
+      toast({ title: 'Save Failed', description: err.message || 'Failed to save setting item.', type: 'error' });
+    }
+  };
+
+  const handleDeleteKv = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete setting "${name}"?`)) return;
+    try {
+      await api.deleteSystemSettingItem(id);
+      toast({ title: 'Setting Deleted', description: `Deleted setting "${name}".`, type: 'info' });
+      loadSettingItems();
+      if (name === 'SESSION_TIMEOUT_MINUTES' || name === 'sessionTimeoutMinutes') {
+        const nextSettings: SystemSettingsEntity = {
+          ...settings,
+          sessionTimeoutMinutes: 30,
+          SESSION_TIMEOUT_MINUTES: '30',
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'admin',
+        };
+        setSessionTimeoutMinutes(30);
+        onSaveSettings(nextSettings);
+      }
+    } catch (err: any) {
+      toast({ title: 'Delete Failed', description: err.message, type: 'error' });
+    }
+  };
 
   // Collector Endpoint Health State
   const defaultUrl = settings.collectorEndpoint || 'http://localhost:3000/api/collector/mock-health';
@@ -389,6 +503,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       collectorEndpoint: collectorUrl,
       showInfoTips: showInfoTips,
       timestampFormat: timestampFormat,
+      sessionTimeoutMinutes: Number(sessionTimeoutMinutes) || 30,
+      SESSION_TIMEOUT_MINUTES: String(Number(sessionTimeoutMinutes) || 30),
       updatedAt: new Date().toISOString(),
       updatedBy: 'admin',
     };
@@ -670,6 +786,21 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
             {alertMethods.length}
           </span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('kv-settings')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            activeTab === 'kv-settings'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Sliders className="w-3.5 h-3.5" />
+          <span>System Settings Panel (Key-Value)</span>
+          <span className="px-1.5 py-0.2 rounded text-[10px] bg-indigo-100 text-indigo-800 font-mono">
+            {settingItems.length}
+          </span>
+        </button>
       </div>
 
       {/* TAB 1: Collector API & UI Preferences */}
@@ -834,6 +965,32 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                   <option value="DD/MM/YYYY HH24:MI:SS">DD/MM/YYYY HH24:MI:SS (22/08/2026 14:30:15)</option>
                   <option value="YYYY-MM-DD HH:mm:ss">YYYY-MM-DD HH:mm:ss (2026-08-22 14:30:15)</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Session Timeout Minutes Card */}
+            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-indigo-600" />
+                  <span>Session Inactivity Timeout (<code className="font-mono font-bold text-indigo-700">SESSION_TIMEOUT_MINUTES</code>)</span>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Maximum allowed inactivity window (in minutes) before the user session is automatically logged out.
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  type="number"
+                  min={1}
+                  max={1440}
+                  disabled={!isAdmin}
+                  value={sessionTimeoutMinutes}
+                  onChange={(e) => setSessionTimeoutMinutes(Math.max(1, parseInt(e.target.value, 10) || 30))}
+                  className="w-24 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-indigo-500 disabled:opacity-60 shadow-2xs"
+                />
+                <span className="text-xs text-slate-500 font-medium">minutes</span>
               </div>
             </div>
           </div>
@@ -1274,6 +1431,139 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         </div>
       )}
 
+      {/* TAB 4: Key-Value System Settings Panel */}
+      {activeTab === 'kv-settings' && (
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Sliders className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-bold text-slate-900 text-base">System Configuration Parameters (Key-Value Store)</h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Manage runtime setting key-value pairs (<code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-800">id, name, value, updatedAt, updatedBy</code>).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={loadSettingItems}
+                  disabled={isLoadingItems}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingItems ? 'animate-spin text-indigo-600' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleOpenAddKv}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-colors shadow-2xs cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Setting Parameter</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Search Filter */}
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Filter settings by key name or value..."
+                  value={itemSearchQuery}
+                  onChange={(e) => setItemSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    <th className="py-3 px-4 font-mono">ID</th>
+                    <th className="py-3 px-4">Setting Key (Name)</th>
+                    <th className="py-3 px-4">Setting Value</th>
+                    <th className="py-3 px-4">Updated At</th>
+                    <th className="py-3 px-4">Updated By</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs text-slate-800">
+                  {settingItems
+                    .filter(
+                      (item) =>
+                        item.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) ||
+                        item.value.toLowerCase().includes(itemSearchQuery.toLowerCase())
+                    )
+                    .map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-500">{item.id}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                          {item.name === 'SESSION_TIMEOUT_MINUTES' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              <Clock className="w-3 h-3 text-indigo-600" />
+                              {item.name}
+                            </span>
+                          ) : (
+                            item.name
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-700 max-w-xs truncate">
+                          {item.value}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 text-[11px] font-mono">
+                          {item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600 font-semibold">{item.updatedBy || 'admin'}</td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isAdmin && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditKv(item)}
+                                  className="p-1.5 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors cursor-pointer"
+                                  title="Edit Parameter"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteKv(item.id, item.name)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                                  title="Delete Parameter"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  {settingItems.length === 0 && !isLoadingItems && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-500 text-xs italic">
+                        No system settings items found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Engine Modal */}
       <Dialog
         isOpen={isEngineModalOpen}
@@ -1687,6 +1977,58 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
             </button>
           </div>
         </div>
+      </Dialog>
+
+      {/* Key-Value Setting Parameter Dialog */}
+      <Dialog
+        isOpen={isKvModalOpen}
+        onClose={() => setIsKvModalOpen(false)}
+        title={editingItem ? 'Edit System Setting Parameter' : 'Add System Setting Parameter'}
+        description="Configure runtime setting key-value pair"
+        maxWidth="md"
+      >
+        <form onSubmit={handleSaveKvSubmit} className="space-y-4 text-xs">
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">Setting Key (Name):</label>
+            <input
+              type="text"
+              required
+              disabled={!!editingItem}
+              value={kvForm.name}
+              onChange={(e) => setKvForm({ ...kvForm, name: e.target.value })}
+              placeholder="e.g. SESSION_TIMEOUT_MINUTES"
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">Setting Value:</label>
+            <textarea
+              required
+              rows={3}
+              value={kvForm.value}
+              onChange={(e) => setKvForm({ ...kvForm, value: e.target.value })}
+              placeholder="e.g. 30"
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={() => setIsKvModalOpen(false)}
+              className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors shadow-2xs cursor-pointer"
+            >
+              {editingItem ? 'Save Setting Changes' : 'Create Setting Parameter'}
+            </button>
+          </div>
+        </form>
       </Dialog>
     </div>
   );
