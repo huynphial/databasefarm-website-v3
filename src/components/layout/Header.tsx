@@ -8,8 +8,6 @@ interface HeaderProps {
   activeTab: NavigationTab;
   userRole: UserRole;
   storageType?: 'prisma' | 'memory';
-  onRoleChange?: (newRole: UserRole) => void;
-  onToggleRole?: () => void;
 }
 
 const titles: Record<NavigationTab, { title: string; subtitle: string }> = {
@@ -42,8 +40,12 @@ const titles: Record<NavigationTab, { title: string; subtitle: string }> = {
     subtitle: 'Audited log of cleared and historical alert events (30-day default query optimization)',
   },
   'alert-notification-logs': {
-    title: 'Alert Notification Audit Log',
-    subtitle: 'Comprehensive audit trail of dispatched alert notifications across all channels and gateways',
+    title: 'Alert Notification Queue & Audit Log',
+    subtitle: 'Real-time alert notification queue and audit trail of dispatched alert notifications',
+  },
+  'monitor-poll-logs': {
+    title: 'Monitor Poll Queue & Execution Logs',
+    subtitle: 'Real-time database poll scheduling queue (database_poll_queue) and historical execution logs (database_poll_log)',
   },
   'active-alerts': {
     title: 'Active Alerts',
@@ -61,9 +63,13 @@ const titles: Record<NavigationTab, { title: string; subtitle: string }> = {
     title: 'Raw Query History',
     subtitle: 'Real-time telemetry stream of raw probe query executions, attribute measurements, and threshold evaluations',
   },
+  account: {
+    title: 'Account Settings',
+    subtitle: 'User accounts management, directory access control, and credential settings',
+  },
 };
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, userRole, storageType = 'memory', onRoleChange, onToggleRole }) => {
+export const Header: React.FC<HeaderProps> = ({ activeTab, userRole, storageType = 'memory' }) => {
   const currentInfo = titles[activeTab] || {
     title: 'Dashboard',
     subtitle: 'Database Monitoring System',
@@ -89,15 +95,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, userRole, storageType
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  };
-
-  const handleRoleClick = () => {
-    if (onRoleChange) {
-      const nextRole: UserRole = userRole === 'ADMIN' ? 'VIEWER' : 'ADMIN';
-      onRoleChange(nextRole);
-    } else if (onToggleRole) {
-      onToggleRole();
-    }
   };
 
   const isTimerLow = secondsRemaining < 300; // Under 5 minutes
@@ -134,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, userRole, storageType
             </div>
           </div>
 
-          {/* Column 2: Session Expiration Countdown | User Role */}
+          {/* Column 2: Session Expiration Countdown | User Role (Static view of account role) */}
           <div className="px-2.5 flex flex-col justify-center gap-0.5 pl-2.5">
             <div
               title="Dynamic session inactivity timeout countdown"
@@ -145,10 +142,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, userRole, storageType
               <Timer className={`w-3.5 h-3.5 shrink-0 ${isTimerUrgent ? 'text-rose-500' : 'text-indigo-500'}`} />
               <span>EXPIRY: {formatCountdown(secondsRemaining)}</span>
             </div>
-            <button
-              onClick={handleRoleClick}
-              title="Click to toggle between Admin and View-Only role"
-              className="flex items-center gap-1.5 font-semibold hover:opacity-80 transition-opacity cursor-pointer text-left"
+            <div
+              title={`Authenticated account security role: ${userRole}`}
+              className="flex items-center gap-1.5 font-semibold text-left select-none"
             >
               {userRole === 'ADMIN' ? (
                 <>
@@ -161,7 +157,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, userRole, storageType
                   <span className="text-emerald-600 font-bold">ROLE: VIEWER</span>
                 </>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </div>

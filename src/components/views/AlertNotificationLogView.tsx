@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   BellRing,
   Search,
@@ -16,69 +16,219 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Info,
   Calendar,
+  ShieldAlert,
+  Layers,
+  Lock,
+  Database,
+  Check,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react';
-import { AlertNotificationLogEntity, DatabaseEntity, UserRole } from '../../types';
+import {
+  AlertNotificationLogEntity,
+  AlertNotificationQueueEntity,
+  DatabaseEntity,
+  DatabaseEngineEntity,
+  UserRole,
+} from '../../types';
+import { getDbEngineBadgeClass } from '../../config/dbEngines';
+import { cn } from '../../lib/utils';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 
 interface AlertNotificationLogViewProps {
+  queue?: AlertNotificationQueueEntity[];
   logs: AlertNotificationLogEntity[];
   databases: DatabaseEntity[];
+  databaseEngines?: DatabaseEngineEntity[];
   userRole: UserRole;
   showInfoTips?: boolean;
   onRefresh: () => void;
 }
 
 export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> = ({
+  queue = [],
   logs,
   databases,
+  databaseEngines = [],
   userRole,
   showInfoTips = true,
   onRefresh,
 }) => {
   const { toast } = useToast();
 
-  // Filters State
+  // If user is not ADMIN, show Access Denied
+  if (userRole !== 'ADMIN') {
+    return (
+      <div className="p-8 flex-1 flex flex-col items-center justify-center bg-slate-50 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 mb-4 shadow-sm">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-2">Access Restricted</h2>
+        <p className="text-sm text-slate-600 max-w-md mb-6 leading-relaxed">
+          The <strong>Alert Notification Log</strong> is restricted to administrators only. Viewer roles do not have permission to view notification dispatch queues or audit logs.
+        </p>
+      </div>
+    );
+  }
+
+  // 1. DATABASE ENGINE & TARGET DATABASE FILTER STATE (Default: Not Filter / 'ALL')
+  const [selectedEngineType, setSelectedEngineType] = useState<string>('ALL');
+  const [selectedDbId, setSelectedDbId] = useState<string>('ALL');
+  const [dbSearchQuery, setDbSearchQuery] = useState<string>('');
+  const [isDbDropdownOpen, setIsDbDropdownOpen] = useState<boolean>(false);
+  const dbDropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // 2. TIME WINDOW FILTER STATE (Default: 24H like tab Analytics Database)
+  const [timeRangePreset, setTimeRangePreset] = useState<'1h' | '6h' | '24h' | '3d' | '7d' | 'all' | 'custom'>('24h');
+  const [fromDateTime, setFromDateTime] = useState<string>(() => {
+    const d = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    return d.toISOString().slice(0, 16);
+  });
+  const [toDateTime, setToDateTime] = useState<string>(() => {
+    const d = new Date();
+    return d.toISOString().slice(0, 16);
+  });
+
+  // Secondary Filters State for Logs
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [channelFilter, setChannelFilter] = useState<string>('ALL');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
-  const [selectedDbId, setSelectedDbId] = useState<string>('ALL');
-
-  // Date Range Filters (Default 7 Days)
-  const defaultTo = new Date().toISOString().split('T')[0];
-  const defaultFrom = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-  const [fromDate, setFromDate] = useState<string>(defaultFrom);
-  const [toDate, setToDate] = useState<string>(defaultTo);
-  const [activeDatePreset, setActiveDatePreset] = useState<'3D' | '7D' | '30D' | 'ALL'>('7D');
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Selected Log Detail Modal State
   const [selectedLog, setSelectedLog] = useState<AlertNotificationLogEntity | null>(null);
 
-  // Quick Date Preset Handler
-  const handleDatePreset = (preset: '3D' | '7D' | '30D' | 'ALL') => {
-    setActiveDatePreset(preset);
-    const today = new Date().toISOString().split('T')[0];
-    if (preset === 'ALL') {
-      setFromDate('');
-      setToDate('');
-    } else {
-      const days = preset === '3D' ? 3 : preset === '7D' ? 7 : 30;
-      const past = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
-      setFromDate(past);
-      setToDate(today);
+  // Close dropdown on click outside or escape key
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dbDropdownRef.current && !dbDropdownRef.current.contains(event.target as Node)) {
+        setIsDbDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsDbDropdownOpen(false);
+      }
+    };
+    if (isDbDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDbDropdownOpen]);
+
+  // Focus search input when database dropdown opens
+  useEffect(() => {
+    if (isDbDropdownOpen && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+    }
+  }, [isDbDropdownOpen]);
+
+  // Quick Preset Handler for Time Window
+  const handleSelectTimePreset = (preset: '1h' | '6h' | '24h' | '3d' | '7d' | 'all') => {
+    setTimeRangePreset(preset);
+    const now = new Date();
+    setToDateTime(now.toISOString().slice(0, 16));
+
+    if (preset === 'all') {
+      const past = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      setFromDateTime(past.toISOString().slice(0, 16));
+    } else if (preset === '1h') {
+      const past = new Date(Date.now() - 1 * 60 * 60 * 1000);
+      setFromDateTime(past.toISOString().slice(0, 16));
+    } else if (preset === '6h') {
+      const past = new Date(Date.now() - 6 * 60 * 60 * 1000);
+      setFromDateTime(past.toISOString().slice(0, 16));
+    } else if (preset === '24h') {
+      const past = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      setFromDateTime(past.toISOString().slice(0, 16));
+    } else if (preset === '3d') {
+      const past = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      setFromDateTime(past.toISOString().slice(0, 16));
+    } else if (preset === '7d') {
+      const past = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      setFromDateTime(past.toISOString().slice(0, 16));
     }
     setCurrentPage(1);
   };
 
+  // Time boundaries in milliseconds for Log filtering
+  const fromTimeMs = useMemo(() => {
+    return fromDateTime ? new Date(fromDateTime).getTime() : 0;
+  }, [fromDateTime]);
+
+  const toTimeMs = useMemo(() => {
+    return toDateTime ? new Date(toDateTime).getTime() : Date.now() + 86400000;
+  }, [toDateTime]);
+
+  // DB lookup
+  const dbMap = useMemo(() => {
+    const map = new Map<string, DatabaseEntity>();
+    databases.forEach((db) => map.set(db.id, db));
+    return map;
+  }, [databases]);
+
+  // Available database engines
+  const availableEngines = useMemo(() => {
+    const engineMap = new Map<string, { code: string; name: string }>();
+    if (databaseEngines && databaseEngines.length > 0) {
+      databaseEngines.forEach((e) => {
+        engineMap.set(e.dbCode.toUpperCase(), { code: e.dbCode, name: e.dbName });
+      });
+    }
+    databases.forEach((db) => {
+      const code = db.dbType.toUpperCase();
+      if (!engineMap.has(code)) {
+        engineMap.set(code, { code: db.dbType, name: db.dbType });
+      }
+    });
+    return Array.from(engineMap.values());
+  }, [databaseEngines, databases]);
+
+  // Searchable databases list for dropdown selection
+  const searchableDatabases = useMemo(() => {
+    return databases.filter((db) => {
+      const matchEngine =
+        selectedEngineType === 'ALL' ||
+        db.dbType.toUpperCase() === selectedEngineType.toUpperCase();
+      const q = dbSearchQuery.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        db.name.toLowerCase().includes(q) ||
+        (db.databaseName && db.databaseName.toLowerCase().includes(q)) ||
+        db.host.toLowerCase().includes(q) ||
+        String(db.port || '').includes(q) ||
+        (db.environment && db.environment.toLowerCase().includes(q)) ||
+        db.dbType.toLowerCase().includes(q) ||
+        (db.note && db.note.toLowerCase().includes(q)) ||
+        (db.tags && db.tags.some((t) => t.toLowerCase().includes(q)));
+      return matchEngine && matchSearch;
+    });
+  }, [databases, selectedEngineType, dbSearchQuery]);
+
+  // Selected Target Database Entity (if selectedDbId !== 'ALL')
+  const selectedDb = useMemo(() => {
+    if (selectedDbId === 'ALL') return null;
+    return databases.find((d) => d.id === selectedDbId) || null;
+  }, [databases, selectedDbId]);
+
   // Helper date formatter in UTC+7 / Local
-  const formatDateTime = (isoString?: string) => {
+  const formatDateTime = (isoString?: string | null) => {
     if (!isoString) return '—';
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return isoString;
@@ -94,81 +244,115 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     }).format(date);
   };
 
-  const formatRelativeTime = (isoString?: string) => {
+  const formatRelativeTime = (isoString?: string | null) => {
     if (!isoString) return '';
     const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+    if (diff < 0) {
+      const future = Math.abs(diff);
+      if (future < 60) return `in ${future}s`;
+      if (future < 3600) return `in ${Math.floor(future / 60)}m`;
+      return `in ${Math.floor(future / 3600)}h`;
+    }
     if (diff < 60) return `${Math.max(1, diff)}s ago`;
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     return `${Math.floor(diff / 86400)}d ago`;
   };
 
-  // Compute stats
-  const stats = useMemo(() => {
-    const total = logs.length;
-    const dispatched = logs.filter((l) => l.status === 'DISPATCHED').length;
-    const failed = logs.filter((l) => l.status === 'FAILED').length;
-    const pending = logs.filter((l) => l.status === 'PENDING').length;
-    const telegram = logs.filter((l) => l.dispatchType === 'TELEGRAM').length;
-    const email = logs.filter((l) => l.dispatchType === 'EMAIL').length;
-    const other = total - telegram - email;
-    const latencies = logs.filter((l) => typeof l.latencyMs === 'number').map((l) => l.latencyMs as number);
-    const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 185;
-
-    return { total, dispatched, failed, pending, telegram, email, other, avgLatency };
-  }, [logs]);
-
-  // DB lookup
-  const dbMap = useMemo(() => {
-    const map = new Map<string, DatabaseEntity>();
-    databases.forEach((db) => map.set(db.id, db));
-    return map;
-  }, [databases]);
-
-  // Filtered Logs
-  const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      // Date filter
-      if (fromDate) {
-        const logDate = new Date(log.timestamp).toISOString().split('T')[0];
-        if (logDate < fromDate) return false;
-      }
-      if (toDate) {
-        const logDate = new Date(log.timestamp).toISOString().split('T')[0];
-        if (logDate > toDate) return false;
+  // FILTERED QUEUE: Queue tables DO NOT filter time (as requested: "queue tables not filter time")
+  const filteredQueue = useMemo(() => {
+    return queue.filter((item) => {
+      // Database Engine filter
+      if (selectedEngineType !== 'ALL') {
+        const dbObj = dbMap.get(item.dbId);
+        const dbType = dbObj?.dbType || '';
+        if (dbType.toUpperCase() !== selectedEngineType.toUpperCase()) return false;
       }
 
-      // Status filter
-      if (statusFilter !== 'ALL' && log.status !== statusFilter) return false;
-
-      // Channel filter
-      if (channelFilter !== 'ALL' && log.dispatchType !== channelFilter) return false;
-
-      // Severity filter
-      if (severityFilter !== 'ALL' && log.alertLevel !== severityFilter) return false;
-
-      // DB Filter
-      if (selectedDbId !== 'ALL' && log.dbId !== selectedDbId) return false;
-
-      // Search term
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase();
-        const matchesTerm =
-          log.alertId?.toLowerCase().includes(term) ||
-          log.dbName?.toLowerCase().includes(term) ||
-          log.metricName?.toLowerCase().includes(term) ||
-          log.attributeName?.toLowerCase().includes(term) ||
-          log.dispatchMethod?.toLowerCase().includes(term) ||
-          log.senderIds?.toLowerCase().includes(term) ||
-          log.errorMessage?.toLowerCase().includes(term) ||
-          log.payloadSummary?.toLowerCase().includes(term);
-
-        if (!matchesTerm) return false;
-      }
+      // Target Database filter
+      if (selectedDbId !== 'ALL' && item.dbId !== selectedDbId) return false;
 
       return true;
-    }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [logs, fromDate, toDate, statusFilter, channelFilter, severityFilter, selectedDbId, searchTerm]);
+    });
+  }, [queue, selectedEngineType, selectedDbId, dbMap]);
+
+  // FILTERED LOGS: Applies Time Filter (Default 24H) + Engine + Target DB + Secondary filters
+  const filteredLogs = useMemo(() => {
+    return logs
+      .filter((log) => {
+        // Time window filter (Default 24H)
+        const logTime = new Date(log.timestamp).getTime();
+        if (fromTimeMs && logTime < fromTimeMs) return false;
+        if (toTimeMs && logTime > toTimeMs) return false;
+
+        // Database Engine filter
+        if (selectedEngineType !== 'ALL') {
+          const dbObj = dbMap.get(log.dbId);
+          const dbType = dbObj?.dbType || '';
+          if (dbType.toUpperCase() !== selectedEngineType.toUpperCase()) return false;
+        }
+
+        // Target Database filter
+        if (selectedDbId !== 'ALL' && log.dbId !== selectedDbId) return false;
+
+        // Status filter
+        if (statusFilter !== 'ALL' && log.status !== statusFilter) return false;
+
+        // Channel filter
+        if (channelFilter !== 'ALL' && log.dispatchType !== channelFilter) return false;
+
+        // Severity filter
+        if (severityFilter !== 'ALL' && log.alertLevel !== severityFilter) return false;
+
+        // Search term
+        if (searchTerm.trim()) {
+          const term = searchTerm.toLowerCase();
+          const matchesTerm =
+            log.alertId?.toLowerCase().includes(term) ||
+            log.dbName?.toLowerCase().includes(term) ||
+            log.metricName?.toLowerCase().includes(term) ||
+            log.attributeName?.toLowerCase().includes(term) ||
+            log.dispatchMethod?.toLowerCase().includes(term) ||
+            log.senderIds?.toLowerCase().includes(term) ||
+            log.errorMessage?.toLowerCase().includes(term) ||
+            log.payloadSummary?.toLowerCase().includes(term);
+
+          if (!matchesTerm) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [
+    logs,
+    fromTimeMs,
+    toTimeMs,
+    selectedEngineType,
+    selectedDbId,
+    statusFilter,
+    channelFilter,
+    severityFilter,
+    searchTerm,
+    dbMap,
+  ]);
+
+  // Compute stats based on current view
+  const stats = useMemo(() => {
+    const total = filteredLogs.length;
+    const dispatched = filteredLogs.filter((l) => l.status === 'DISPATCHED').length;
+    const failed = filteredLogs.filter((l) => l.status === 'FAILED').length;
+    const pendingInQueue = filteredQueue.filter((q) => q.status === 'PENDING').length;
+    const processingInQueue = filteredQueue.filter((q) => q.status === 'PROCESSING').length;
+    const latencies = filteredLogs
+      .filter((l) => typeof l.latencyMs === 'number')
+      .map((l) => l.latencyMs as number);
+    const avgLatency =
+      latencies.length > 0
+        ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+        : 185;
+
+    return { total, dispatched, failed, pendingInQueue, processingInQueue, avgLatency };
+  }, [filteredLogs, filteredQueue]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredLogs.length / pageSize) || 1;
@@ -176,6 +360,41 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     const start = (currentPage - 1) * pageSize;
     return filteredLogs.slice(start, start + pageSize);
   }, [filteredLogs, currentPage, pageSize]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    if (onRefresh) {
+      await onRefresh();
+    }
+    setTimeout(() => {
+      setIsRefreshing(false);
+      toast({
+        title: 'Notification Logs Refreshed',
+        description: 'Loaded latest dispatcher queue and telemetry logs.',
+        type: 'info',
+      });
+    }, 500);
+  };
+
+  const handleClearFilters = () => {
+    setSelectedEngineType('ALL');
+    setSelectedDbId('ALL');
+    setDbSearchQuery('');
+    setStatusFilter('ALL');
+    setChannelFilter('ALL');
+    setSeverityFilter('ALL');
+    setSearchTerm('');
+    handleSelectTimePreset('24h');
+  };
+
+  const hasActiveFilters =
+    selectedEngineType !== 'ALL' ||
+    selectedDbId !== 'ALL' ||
+    statusFilter !== 'ALL' ||
+    channelFilter !== 'ALL' ||
+    severityFilter !== 'ALL' ||
+    searchTerm.trim() !== '' ||
+    timeRangePreset !== '24h';
 
   // Render Channel Badge
   const renderChannelBadge = (type?: string, method?: string) => {
@@ -220,32 +439,391 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
 
   return (
     <div className="p-6 sm:p-8 flex-1 flex flex-col gap-6 overflow-y-auto bg-slate-50/50">
-      {/* Top Header Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <BellRing className="w-5 h-5 text-indigo-600" />
-            Alert Notification Audit Log
-          </h2>
-          <p className="text-xs text-slate-500">
-            Audit history of dispatched incidents, destination channels, delivery latencies, and gateway statuses ({filteredLogs.length} matching)
-          </p>
+      {/* ========================================================================= */}
+      {/* 1. FILTER CONTROLS BAR: DATABASE ENGINE, Target Database, Time Window */}
+      {/* ========================================================================= */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs relative z-30">
+        {/* Header Bar */}
+        <div className="px-6 py-4 border-b border-slate-100 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 rounded-t-2xl">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 shadow-2xs">
+              <BellRing className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                  Alert Notification Queue & Audit Log
+                </h2>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Dispatch Stream
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Inspect real-time notification queue (<span className="font-mono text-slate-700 font-semibold">alert_notification_queue</span>) and 24-hour historical dispatch audit logs (<span className="font-mono text-slate-700 font-semibold">alert_notification_log</span>).
+              </p>
+            </div>
+          </div>
+
+          {/* Header Actions */}
+          <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center justify-center gap-2 h-9 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-400 text-white rounded-xl text-xs font-semibold shadow-2xs hover:shadow-sm transition-all cursor-pointer w-full sm:w-auto"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh Logs'}</span>
+            </button>
+          </div>
         </div>
 
-        <button
-          onClick={() => {
-            onRefresh();
-            toast({
-              title: 'Notification Logs Refreshed',
-              description: 'Loaded latest dispatcher telemetry logs.',
-              type: 'info',
-            });
-          }}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Refresh Audit Trail</span>
-        </button>
+        {/* Filter Controls Grid */}
+        <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-4">
+          {/* Filter 1: DATABASE ENGINE */}
+          <div className="md:col-span-3 space-y-2">
+            <div className="h-5 flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Database Engine</span>
+              </label>
+              <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                {availableEngines.length} types
+              </span>
+            </div>
+
+            <div className="relative">
+              <select
+                value={selectedEngineType}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedEngineType(val);
+                  // If selected DB doesn't match new engine, reset DB to ALL
+                  if (val !== 'ALL' && selectedDb && selectedDb.dbType.toUpperCase() !== val.toUpperCase()) {
+                    setSelectedDbId('ALL');
+                  }
+                  setCurrentPage(1);
+                }}
+                className="w-full h-10 appearance-none bg-slate-50/80 hover:bg-slate-100/60 border border-slate-200 hover:border-slate-300 text-slate-900 text-xs font-medium rounded-xl px-3 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer shadow-2xs"
+              >
+                <option value="ALL">All Database Engines ({databases.length})</option>
+                {availableEngines.map((eng) => {
+                  const count = databases.filter(
+                    (d) => d.dbType.toUpperCase() === eng.code.toUpperCase()
+                  ).length;
+                  return (
+                    <option key={eng.code} value={eng.code}>
+                      {eng.name} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Filter 2: Target Database (Searchable Selection Dropdown) */}
+          <div className="md:col-span-4 space-y-2" ref={dbDropdownRef}>
+            <div className="h-5 flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                <Server className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Target Database</span>
+              </label>
+              <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                {selectedDbId === 'ALL' ? 'All Databases' : '1 Selected'}
+              </span>
+            </div>
+
+            <div className="relative">
+              {/* Dropdown Trigger Button */}
+              <button
+                type="button"
+                onClick={() => setIsDbDropdownOpen((prev) => !prev)}
+                className={cn(
+                  'w-full h-10 flex items-center justify-between gap-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-900 text-xs rounded-xl px-3 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-2xs group',
+                  isDbDropdownOpen && 'ring-2 ring-indigo-500/20 border-indigo-500'
+                )}
+              >
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  {selectedDb ? (
+                    <>
+                      <span
+                        className={cn(
+                          'w-2 h-2 rounded-full shrink-0',
+                          (selectedDb.status || 'UP').toUpperCase() === 'UP' || (selectedDb.status || 'UP').toUpperCase() === 'NORMAL'
+                            ? 'bg-emerald-500'
+                            : (selectedDb.status || '').toUpperCase() === 'DOWN' || (selectedDb.status || '').toUpperCase() === 'CRITICAL'
+                            ? 'bg-rose-500'
+                            : 'bg-amber-500'
+                        )}
+                      />
+                      <div className="min-w-0 flex-1 flex items-center gap-1.5">
+                        <span className="font-bold text-slate-900 truncate">{selectedDb.name}</span>
+                        <span className="text-[10px] text-slate-400 font-mono hidden sm:inline truncate">
+                          ({selectedDb.host}:{selectedDb.port})
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          'text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0',
+                          getDbEngineBadgeClass(selectedDb.dbType)
+                        )}
+                      >
+                        {selectedDb.dbType}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Database className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <span className="font-medium text-slate-700 truncate">
+                        All Databases ({searchableDatabases.length})
+                      </span>
+                    </>
+                  )}
+                </div>
+                <ChevronDown
+                  className={cn(
+                    'w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 group-hover:text-slate-600',
+                    isDbDropdownOpen && 'rotate-180 text-indigo-600'
+                  )}
+                />
+              </button>
+
+              {/* Popover Dropdown Panel */}
+              {isDbDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col max-h-80 w-full min-w-[280px]">
+                  {/* Search input header */}
+                  <div className="p-2.5 bg-slate-50 border-b border-slate-200">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        placeholder="Search database, host, IP, engine..."
+                        value={dbSearchQuery}
+                        onChange={(e) => setDbSearchQuery(e.target.value)}
+                        className="w-full bg-white border border-slate-200 text-slate-900 text-xs rounded-lg pl-8 pr-7 py-1.5 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium"
+                      />
+                      {dbSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setDbSearchQuery('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs p-0.5 rounded cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Database List */}
+                  <div className="overflow-y-auto divide-y divide-slate-100 flex-1 max-h-60">
+                    {/* "All Databases" option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDbId('ALL');
+                        setIsDbDropdownOpen(false);
+                        setCurrentPage(1);
+                      }}
+                      className={cn(
+                        'w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-indigo-50/50 transition-colors cursor-pointer',
+                        selectedDbId === 'ALL' && 'bg-indigo-50/80 font-bold'
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Database className="w-4 h-4 text-indigo-600" />
+                        <div>
+                          <div className="text-xs font-bold text-slate-900">All Databases</div>
+                          <div className="text-[10px] text-slate-400">Do not filter by target database instance</div>
+                        </div>
+                      </div>
+                      {selectedDbId === 'ALL' && (
+                        <Check className="w-4 h-4 text-indigo-600 shrink-0 font-bold" />
+                      )}
+                    </button>
+
+                    {searchableDatabases.length === 0 ? (
+                      <div className="p-4 text-center text-slate-400">
+                        <Database className="w-5 h-5 mx-auto text-slate-300 mb-1" />
+                        <p className="text-xs font-semibold text-slate-600">No matching databases</p>
+                      </div>
+                    ) : (
+                      searchableDatabases.map((db) => {
+                        const isSelected = db.id === selectedDbId;
+                        const isUp = (db.status || 'UP').toUpperCase() === 'UP' || (db.status || 'UP').toUpperCase() === 'NORMAL';
+                        const isDown = (db.status || '').toUpperCase() === 'DOWN' || (db.status || '').toUpperCase() === 'CRITICAL';
+
+                        return (
+                          <button
+                            key={db.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedDbId(db.id);
+                              setIsDbDropdownOpen(false);
+                              if (selectedEngineType !== 'ALL' && selectedEngineType.toUpperCase() !== db.dbType.toUpperCase()) {
+                                setSelectedEngineType('ALL');
+                              }
+                              setCurrentPage(1);
+                            }}
+                            className={cn(
+                              'w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-indigo-50/50 transition-colors cursor-pointer group',
+                              isSelected && 'bg-indigo-50/80'
+                            )}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <span
+                                className={cn(
+                                  'w-2 h-2 rounded-full shrink-0',
+                                  isUp ? 'bg-emerald-500' : isDown ? 'bg-rose-500' : 'bg-amber-500'
+                                )}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={cn('text-xs font-bold text-slate-900', isSelected && 'text-indigo-900')}>
+                                    {db.name}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      'text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider',
+                                      getDbEngineBadgeClass(db.dbType)
+                                    )}
+                                  >
+                                    {db.dbType}
+                                  </span>
+                                  {db.environment && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase">
+                                      {db.environment}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-2 truncate">
+                                  <span>{db.host}:{db.port}</span>
+                                  {db.databaseName && <span>• {db.databaseName}</span>}
+                                </div>
+                              </div>
+                            </div>
+
+                            {isSelected && (
+                              <Check className="w-4 h-4 text-indigo-600 shrink-0 font-bold" />
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Dropdown Footer */}
+                  <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-500 flex items-center justify-between">
+                    <span>{searchableDatabases.length} databases</span>
+                    {selectedEngineType !== 'ALL' && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedEngineType('ALL')}
+                        className="text-indigo-600 hover:text-indigo-800 font-semibold underline cursor-pointer"
+                      >
+                        Show all engines
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Filter 3: Time Window (like tab Analytics Database, Default: 24h) */}
+          <div className="md:col-span-5 space-y-2">
+            <div className="h-5 flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Time Window</span>
+              </label>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                {(['1h', '6h', '24h', '3d', '7d', 'all'] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => handleSelectTimePreset(preset)}
+                    className={cn(
+                      'px-2 py-0.5 text-[10px] font-bold rounded transition-all cursor-pointer',
+                      timeRangePreset === preset
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    )}
+                  >
+                    {preset.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Time pickers row */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="relative">
+                <input
+                  type="datetime-local"
+                  value={fromDateTime}
+                  onChange={(e) => {
+                    setFromDateTime(e.target.value);
+                    setTimeRangePreset('custom');
+                    setCurrentPage(1);
+                  }}
+                  className="w-full h-10 bg-slate-50/80 hover:bg-slate-100/60 border border-slate-200 hover:border-slate-300 text-slate-800 text-xs rounded-xl px-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all font-mono shadow-2xs cursor-pointer"
+                  title="From Timestamp (UTC+7)"
+                />
+              </div>
+
+              <div className="relative">
+                <input
+                  type="datetime-local"
+                  value={toDateTime}
+                  onChange={(e) => {
+                    setToDateTime(e.target.value);
+                    setTimeRangePreset('custom');
+                    setCurrentPage(1);
+                  }}
+                  className="w-full h-10 bg-slate-50/80 hover:bg-slate-100/60 border border-slate-200 hover:border-slate-300 text-slate-800 text-xs rounded-xl px-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all font-mono shadow-2xs cursor-pointer"
+                  title="To Timestamp (UTC+7)"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter Summary Context Strip */}
+        <div className="px-6 py-2.5 bg-slate-50/80 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600 rounded-b-2xl">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <SlidersHorizontal className="w-3 h-3 text-slate-400" />
+              Active Scope:
+            </span>
+            <span className="font-semibold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
+              Engine: <strong className="text-indigo-600">{selectedEngineType}</strong>
+            </span>
+            <span className="font-semibold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
+              Target DB:{' '}
+              <strong className="text-indigo-600">
+                {selectedDb ? selectedDb.name : 'All Databases'}
+              </strong>
+            </span>
+            <span className="font-semibold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
+              Window: <strong className="text-indigo-600">{timeRangePreset.toUpperCase()}</strong>{' '}
+              <span className="text-slate-400 text-[10px] font-normal">(Queue tables not filtered by time)</span>
+            </span>
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              onClick={handleClearFilters}
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 underline cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+              Reset Filters
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Info Tips */}
@@ -253,25 +831,32 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
         <div className="p-3 bg-indigo-50/60 border border-indigo-200/80 rounded-xl text-indigo-950 flex items-start gap-2.5 text-xs shadow-2xs">
           <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
           <div className="text-[11px] leading-relaxed">
-            <span className="font-bold">Notification Gateway Audit Trail: </span>
-            Every alert evaluation that breaches warning, high, or critical thresholds generates an immutable notification log with destination sender IDs, latency timestamps, and API response statuses.
+            <span className="font-bold">Notification Gateway Queue & Audit Pipeline: </span>
+            When an alert rule triggers, an entry is enqueued into <span className="font-mono font-bold">alert_notification_queue</span>. Notification dispatcher worker processes pick pending items with worker locks (<span className="font-mono font-semibold">locked_by</span>), dispatch via configured alert channels (Telegram, Email, Slack, SMS, Webhook), and write final audit records into <span className="font-mono font-bold">alert_notification_log</span>.
           </div>
         </div>
       )}
 
-      {/* KPI Stats Grid - COMPACT SPACE SAVING DESIGN */}
+      {/* KPI Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Logs</span>
-            <span className="text-base font-black text-slate-800">{stats.total}</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Queue In Flight</span>
+            <span className="text-base font-black text-slate-800">{filteredQueue.length}</span>
           </div>
-          <span className="text-[10px] text-slate-400 font-mono bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Audit Entries</span>
+          <div className="text-right">
+            <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 block">
+              {stats.pendingInQueue} Pending
+            </span>
+            <span className="text-[9px] text-indigo-600 font-semibold mt-0.5 block">
+              {stats.processingInQueue} Processing
+            </span>
+          </div>
         </div>
 
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Dispatched</span>
+            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Dispatched Logs</span>
             <span className="text-base font-black text-emerald-700">{stats.dispatched}</span>
           </div>
           <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Delivered</span>
@@ -294,319 +879,179 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
         </div>
       </div>
 
-      {/* Control Bar: Filters, Date Range & Search */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-        {/* Row 1: Search and Dropdowns */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Search Box */}
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              placeholder="Search alert ID, database, metric, channel, sender IDs, error..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setCurrentPage(1);
-                }}
-                className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* Filter Dropdowns */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">Status: All</option>
-              <option value="DISPATCHED">DISPATCHED</option>
-              <option value="FAILED">FAILED</option>
-              <option value="PENDING">PENDING</option>
-            </select>
-
-            {/* Channel Filter */}
-            <select
-              value={channelFilter}
-              onChange={(e) => {
-                setChannelFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">Channel: All</option>
-              <option value="TELEGRAM">Telegram</option>
-              <option value="EMAIL">Email</option>
-              <option value="SLACK">Slack</option>
-              <option value="SMS">SMS</option>
-              <option value="WEBHOOK">Webhook</option>
-            </select>
-
-            {/* Severity Filter */}
-            <select
-              value={severityFilter}
-              onChange={(e) => {
-                setSeverityFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">Severity: All</option>
-              <option value="CRITICAL">CRITICAL</option>
-              <option value="HIGH">HIGH</option>
-              <option value="WARN">WARN</option>
-              <option value="DOWN">DOWN</option>
-            </select>
-
-            {/* Database Dropdown */}
-            <select
-              value={selectedDbId}
-              onChange={(e) => {
-                setSelectedDbId(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">Database: All Instances</option>
-              {databases.map((db) => (
-                <option key={db.id} value={db.id}>
-                  {db.name} ({db.dbType})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Row 2: Date Presets & Custom Pickers */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="text-slate-500 font-semibold flex items-center gap-1 mr-1">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-              Time Range:
-            </span>
-            {(['3D', '7D', '30D', 'ALL'] as const).map((preset) => (
-              <button
-                key={preset}
-                onClick={() => handleDatePreset(preset)}
-                className={`px-2.5 py-1 rounded text-xs font-bold transition-colors cursor-pointer ${
-                  activeDatePreset === preset
-                    ? 'bg-indigo-600 text-white shadow-2xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {preset === 'ALL' ? 'All Time' : `Last ${preset}`}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-slate-600">
-              <span>From:</span>
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(e) => {
-                  setFromDate(e.target.value);
-                  setActiveDatePreset('ALL');
-                  setCurrentPage(1);
-                }}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-0.5 text-xs font-mono text-slate-800"
-              />
-            </div>
-            <div className="flex items-center gap-1 text-slate-600">
-              <span>To:</span>
-              <input
-                type="date"
-                value={toDate}
-                onChange={(e) => {
-                  setToDate(e.target.value);
-                  setActiveDatePreset('ALL');
-                  setCurrentPage(1);
-                }}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-0.5 text-xs font-mono text-slate-800"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Audit Log Table Container */}
+      {/* SECTION 1: ALERT NOTIFICATION QUEUE (alert_notification_queue) - BEFORE LOGS */}
+      {/* Notice: Queue table is NOT filtered by time window */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs">
-        <div className="overflow-x-auto rounded-t-xl">
+        <div className="p-4 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                1. Alert Notification Dispatch Queue
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-bold">
+                  Table: alert_notification_queue ({filteredQueue.length} queued)
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Active queued dispatches (real-time queue; not constrained by the 24H history window).
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-400"></span> Pending: {filteredQueue.filter(q => q.status === 'PENDING').length}
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span> Processing: {filteredQueue.filter(q => q.status === 'PROCESSING').length}
+            </span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="py-2.5 px-3">Timestamp</th>
+                <th className="py-2.5 px-3">Queue ID</th>
                 <th className="py-2.5 px-3">Alert ID</th>
                 <th className="py-2.5 px-3">Database Instance</th>
                 <th className="py-2.5 px-3">Metric / Attribute</th>
                 <th className="py-2.5 px-3 text-center">Severity</th>
-                <th className="py-2.5 px-3">Dispatch Method</th>
-                <th className="py-2.5 px-3">Destination Sender IDs</th>
+                <th className="py-2.5 px-3">Dispatcher / Channel</th>
                 <th className="py-2.5 px-3 text-center">Status</th>
-                <th className="py-2.5 px-3">Details / Latency</th>
+                <th className="py-2.5 px-3">Locked By / Worker</th>
+                <th className="py-2.5 px-3">Scheduled At</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {paginatedLogs.length === 0 ? (
+              {filteredQueue.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <BellRing className="w-8 h-8 text-slate-300" />
-                      <span className="font-semibold text-slate-600">No alert notification logs found</span>
-                      <span className="text-xs text-slate-400 max-w-sm">
-                        No dispatches matched your current filters or date range.
+                  <td colSpan={9} className="py-8 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-1.5">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                      <span className="font-semibold text-slate-600">Notification queue is clear</span>
+                      <span className="text-[11px] text-slate-400">
+                        No pending items in <span className="font-mono">alert_notification_queue</span> matching current scope.
                       </span>
                     </div>
                   </td>
                 </tr>
               ) : (
-                paginatedLogs.map((log) => {
-                  const dbObj = dbMap.get(log.dbId);
+                filteredQueue.map((item) => {
+                  const dbObj = dbMap.get(item.dbId);
                   return (
-                    <tr
-                      key={log.id}
-                      onClick={() => setSelectedLog(log)}
-                      className="hover:bg-slate-50/90 transition-colors cursor-pointer group"
-                    >
-                      {/* 1. Timestamp */}
+                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                      {/* ID */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        <div className="font-mono text-[11px] font-semibold text-slate-800">
-                          {formatDateTime(log.timestamp)}
-                        </div>
-                        <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                          <Clock className="w-2.5 h-2.5" />
-                          <span>{formatRelativeTime(log.timestamp)}</span>
-                        </div>
-                      </td>
-
-                      {/* 2. Alert ID */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100">
-                          {log.alertId || log.id}
+                        <span className="font-mono text-[11px] font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                          #{item.id}
                         </span>
                       </td>
 
-                      {/* 3. Database */}
+                      {/* Alert ID */}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100">
+                          {item.alertId}
+                        </span>
+                      </td>
+
+                      {/* Database */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
                         <div className="font-bold text-slate-900 flex items-center gap-1.5">
                           <Server className="w-3 h-3 text-slate-400" />
-                          {log.dbName}
+                          {item.dbName}
                         </div>
                         {dbObj && (
-                          <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-slate-100 border border-slate-200 text-slate-600 mt-0.5 inline-block">
+                          <span
+                            className={cn(
+                              'text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full border mt-0.5 inline-block',
+                              getDbEngineBadgeClass(dbObj.dbType)
+                            )}
+                          >
                             {dbObj.dbType}
                           </span>
                         )}
                       </td>
 
-                      {/* 4. Metric / Attribute */}
+                      {/* Metric */}
                       <td className="py-2.5 px-3">
-                        <div className="font-semibold text-slate-800 max-w-[180px] truncate">
-                          {log.metricName}
+                        <div className="font-semibold text-slate-800 max-w-[160px] truncate">
+                          {item.metricName}
                         </div>
-                        {log.attributeName && (
+                        {item.attributeName && (
                           <div className="text-[10px] text-slate-400 font-mono truncate">
-                            {log.attributeName}
+                            {item.attributeName}
                           </div>
                         )}
                       </td>
 
-                      {/* 5. Severity */}
+                      {/* Severity */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        {log.alertLevel === 'CRITICAL' && (
+                        {item.alertLevel === 'CRITICAL' && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 font-mono">
                             CRITICAL
                           </span>
                         )}
-                        {log.alertLevel === 'HIGH' && (
+                        {item.alertLevel === 'HIGH' && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200 font-mono">
                             HIGH
                           </span>
                         )}
-                        {log.alertLevel === 'WARN' && (
+                        {item.alertLevel === 'WARN' && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 font-mono">
                             WARN
                           </span>
                         )}
-                        {log.alertLevel === 'DOWN' && (
+                        {item.alertLevel === 'DOWN' && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200 font-mono">
                             DOWN
                           </span>
                         )}
                       </td>
 
-                      {/* 6. Dispatch Method */}
+                      {/* Dispatcher */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        {renderChannelBadge(log.dispatchType, log.dispatchMethod)}
+                        {renderChannelBadge(item.dispatcherType, item.dispatcherName)}
                       </td>
 
-                      {/* 7. Sender IDs */}
-                      <td className="py-2.5 px-3">
-                        <div
-                          className="text-[11px] font-mono text-slate-700 max-w-[200px] truncate bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200"
-                          title={log.senderIds}
-                        >
-                          {log.senderIds || '—'}
-                        </div>
-                      </td>
-
-                      {/* 8. Status */}
+                      {/* Status */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        {log.status === 'DISPATCHED' && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            DISPATCHED
+                        {item.status === 'PROCESSING' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full animate-pulse">
+                            <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                            PROCESSING
                           </span>
-                        )}
-                        {log.status === 'FAILED' && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                            <XCircle className="w-3 h-3 text-rose-600" />
-                            FAILED
-                          </span>
-                        )}
-                        {log.status === 'PENDING' && (
+                        ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                            <Clock className="w-3 h-3 text-amber-600" />
+                            <Clock className="w-2.5 h-2.5" />
                             PENDING
                           </span>
                         )}
                       </td>
 
-                      {/* 9. Details / Latency */}
+                      {/* Locked By */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        {log.errorMessage ? (
-                          <span className="text-[11px] font-semibold text-rose-600 block max-w-[220px] truncate" title={log.errorMessage}>
-                            {log.errorMessage}
+                        {item.lockedBy ? (
+                          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            <Lock className="w-3 h-3 text-indigo-500" />
+                            {item.lockedBy}
                           </span>
                         ) : (
-                          <div className="flex items-center gap-2 text-slate-500 text-[11px]">
-                            {log.latencyMs && (
-                              <span className="font-mono bg-slate-100 px-1.5 py-0.2 rounded text-slate-700 font-bold">
-                                {log.latencyMs}ms
-                              </span>
-                            )}
-                            <span className="text-slate-400 group-hover:text-indigo-600 text-[10px] transition-colors underline">
-                              View Payload »
-                            </span>
-                          </div>
+                          <span className="text-slate-400 italic text-[11px]">Unassigned</span>
                         )}
+                      </td>
+
+                      {/* Scheduled At */}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <div className="font-mono text-[11px] font-semibold text-slate-800">
+                          {formatDateTime(item.scheduledAt)}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {formatRelativeTime(item.scheduledAt)}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -615,68 +1060,346 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
             </tbody>
           </table>
         </div>
+      </div>
 
-        {/* Pagination Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-slate-200 text-xs rounded-b-xl">
-          <div className="flex items-center gap-2 text-slate-600 font-medium">
-            <span>Rows per page:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500"
-            >
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-              <option value={250}>250</option>
-            </select>
-            <span className="text-slate-400">|</span>
-            <span className="font-mono text-[11px]">
-              {filteredLogs.length === 0
-                ? '0 of 0'
-                : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredLogs.length)} of ${filteredLogs.length}`}
-            </span>
+      {/* SECTION 2: ALERT NOTIFICATION LOGS (alert_notification_log) */}
+      <div className="space-y-4">
+        {/* Secondary Control Bar: Search, Status, Channel, Severity Filters */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-700">
+                <BellRing className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                  2. Historical Dispatched Alert Notification Logs
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold">
+                    Table: alert_notification_log ({filteredLogs.length} records in window)
+                  </span>
+                </h3>
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage <= 1}
-              className="px-2 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold cursor-pointer"
-              title="First Page"
-            >
-              «
-            </button>
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1}
-              className="px-2.5 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 cursor-pointer"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-              Prev
-            </button>
-            <span className="px-3 py-1 bg-white border border-indigo-300 text-indigo-700 font-bold rounded text-xs">
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-2.5 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 cursor-pointer"
-            >
-              Next
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage >= totalPages}
-              className="px-2 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold cursor-pointer"
-              title="Last Page"
-            >
-              »
-            </button>
+          {/* Search and Secondary Dropdowns */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            {/* Search Box */}
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search alert ID, database, metric, channel, sender IDs, error..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Secondary Filter Dropdowns */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="ALL">Status: All</option>
+                <option value="DISPATCHED">DISPATCHED</option>
+                <option value="FAILED">FAILED</option>
+                <option value="PENDING">PENDING</option>
+              </select>
+
+              {/* Channel Filter */}
+              <select
+                value={channelFilter}
+                onChange={(e) => {
+                  setChannelFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="ALL">Channel: All</option>
+                <option value="TELEGRAM">Telegram</option>
+                <option value="EMAIL">Email</option>
+                <option value="SLACK">Slack</option>
+                <option value="SMS">SMS</option>
+                <option value="WEBHOOK">Webhook</option>
+              </select>
+
+              {/* Severity Filter */}
+              <select
+                value={severityFilter}
+                onChange={(e) => {
+                  setSeverityFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="ALL">Severity: All</option>
+                <option value="CRITICAL">CRITICAL</option>
+                <option value="HIGH">HIGH</option>
+                <option value="WARN">WARN</option>
+                <option value="DOWN">DOWN</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Audit Log Table Container */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs">
+          <div className="overflow-x-auto rounded-t-xl">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-2.5 px-3">Timestamp</th>
+                  <th className="py-2.5 px-3">Alert ID</th>
+                  <th className="py-2.5 px-3">Database Instance</th>
+                  <th className="py-2.5 px-3">Metric / Attribute</th>
+                  <th className="py-2.5 px-3 text-center">Severity</th>
+                  <th className="py-2.5 px-3">Dispatch Method</th>
+                  <th className="py-2.5 px-3">Destination Sender IDs</th>
+                  <th className="py-2.5 px-3 text-center">Status</th>
+                  <th className="py-2.5 px-3">Details / Latency</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {paginatedLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-slate-400">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <BellRing className="w-8 h-8 text-slate-300" />
+                        <span className="font-semibold text-slate-600">No alert notification logs found</span>
+                        <span className="text-xs text-slate-400 max-w-sm">
+                          No dispatches matched your current filters or {timeRangePreset.toUpperCase()} time window.
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedLogs.map((log) => {
+                    const dbObj = dbMap.get(log.dbId);
+                    return (
+                      <tr
+                        key={log.id}
+                        onClick={() => setSelectedLog(log)}
+                        className="hover:bg-slate-50/90 transition-colors cursor-pointer group"
+                      >
+                        {/* 1. Timestamp */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <div className="font-mono text-[11px] font-semibold text-slate-800">
+                            {formatDateTime(log.timestamp)}
+                          </div>
+                          <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                            <Clock className="w-2.5 h-2.5" />
+                            <span>{formatRelativeTime(log.timestamp)}</span>
+                          </div>
+                        </td>
+
+                        {/* 2. Alert ID */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100">
+                            {log.alertId || log.id}
+                          </span>
+                        </td>
+
+                        {/* 3. Database */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <Server className="w-3 h-3 text-slate-400" />
+                            {log.dbName}
+                          </div>
+                          {dbObj && (
+                            <span
+                              className={cn(
+                                'text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full border mt-0.5 inline-block',
+                                getDbEngineBadgeClass(dbObj.dbType)
+                              )}
+                            >
+                              {dbObj.dbType}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 4. Metric / Attribute */}
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold text-slate-800 max-w-[180px] truncate">
+                            {log.metricName}
+                          </div>
+                          {log.attributeName && (
+                            <div className="text-[10px] text-slate-400 font-mono truncate">
+                              {log.attributeName}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* 5. Severity */}
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          {log.alertLevel === 'CRITICAL' && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 font-mono">
+                              CRITICAL
+                            </span>
+                          )}
+                          {log.alertLevel === 'HIGH' && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200 font-mono">
+                              HIGH
+                            </span>
+                          )}
+                          {log.alertLevel === 'WARN' && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 font-mono">
+                              WARN
+                            </span>
+                          )}
+                          {log.alertLevel === 'DOWN' && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200 font-mono">
+                              DOWN
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 6. Dispatch Method */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {renderChannelBadge(log.dispatchType, log.dispatchMethod)}
+                        </td>
+
+                        {/* 7. Sender IDs */}
+                        <td className="py-2.5 px-3">
+                          <div
+                            className="text-[11px] font-mono text-slate-700 max-w-[200px] truncate bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200"
+                            title={log.senderIds}
+                          >
+                            {log.senderIds || '—'}
+                          </div>
+                        </td>
+
+                        {/* 8. Status */}
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          {log.status === 'DISPATCHED' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              DISPATCHED
+                            </span>
+                          )}
+                          {log.status === 'FAILED' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                              <XCircle className="w-3 h-3 text-rose-600" />
+                              FAILED
+                            </span>
+                          )}
+                          {log.status === 'PENDING' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              PENDING
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 9. Details / Latency */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {log.errorMessage ? (
+                            <span className="text-[11px] font-semibold text-rose-600 block max-w-[220px] truncate" title={log.errorMessage}>
+                              {log.errorMessage}
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-2 text-slate-500 text-[11px]">
+                              {log.latencyMs && (
+                                <span className="font-mono bg-slate-100 px-1.5 py-0.2 rounded text-slate-700 font-bold">
+                                  {log.latencyMs}ms
+                                </span>
+                              )}
+                              <span className="text-slate-400 group-hover:text-indigo-600 text-[10px] transition-colors underline">
+                                View Payload »
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-slate-200 text-xs rounded-b-xl">
+            <div className="flex items-center gap-2 text-slate-600 font-medium">
+              <span>Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={250}>250</option>
+              </select>
+              <span className="text-slate-400">|</span>
+              <span className="font-mono text-[11px]">
+                {filteredLogs.length === 0
+                  ? '0 of 0'
+                  : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredLogs.length)} of ${filteredLogs.length}`}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage <= 1}
+                className="px-2 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold cursor-pointer"
+                title="First Page"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="px-2.5 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                Prev
+              </button>
+              <span className="px-3 py-1 bg-white border border-indigo-300 text-indigo-700 font-bold rounded text-xs">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-2.5 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                Next
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage >= totalPages}
+                className="px-2 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold cursor-pointer"
+                title="Last Page"
+              >
+                »
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -743,3 +1466,4 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     </div>
   );
 };
+

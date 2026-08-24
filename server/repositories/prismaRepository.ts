@@ -17,6 +17,9 @@ import {
   SystemSettingsEntity,
   AuditLogEntity,
   AlertNotificationLogEntity,
+  DatabasePollQueueEntity,
+  DatabasePollLogEntity,
+  AlertNotificationQueueEntity,
 } from '../../src/types';
 
 export class PrismaRepository implements IStorageRepository {
@@ -1584,6 +1587,33 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async getAlertNotificationLogs(): Promise<AlertNotificationLogEntity[]> {
+    try {
+      const records = await (this.prisma as any).alertNotificationLog?.findMany({
+        orderBy: { timestamp: 'desc' },
+      });
+      if (records && records.length > 0) {
+        return records.map((r: any) => ({
+          id: String(r.id),
+          timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
+          alertId: r.alertId || '',
+          dbId: r.dbId || '',
+          dbName: r.dbName || '',
+          metricName: r.metricName || '',
+          attributeName: r.attributeName || null,
+          alertLevel: r.alertLevel || 'WARN',
+          dispatchMethod: r.dispatchMethod || '',
+          dispatchType: r.dispatchType || 'TELEGRAM',
+          senderIds: r.senderIds || '',
+          status: r.status || 'DISPATCHED',
+          errorMessage: r.errorMessage || null,
+          payloadSummary: r.payloadSummary || '',
+          latencyMs: r.latencyMs != null ? Number(r.latencyMs) : undefined,
+        }));
+      }
+    } catch (e) {
+      console.warn('Prisma getAlertNotificationLogs failed, falling back to static list:', e);
+    }
+
     return [
       {
         id: 'notif-log-01',
@@ -1685,6 +1715,191 @@ export class PrismaRepository implements IStorageRepository {
     ];
   }
 
+  async getAlertNotificationQueue(): Promise<AlertNotificationQueueEntity[]> {
+    try {
+      const records = await (this.prisma as any).alertNotificationQueue?.findMany({
+        orderBy: { scheduledAt: 'desc' },
+      });
+      if (records && records.length > 0) {
+        return records.map((r: any) => ({
+          id: String(r.id),
+          alertId: r.alertId || '',
+          dbId: r.dbId || '',
+          dbName: r.dbName || '',
+          metricName: r.metricName || '',
+          attributeName: r.attributeName || null,
+          alertLevel: r.alertLevel || 'WARN',
+          eventType: r.eventType || 'TRIGGER',
+          dispatcherId: r.dispatcherId || '',
+          dispatcherName: r.dispatcherName || '',
+          dispatcherType: r.dispatcherType || 'TELEGRAM',
+          status: r.status || 'PENDING',
+          lockedBy: r.lockedBy || null,
+          lockedAt: r.lockedAt ? new Date(r.lockedAt).toISOString() : null,
+          scheduledAt: r.scheduledAt ? new Date(r.scheduledAt).toISOString() : new Date().toISOString(),
+          createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+        }));
+      }
+    } catch (e) {
+      console.warn('Prisma getAlertNotificationQueue failed, falling back:', e);
+    }
+
+    return [
+      {
+        id: 'notif-q-01',
+        alertId: '1',
+        dbId: 'db-03',
+        dbName: 'AUTH_NODE_MYSQL',
+        metricName: 'Threads Connected',
+        attributeName: 'Threads_connected',
+        alertLevel: 'WARN',
+        eventType: 'TRIGGER',
+        dispatcherId: 'meth-slack-03',
+        dispatcherName: 'Slack NOC Incident Channel',
+        dispatcherType: 'SLACK',
+        status: 'PENDING',
+        lockedBy: null,
+        lockedAt: null,
+        scheduledAt: new Date(Date.now() + 60000).toISOString(),
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'notif-q-02',
+        alertId: '2',
+        dbId: 'db-01',
+        dbName: 'ERP_PROD_ORA',
+        metricName: 'Tablespace Usage %',
+        attributeName: 'used_space_pct',
+        alertLevel: 'CRITICAL',
+        eventType: 'TRIGGER',
+        dispatcherId: 'meth-tg-02',
+        dispatcherName: 'Telegram Incident Operations Bot',
+        dispatcherType: 'TELEGRAM',
+        status: 'PROCESSING',
+        lockedBy: 'dispatcher-worker-01',
+        lockedAt: new Date(Date.now() - 10000).toISOString(),
+        scheduledAt: new Date(Date.now() - 10000).toISOString(),
+        createdAt: new Date(Date.now() - 30000).toISOString(),
+      },
+    ];
+  }
+
+  async getDatabasePollQueue(): Promise<DatabasePollQueueEntity[]> {
+    try {
+      const records = await (this.prisma as any).databasePollQueue?.findMany({
+        orderBy: { scheduledAt: 'desc' },
+      });
+      if (records && records.length > 0) {
+        return records.map((r: any) => ({
+          id: String(r.id),
+          dbId: r.dbId || '',
+          dbName: r.dbName || '',
+          status: r.status || 'pending',
+          lockedBy: r.lockedBy || null,
+          lockedAt: r.lockedAt ? new Date(r.lockedAt).toISOString() : null,
+          scheduledAt: r.scheduledAt ? new Date(r.scheduledAt).toISOString() : new Date().toISOString(),
+          createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+        }));
+      }
+    } catch (e) {
+      console.warn('Prisma getDatabasePollQueue failed, falling back:', e);
+    }
+
+    return [
+      {
+        id: '1',
+        dbId: 'db-01',
+        dbName: 'ERP_PROD_ORA',
+        status: 'pending',
+        lockedBy: null,
+        lockedAt: null,
+        scheduledAt: new Date(Date.now() + 5 * 60000).toISOString(),
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '2',
+        dbId: 'db-02',
+        dbName: 'PAYMENT_API_PG',
+        status: 'processing',
+        lockedBy: 'collector-node-01',
+        lockedAt: new Date(Date.now() - 30 * 1000).toISOString(),
+        scheduledAt: new Date(Date.now() - 60000).toISOString(),
+        createdAt: new Date(Date.now() - 60000).toISOString(),
+      },
+      {
+        id: '3',
+        dbId: 'db-03',
+        dbName: 'AUTH_NODE_MYSQL',
+        status: 'pending',
+        lockedBy: null,
+        lockedAt: null,
+        scheduledAt: new Date(Date.now() + 2 * 60000).toISOString(),
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  }
+
+  async getDatabasePollLogs(): Promise<DatabasePollLogEntity[]> {
+    try {
+      const records = await (this.prisma as any).databasePollLog?.findMany({
+        orderBy: { finishedAt: 'desc' },
+        take: 200,
+      });
+      if (records && records.length > 0) {
+        return records.map((r: any) => ({
+          id: String(r.id),
+          dbId: r.dbId || '',
+          dbName: r.dbName || '',
+          status: r.status || 'success',
+          errorMessage: r.errorMessage || null,
+          startedAt: r.startedAt ? new Date(r.startedAt).toISOString() : new Date().toISOString(),
+          finishedAt: r.finishedAt ? new Date(r.finishedAt).toISOString() : new Date().toISOString(),
+        }));
+      }
+    } catch (e) {
+      console.warn('Prisma getDatabasePollLogs failed, falling back:', e);
+    }
+
+    return [
+      {
+        id: '1',
+        dbId: 'db-01',
+        dbName: 'ERP_PROD_ORA',
+        status: 'success',
+        errorMessage: null,
+        startedAt: new Date(Date.now() - 3 * 60000 - 4500).toISOString(),
+        finishedAt: new Date(Date.now() - 3 * 60000).toISOString(),
+      },
+      {
+        id: '2',
+        dbId: 'db-02',
+        dbName: 'PAYMENT_API_PG',
+        status: 'success',
+        errorMessage: null,
+        startedAt: new Date(Date.now() - 4 * 60000 - 1200).toISOString(),
+        finishedAt: new Date(Date.now() - 4 * 60000).toISOString(),
+      },
+      {
+        id: '3',
+        dbId: 'db-04',
+        dbName: 'HR_PORTAL_MSSQL',
+        status: 'failed',
+        errorMessage: 'Connection timeout (3000ms exceeded): host 10.0.40.72 unreachable',
+        startedAt: new Date(Date.now() - 5 * 60000 - 15000).toISOString(),
+        finishedAt: new Date(Date.now() - 5 * 60000).toISOString(),
+      },
+      {
+        id: '4',
+        dbId: 'db-03',
+        dbName: 'AUTH_NODE_MYSQL',
+        status: 'success',
+        errorMessage: null,
+        startedAt: new Date(Date.now() - 8 * 60000 - 850).toISOString(),
+        finishedAt: new Date(Date.now() - 8 * 60000).toISOString(),
+      },
+    ];
+  }
+
   async cleanAllMonitorData(daysToKeep = 0, dbId = 'ALL') {
     const cutoffDate = daysToKeep <= 0 ? new Date() : new Date(Date.now() - daysToKeep * 86400000);
     const dbFilter = dbId === 'ALL' ? {} : { dbId };
@@ -1743,6 +1958,9 @@ export class PrismaRepository implements IStorageRepository {
     const p = this.prisma as any;
     try {
       await p.$transaction([
+        p.alertNotificationQueue.deleteMany(),
+        p.databasePollQueue.deleteMany(),
+        p.databasePollLog.deleteMany(),
         p.metricDataPoint.deleteMany(),
         p.activeAlert.deleteMany(),
         p.alertHistory.deleteMany(),
@@ -1760,6 +1978,9 @@ export class PrismaRepository implements IStorageRepository {
       console.warn('⚠️ Standard Prisma delete transaction failed, falling back to raw SQL deletion:', err);
       await p.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0;');
       try {
+        await p.$executeRawUnsafe('DELETE FROM `alert_notification_queue`;');
+        await p.$executeRawUnsafe('DELETE FROM `database_poll_queue`;');
+        await p.$executeRawUnsafe('DELETE FROM `database_poll_log`;');
         await p.$executeRawUnsafe('DELETE FROM `metric_data_points`;');
         await p.$executeRawUnsafe('DELETE FROM `active_alerts`;');
         await p.$executeRawUnsafe('DELETE FROM `alert_history`;');

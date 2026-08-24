@@ -9,6 +9,9 @@ import {
   AlertNotificationLogEntity,
   MetricHistoryEntity,
   SystemSettingsEntity,
+  AlertNotificationQueueEntity,
+  DatabasePollQueueEntity,
+  DatabasePollLogEntity,
 } from '../types';
 
 const STORAGE_KEYS = {
@@ -21,6 +24,9 @@ const STORAGE_KEYS = {
   ACTIVE_ALERTS: 'dbmon_active_alerts',
   ALERT_HISTORY: 'dbmon_alert_history',
   ALERT_NOTIFICATION_LOGS: 'dbmon_alert_notification_logs',
+  ALERT_NOTIFICATION_QUEUE: 'dbmon_alert_notification_queue',
+  DATABASE_POLL_QUEUE: 'dbmon_database_poll_queue',
+  DATABASE_POLL_LOGS: 'dbmon_database_poll_logs',
   METRIC_HISTORY: 'dbmon_metric_history',
   SYSTEM_SETTINGS: 'dbmon_system_settings',
 };
@@ -520,6 +526,117 @@ export const INITIAL_ALERT_NOTIFICATION_LOGS: AlertNotificationLogEntity[] = [
   },
 ];
 
+export const INITIAL_ALERT_NOTIFICATION_QUEUE: AlertNotificationQueueEntity[] = [
+  {
+    id: 'notif-q-01',
+    alertId: '1',
+    dbId: 'db-03',
+    dbName: 'AUTH_NODE_MYSQL',
+    metricName: 'Threads Connected',
+    attributeName: 'Threads_connected',
+    alertLevel: 'WARN',
+    eventType: 'TRIGGER',
+    dispatcherId: 'meth-slack-03',
+    dispatcherName: 'Slack NOC Incident Channel',
+    dispatcherType: 'SLACK',
+    status: 'PENDING',
+    lockedBy: null,
+    lockedAt: null,
+    scheduledAt: new Date(Date.now() + 60000).toISOString(),
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'notif-q-02',
+    alertId: '2',
+    dbId: 'db-01',
+    dbName: 'ERP_PROD_ORA',
+    metricName: 'Tablespace Usage %',
+    attributeName: 'used_space_pct',
+    alertLevel: 'CRITICAL',
+    eventType: 'TRIGGER',
+    dispatcherId: 'meth-tg-02',
+    dispatcherName: 'Telegram Incident Operations Bot',
+    dispatcherType: 'TELEGRAM',
+    status: 'PROCESSING',
+    lockedBy: 'dispatcher-worker-01',
+    lockedAt: new Date(Date.now() - 10000).toISOString(),
+    scheduledAt: new Date(Date.now() - 10000).toISOString(),
+    createdAt: new Date(Date.now() - 30000).toISOString(),
+  },
+];
+
+export const INITIAL_DATABASE_POLL_QUEUE: DatabasePollQueueEntity[] = [
+  {
+    id: '1',
+    dbId: 'db-01',
+    dbName: 'ERP_PROD_ORA',
+    status: 'pending',
+    lockedBy: null,
+    lockedAt: null,
+    scheduledAt: new Date(Date.now() + 5 * 60000).toISOString(),
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: '2',
+    dbId: 'db-02',
+    dbName: 'PAYMENT_API_PG',
+    status: 'processing',
+    lockedBy: 'collector-node-01',
+    lockedAt: new Date(Date.now() - 30 * 1000).toISOString(),
+    scheduledAt: new Date(Date.now() - 60000).toISOString(),
+    createdAt: new Date(Date.now() - 60000).toISOString(),
+  },
+  {
+    id: '3',
+    dbId: 'db-03',
+    dbName: 'AUTH_NODE_MYSQL',
+    status: 'pending',
+    lockedBy: null,
+    lockedAt: null,
+    scheduledAt: new Date(Date.now() + 2 * 60000).toISOString(),
+    createdAt: new Date().toISOString(),
+  },
+];
+
+export const INITIAL_DATABASE_POLL_LOGS: DatabasePollLogEntity[] = [
+  {
+    id: '1',
+    dbId: 'db-01',
+    dbName: 'ERP_PROD_ORA',
+    status: 'success',
+    errorMessage: null,
+    startedAt: new Date(Date.now() - 3 * 60000 - 4500).toISOString(),
+    finishedAt: new Date(Date.now() - 3 * 60000).toISOString(),
+  },
+  {
+    id: '2',
+    dbId: 'db-02',
+    dbName: 'PAYMENT_API_PG',
+    status: 'success',
+    errorMessage: null,
+    startedAt: new Date(Date.now() - 4 * 60000 - 1200).toISOString(),
+    finishedAt: new Date(Date.now() - 4 * 60000).toISOString(),
+  },
+  {
+    id: '3',
+    dbId: 'db-04',
+    dbName: 'HR_PORTAL_MSSQL',
+    status: 'failed',
+    errorMessage: 'Connection timeout (3000ms exceeded): host 10.0.40.72 unreachable',
+    startedAt: new Date(Date.now() - 5 * 60000 - 15000).toISOString(),
+    finishedAt: new Date(Date.now() - 5 * 60000).toISOString(),
+  },
+  {
+    id: '4',
+    dbId: 'db-03',
+    dbName: 'AUTH_NODE_MYSQL',
+    status: 'success',
+    errorMessage: null,
+    startedAt: new Date(Date.now() - 8 * 60000 - 850).toISOString(),
+    finishedAt: new Date(Date.now() - 8 * 60000).toISOString(),
+  },
+];
+
 export const INITIAL_ALERT_HISTORY: AlertHistoryEntity[] = [
   {
     id: 'althist-01',
@@ -928,6 +1045,45 @@ export const storage = {
     const updated = [log, ...current].slice(0, 1000); // keep last 1000 logs
     this.setAlertNotificationLogs(updated);
   },
+  getAlertNotificationQueue(): AlertNotificationQueueEntity[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE);
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch (e) {}
+    }
+    localStorage.setItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE, JSON.stringify(INITIAL_ALERT_NOTIFICATION_QUEUE));
+    return INITIAL_ALERT_NOTIFICATION_QUEUE;
+  },
+  setAlertNotificationQueue(data: AlertNotificationQueueEntity[]) {
+    localStorage.setItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE, JSON.stringify(data));
+  },
+  getDatabasePollQueue(): DatabasePollQueueEntity[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.DATABASE_POLL_QUEUE);
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch (e) {}
+    }
+    localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_QUEUE, JSON.stringify(INITIAL_DATABASE_POLL_QUEUE));
+    return INITIAL_DATABASE_POLL_QUEUE;
+  },
+  setDatabasePollQueue(data: DatabasePollQueueEntity[]) {
+    localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_QUEUE, JSON.stringify(data));
+  },
+  getDatabasePollLogs(): DatabasePollLogEntity[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.DATABASE_POLL_LOGS);
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch (e) {}
+    }
+    localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_LOGS, JSON.stringify(INITIAL_DATABASE_POLL_LOGS));
+    return INITIAL_DATABASE_POLL_LOGS;
+  },
+  setDatabasePollLogs(data: DatabasePollLogEntity[]) {
+    localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_LOGS, JSON.stringify(data));
+  },
   getMetricHistory(): MetricHistoryEntity[] {
     const raw = localStorage.getItem(STORAGE_KEYS.METRIC_HISTORY);
     if (raw) {
@@ -956,6 +1112,9 @@ export const storage = {
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERTS);
     localStorage.removeItem(STORAGE_KEYS.ALERT_HISTORY);
     localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS);
+    localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE);
+    localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_QUEUE);
+    localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_LOGS);
     localStorage.removeItem(STORAGE_KEYS.METRIC_HISTORY);
   },
   resetToDefaults() {
@@ -965,6 +1124,10 @@ export const storage = {
     localStorage.removeItem(STORAGE_KEYS.GROUPS);
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERTS);
     localStorage.removeItem(STORAGE_KEYS.ALERT_HISTORY);
+    localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS);
+    localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE);
+    localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_QUEUE);
+    localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_LOGS);
     localStorage.removeItem(STORAGE_KEYS.METRIC_HISTORY);
     localStorage.removeItem(STORAGE_KEYS.SYSTEM_SETTINGS);
   }

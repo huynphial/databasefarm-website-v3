@@ -13,6 +13,9 @@ import {
   MetricHistoryEntity,
   SystemSettingsEntity,
   AuditLogEntity,
+  AlertNotificationQueueEntity,
+  DatabasePollQueueEntity,
+  DatabasePollLogEntity,
 } from '../types';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -142,6 +145,31 @@ export const api = {
   async getAlertNotificationLogs(): Promise<AlertNotificationLogEntity[]> {
     try {
       return await fetchJson('/api/alert-notification-logs');
+    } catch {
+      return [];
+    }
+  },
+
+  async getAlertNotificationQueue(): Promise<AlertNotificationQueueEntity[]> {
+    try {
+      return await fetchJson('/api/alert-notification-queue');
+    } catch {
+      return [];
+    }
+  },
+
+  // Database Poll Queue & Logs
+  async getDatabasePollQueue(): Promise<DatabasePollQueueEntity[]> {
+    try {
+      return await fetchJson('/api/database-poll-queue');
+    } catch {
+      return [];
+    }
+  },
+
+  async getDatabasePollLogs(): Promise<DatabasePollLogEntity[]> {
+    try {
+      return await fetchJson('/api/database-poll-logs');
     } catch {
       return [];
     }

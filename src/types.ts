@@ -6,6 +6,7 @@ export interface User {
   role: UserRole;
   createdAt?: string;
   isLocked?: boolean;
+  lastLogin?: string;
 }
 
 export type DbEngine = 'ORACLE' | 'MYSQL' | 'POSTGRES' | 'MSSQL' | 'SINGLESTORE' | 'MONGODB' | 'REDIS' | string;
@@ -290,3 +291,44 @@ export interface AuditLogEntity {
   details?: string | null;
   createdAt: string;
 }
+
+export interface DatabasePollQueueEntity {
+  id: string;
+  dbId: string;
+  dbName: string;
+  status: 'pending' | 'processing';
+  lockedBy?: string | null;
+  lockedAt?: string | null;
+  scheduledAt: string;
+  createdAt: string;
+}
+
+export interface DatabasePollLogEntity {
+  id: string;
+  dbId: string;
+  dbName: string;
+  status: 'success' | 'failed';
+  errorMessage?: string | null;
+  startedAt: string;
+  finishedAt: string;
+}
+
+export interface AlertNotificationQueueEntity {
+  id: string;
+  alertId: string;
+  dbId: string;
+  dbName: string;
+  metricName: string;
+  attributeName?: string | null;
+  alertLevel: string;
+  eventType: string;
+  dispatcherId: string;
+  dispatcherName: string;
+  dispatcherType: string;
+  status: string;
+  lockedBy?: string | null;
+  lockedAt?: string | null;
+  scheduledAt: string;
+  createdAt: string;
+}
+

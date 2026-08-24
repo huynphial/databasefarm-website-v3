@@ -17,7 +17,7 @@ import {
   Trash2,
   Activity
 } from 'lucide-react';
-import { AuditLogEntity } from '../../types';
+import { AuditLogEntity, UserRole } from '../../types';
 import { api } from '../../lib/api';
 import { DataTable, Column } from '../tables/DataTable';
 import { formatTimeVN, cn } from '../../lib/utils';
@@ -25,10 +25,12 @@ import { useToast } from '../ui/Toast';
 
 interface AuditLogsViewProps {
   showInfoTips?: boolean;
+  userRole?: UserRole;
 }
 
-export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = true }) => {
+export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = true, userRole = 'ADMIN' }) => {
   const { toast } = useToast();
+  const isAdmin = userRole === 'ADMIN';
   const [logs, setLogs] = useState<AuditLogEntity[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,6 +39,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
   const [pageSize, setPageSize] = useState(15);
 
   const fetchAuditLogs = async () => {
+    if (!isAdmin) return;
     setLoading(true);
     try {
       const data = await api.getAuditLogs();
@@ -53,8 +56,26 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
   };
 
   useEffect(() => {
-    fetchAuditLogs();
-  }, []);
+    if (isAdmin) {
+      fetchAuditLogs();
+    }
+  }, [isAdmin]);
+
+  if (!isAdmin) {
+    return (
+      <div className="p-6 sm:p-8 flex-1 flex flex-col gap-6 overflow-y-auto bg-slate-50">
+        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center space-y-4 shadow-2xs max-w-2xl mx-auto my-8">
+          <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-600 border border-amber-200">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900">Administrator Access Required</h3>
+          <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
+            Audit Trail Log inspection is restricted to System Administrators. Operations Viewers can inspect telemetry metrics, database health, and active alerts.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const filteredLogs = logs.filter((log) => {
     const matchesAction = actionFilter === 'ALL' || log.actionType === actionFilter;

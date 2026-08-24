@@ -10,11 +10,6 @@ import {
   Eye,
   Info,
   Lock,
-  Unlock,
-  Users,
-  UserPlus,
-  KeyRound,
-  UserX,
   Zap,
   Clock,
   Server,
@@ -36,7 +31,6 @@ import {
 import {
   SystemSettingsEntity,
   UserRole,
-  User,
   DatabaseEntity,
   DatabaseEngineEntity,
   AlertNotificationMethodEntity,
@@ -149,229 +143,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'collector' | 'engines' | 'alerts' | 'accounts'>('collector');
-
-  // --- Stateful User Accounts Management ---
-  const [currentUser, setCurrentUser] = useState<string>(() => {
-    try {
-      const u = JSON.parse(localStorage.getItem('dbm_current_user') || '');
-      return u?.username || 'admin';
-    } catch {
-      return 'admin';
-    }
-  });
-
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
-  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
-
-  const [userForm, setUserForm] = useState({
-    username: '',
-    password: '',
-    confirmPassword: '',
-    role: 'VIEWER' as 'ADMIN' | 'VIEWER',
-    isLocked: false,
-  });
-
-  const [resetPasswordForm, setResetPasswordForm] = useState({
-    userId: '',
-    username: '',
-    newPassword: '',
-    confirmNewPassword: '',
-  });
-
-  const [selfPasswordForm, setSelfPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmNewPassword: '',
-  });
-
-  const fetchUsers = async () => {
-    setIsLoadingUsers(true);
-    try {
-      const data = await api.getUsers();
-      setUsers(data);
-    } catch (err: any) {
-      console.warn('Failed to load user accounts list dynamically:', err);
-    } finally {
-      setIsLoadingUsers(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'accounts') {
-      fetchUsers();
-    }
-  }, [activeTab]);
-
-  const handleCreateUserSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userForm.username.trim()) {
-      toast({ title: 'Validation Error', description: 'Username is required.', type: 'error' });
-      return;
-    }
-    if (!userForm.password) {
-      toast({ title: 'Validation Error', description: 'Password is required.', type: 'error' });
-      return;
-    }
-    if (userForm.password !== userForm.confirmPassword) {
-      toast({ title: 'Validation Error', description: 'Passwords do not match.', type: 'error' });
-      return;
-    }
-
-    try {
-      await api.createUser({
-        username: userForm.username.trim(),
-        password: userForm.password,
-        role: userForm.role,
-        isLocked: userForm.isLocked,
-      });
-
-      toast({
-        title: 'Success',
-        description: `User account "${userForm.username}" successfully created.`,
-        type: 'success',
-      });
-
-      setUserForm({
-        username: '',
-        password: '',
-        confirmPassword: '',
-        role: 'VIEWER',
-        isLocked: false,
-      });
-      setIsAddUserOpen(false);
-      fetchUsers();
-    } catch (err: any) {
-      toast({ title: 'Creation Failed', description: err.message, type: 'error' });
-    }
-  };
-
-  const handleToggleLockUser = async (user: User) => {
-    if (user.username.toLowerCase() === currentUser.toLowerCase()) {
-      toast({ title: 'Operation Prevented', description: 'Action denied: You cannot lock your own logged-in user account.', type: 'error' });
-      return;
-    }
-
-    const nextLockState = !user.isLocked;
-    try {
-      await api.updateUser(user.id, { isLocked: nextLockState });
-      toast({
-        title: nextLockState ? 'Account Locked' : 'Account Unlocked',
-        description: `User "${user.username}" is now ${nextLockState ? 'LOCKED' : 'ACTIVE'}.`,
-        type: 'info',
-      });
-      fetchUsers();
-    } catch (err: any) {
-      toast({ title: 'Action Failed', description: err.message, type: 'error' });
-    }
-  };
-
-  const handleToggleUserRole = async (user: User) => {
-    if (user.username.toLowerCase() === currentUser.toLowerCase()) {
-      toast({ title: 'Operation Prevented', description: 'Action denied: You cannot alter your own security role.', type: 'error' });
-      return;
-    }
-
-    const nextRole = user.role === 'ADMIN' ? 'VIEWER' : 'ADMIN';
-    try {
-      await api.updateUser(user.id, { role: nextRole });
-      toast({
-        title: 'Role Updated',
-        description: `Security role for "${user.username}" updated to ${nextRole}.`,
-        type: 'success',
-      });
-      fetchUsers();
-    } catch (err: any) {
-      toast({ title: 'Action Failed', description: err.message, type: 'error' });
-    }
-  };
-
-  const handleDeleteUser = async (user: User) => {
-    if (user.username.toLowerCase() === currentUser.toLowerCase()) {
-      toast({ title: 'Operation Prevented', description: 'Action denied: You cannot delete your own logged-in user account.', type: 'error' });
-      return;
-    }
-
-    if (!window.confirm(`Are you absolutely sure you want to permanently delete the user account "${user.username}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      await api.deleteUser(user.id);
-      toast({
-        title: 'Account Removed',
-        description: `User account "${user.username}" has been deleted.`,
-        type: 'success',
-      });
-      fetchUsers();
-    } catch (err: any) {
-      toast({ title: 'Deletion Failed', description: err.message, type: 'error' });
-    }
-  };
-
-  const handleOpenResetPassword = (user: User) => {
-    setResetPasswordForm({
-      userId: user.id,
-      username: user.username,
-      newPassword: '',
-      confirmNewPassword: '',
-    });
-    setIsResetPasswordModalOpen(true);
-  };
-
-  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetPasswordForm.newPassword) {
-      toast({ title: 'Validation Error', description: 'New password is required.', type: 'error' });
-      return;
-    }
-    if (resetPasswordForm.newPassword !== resetPasswordForm.confirmNewPassword) {
-      toast({ title: 'Validation Error', description: 'Passwords do not match.', type: 'error' });
-      return;
-    }
-
-    try {
-      await api.updateUser(resetPasswordForm.userId, { password: resetPasswordForm.newPassword });
-      setIsResetPasswordModalOpen(false);
-      toast({
-        title: 'Password Updated',
-        description: `Password for "${resetPasswordForm.username}" successfully updated.`,
-        type: 'success',
-      });
-    } catch (err: any) {
-      toast({ title: 'Reset Failed', description: err.message, type: 'error' });
-    }
-  };
-
-  const handleSelfPasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selfPasswordForm.newPassword) {
-      toast({ title: 'Validation Error', description: 'New password is required.', type: 'error' });
-      return;
-    }
-    if (selfPasswordForm.newPassword !== selfPasswordForm.confirmNewPassword) {
-      toast({ title: 'Validation Error', description: 'Passwords do not match.', type: 'error' });
-      return;
-    }
-
-    try {
-      const usersList = users.length > 0 ? users : await api.getUsers();
-      const match = usersList.find((u) => u.username.toLowerCase() === currentUser.toLowerCase());
-      if (!match) throw new Error(`Logged in account "${currentUser}" not found in current directory context.`);
-
-      await api.updateUser(match.id, { password: selfPasswordForm.newPassword });
-      setSelfPasswordForm({ currentPassword: '', newPassword: '', confirmNewPassword: '' });
-      toast({
-        title: 'Credentials Updated',
-        description: 'Your account password has been successfully changed.',
-        type: 'success',
-      });
-    } catch (err: any) {
-      toast({ title: 'Update Failed', description: err.message, type: 'error' });
-    }
-  };
+  const [activeTab, setActiveTab] = useState<'collector' | 'engines' | 'alerts'>('collector');
 
   // Collector Endpoint Health State
   const defaultUrl = settings.collectorEndpoint || 'http://localhost:3000/api/collector/mock-health';
@@ -785,6 +557,41 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
     }, 750);
   };
 
+  if (!isAdmin) {
+    return (
+      <div className="p-6 sm:p-8 flex-1 flex flex-col gap-6 overflow-y-auto bg-slate-50/50">
+        <div className="p-4 bg-white border border-slate-200 rounded-xl flex items-start justify-between gap-4 shadow-2xs">
+          <div className="flex items-start gap-3 text-xs text-slate-600">
+            <Info className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="font-bold text-slate-900 text-sm">System Settings & Infrastructure Control</div>
+              <div>Central system settings, database engine registry, collector parameters, and alert dispatchers.</div>
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center gap-2">
+            <span className="px-3 py-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center gap-1.5">
+              <Eye className="w-4 h-4 text-slate-500" />
+              VIEWER (Restricted)
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center space-y-4 shadow-2xs max-w-2xl mx-auto my-8">
+          <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-600 border border-amber-200">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900">Administrator Access Required</h3>
+          <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
+            System Settings, API Collector configuration, database engine registrations, and alert notification dispatchers are protected and restricted to System Administrators.
+          </p>
+          <div className="pt-2 text-xs text-slate-600">
+            To update your account password, please visit the <span className="font-bold text-indigo-600">Account Settings</span> tab.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 sm:p-8 flex-1 flex flex-col gap-6 overflow-y-auto bg-slate-50/50">
       {/* Header Banner */}
@@ -862,19 +669,6 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           <span className="px-1.5 py-0.2 rounded text-[10px] bg-indigo-100 text-indigo-800 font-mono">
             {alertMethods.length}
           </span>
-        </button>
-
-        <button
-          id="btn-tab-manage-accounts"
-          onClick={() => setActiveTab('accounts')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-            activeTab === 'accounts'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>Manage Accounts</span>
         </button>
       </div>
 
@@ -1479,366 +1273,6 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* TAB 4: Manage Accounts */}
-      {activeTab === 'accounts' && (
-        <div className="space-y-6">
-          {/* Header Description */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-4">
-            <div className="flex items-center gap-3">
-              <Users className="w-5 h-5 text-indigo-600" />
-              <div>
-                <h3 className="font-bold text-slate-900 text-base">User Accounts & Access Management</h3>
-                <p className="text-slate-500 text-xs">
-                  Create, lock, configure roles, and manage credentials for directory administrators and system operators.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left/Main Column: Self Update Password or Admin Create User */}
-            <div className="space-y-6 lg:col-span-1">
-              {/* Account Security: Update Current User Password */}
-              <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-4">
-                <div className="flex items-center gap-2 pb-3 border-b border-slate-100 font-bold text-slate-900 text-sm">
-                  <KeyRound className="w-4 h-4 text-indigo-600" />
-                  <span>Update My Password</span>
-                </div>
-                
-                <form onSubmit={handleSelfPasswordSubmit} className="space-y-4 text-xs">
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Logged-In Account
-                    </label>
-                    <input
-                      type="text"
-                      disabled
-                      value={currentUser}
-                      className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 font-mono font-bold text-slate-600 cursor-not-allowed"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      New Password *
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Enter new password"
-                      value={selfPasswordForm.newPassword}
-                      onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, newPassword: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Confirm New Password *
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Re-type new password"
-                      value={selfPasswordForm.confirmNewPassword}
-                      onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, confirmNewPassword: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors shadow-2xs cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Save Password Changes</span>
-                  </button>
-                </form>
-              </div>
-
-              {/* Admin Panel: Add New Account Form */}
-              {isAdmin && (
-                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-4">
-                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100 font-bold text-slate-900 text-sm">
-                    <UserPlus className="w-4 h-4 text-emerald-600" />
-                    <span>Create User Account</span>
-                  </div>
-
-                  <form onSubmit={handleCreateUserSubmit} className="space-y-4 text-xs">
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">
-                        Username (Unique) *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. jdoe"
-                        value={userForm.username}
-                        onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">
-                        Security Role *
-                      </label>
-                      <select
-                        value={userForm.role}
-                        onChange={(e) => setUserForm({ ...userForm, role: e.target.value as any })}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
-                      >
-                        <option value="VIEWER">VIEWER (Read-Only access)</option>
-                        <option value="ADMIN">ADMIN (Full administrative access)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">
-                        Initial Password *
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="Enter secure password"
-                        value={userForm.password}
-                        onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">
-                        Confirm Initial Password *
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="Re-type initial password"
-                        value={userForm.confirmPassword}
-                        onChange={(e) => setUserForm({ ...userForm, confirmPassword: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors shadow-2xs cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Register User Account</span>
-                    </button>
-                  </form>
-                </div>
-              )}
-            </div>
-
-            {/* Right Column: Existing Accounts Directory List (Admin Only) */}
-            <div className="lg:col-span-2 space-y-6">
-              {isAdmin ? (
-                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2 font-bold text-slate-900 text-sm">
-                      <Users className="w-4 h-4 text-indigo-600" />
-                      <span>User Accounts Directory ({users.length})</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={fetchUsers}
-                      className="text-xs text-indigo-600 hover:text-indigo-500 font-semibold flex items-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isLoadingUsers ? 'animate-spin' : ''}`} />
-                      <span>Refresh Directory</span>
-                    </button>
-                  </div>
-
-                  {isLoadingUsers ? (
-                    <div className="py-12 flex flex-col items-center justify-center gap-2.5 text-xs text-slate-400">
-                      <RefreshCw className="w-6 h-6 animate-spin text-indigo-500" />
-                      <span>Synchronizing credentials directory...</span>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto border border-slate-100 rounded-lg">
-                      <table className="w-full text-xs text-left">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-mono text-[10px]">
-                          <tr>
-                            <th className="px-4 py-3 font-semibold">Username</th>
-                            <th className="px-4 py-3 font-semibold">Security Role</th>
-                            <th className="px-4 py-3 font-semibold">Account Status</th>
-                            <th className="px-4 py-3 font-semibold">Created Date</th>
-                            <th className="px-4 py-3 text-right font-semibold">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 text-slate-700">
-                          {users.length === 0 ? (
-                            <tr>
-                              <td colSpan={5} className="px-4 py-8 text-center text-slate-400 font-medium">
-                                No registered user accounts found in credentials directory.
-                              </td>
-                            </tr>
-                          ) : (
-                            users.map((user) => {
-                              const isSelf = user.username.toLowerCase() === currentUser.toLowerCase();
-                              return (
-                                <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                                  <td className="px-4 py-3.5">
-                                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                                      <span>{user.username}</span>
-                                      {isSelf && (
-                                        <span className="text-[9px] bg-slate-100 text-slate-500 font-mono px-1 py-0.2 rounded">
-                                          CURRENT
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3.5">
-                                    <button
-                                      type="button"
-                                      disabled={isSelf}
-                                      onClick={() => handleToggleUserRole(user)}
-                                      className={`px-2 py-0.5 rounded-md font-bold text-[10px] inline-flex items-center gap-1 transition-all ${
-                                        user.role === 'ADMIN'
-                                          ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'
-                                          : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
-                                      } ${isSelf ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}
-                                      title={isSelf ? "You cannot demote yourself" : "Click to toggle role"}
-                                    >
-                                      <ShieldCheck className="w-3.5 h-3.5" />
-                                      {user.role}
-                                    </button>
-                                  </td>
-                                  <td className="px-4 py-3.5">
-                                    <button
-                                      type="button"
-                                      disabled={isSelf}
-                                      onClick={() => handleToggleLockUser(user)}
-                                      className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1.5 transition-all ${
-                                        user.isLocked
-                                          ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-                                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                                      } ${isSelf ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}
-                                      title={isSelf ? "You cannot lock yourself out" : "Click to toggle account lock"}
-                                    >
-                                      {user.isLocked ? (
-                                        <>
-                                          <Lock className="w-3 h-3" />
-                                          <span>LOCKED</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Unlock className="w-3 h-3" />
-                                          <span>ACTIVE</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </td>
-                                  <td className="px-4 py-3.5 text-slate-500 font-mono text-[11px]">
-                                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-                                  </td>
-                                  <td className="px-4 py-3.5 text-right">
-                                    <div className="flex items-center justify-end gap-1.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenResetPassword(user)}
-                                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors cursor-pointer"
-                                        title="Reset User Password"
-                                      >
-                                        <KeyRound className="w-3.5 h-3.5" />
-                                      </button>
-                                      
-                                      <button
-                                        type="button"
-                                        disabled={isSelf}
-                                        onClick={() => handleDeleteUser(user)}
-                                        className={`p-1.5 rounded-md transition-colors ${
-                                          isSelf
-                                            ? 'text-slate-300 cursor-not-allowed'
-                                            : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer'
-                                        }`}
-                                        title={isSelf ? "You cannot delete your own account" : "Delete User Account"}
-                                      >
-                                        <UserX className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center space-y-2">
-                  <ShieldCheck className="w-8 h-8 text-slate-400 mx-auto" />
-                  <h4 className="font-bold text-slate-800 text-sm">Security Policy Restriction</h4>
-                  <p className="text-slate-500 text-xs max-w-sm mx-auto">
-                    Directory administration is restricted to System Administrators. Operations Viewers can update their own security passwords on the left panel.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Admin Reset User Password Modal */}
-      <Dialog
-        isOpen={isResetPasswordModalOpen}
-        onClose={() => setIsResetPasswordModalOpen(false)}
-        title={`Reset Password for "${resetPasswordForm.username}"`}
-        description="Establish a new system password for this user account. The change takes effect immediately."
-        maxWidth="md"
-      >
-        <form onSubmit={handleResetPasswordSubmit} className="space-y-4 text-xs">
-          <div>
-            <label className="block text-slate-700 font-semibold mb-1">
-              New Secure Password *
-            </label>
-            <input
-              type="password"
-              required
-              placeholder="Enter new password"
-              value={resetPasswordForm.newPassword}
-              onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, newPassword: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-700 font-semibold mb-1">
-              Confirm Secure Password *
-            </label>
-            <input
-              type="password"
-              required
-              placeholder="Confirm new password"
-              value={resetPasswordForm.confirmNewPassword}
-              onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, confirmNewPassword: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
-            <button
-              type="button"
-              onClick={() => setIsResetPasswordModalOpen(false)}
-              className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors shadow-2xs cursor-pointer"
-            >
-              Update Password
-            </button>
-          </div>
-        </form>
-      </Dialog>
 
       {/* Engine Modal */}
       <Dialog

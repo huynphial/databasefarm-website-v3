@@ -11,6 +11,9 @@ async function main() {
   // 1. Clean Upside-Down Truncations / Deletions (handling dependent tables first)
   console.log('🧹 Cleaning existing data in reverse dependency order...');
   await p.$transaction([
+    p.alertNotificationQueue.deleteMany(),
+    p.databasePollQueue.deleteMany(),
+    p.databasePollLog.deleteMany(),
     p.alertNotificationLog.deleteMany(),
     p.metricDataPoint.deleteMany(),
     p.alertHistory.deleteMany(),
@@ -787,6 +790,65 @@ async function main() {
     },
   ];
 
+  // 10.7. Seed Database Poll Queue
+  const databasePollQueueData = [
+    {
+      dbId: dbOraId,
+      dbName: 'ERP_PROD_ORA',
+      status: 'pending',
+      scheduledAt: new Date(Date.now() + 5 * 60000),
+      createdAt: new Date(),
+    },
+    {
+      dbId: dbPgId,
+      dbName: 'PAYMENT_API_PG',
+      status: 'processing',
+      lockedBy: 'collector-node-01',
+      lockedAt: new Date(Date.now() - 30 * 1000),
+      scheduledAt: new Date(Date.now() - 1 * 60000),
+      createdAt: new Date(Date.now() - 1 * 60000),
+    },
+  ];
+
+  // 10.8. Seed Database Poll Log
+  const databasePollLogData = [
+    {
+      dbId: dbOraId,
+      dbName: 'ERP_PROD_ORA',
+      status: 'success',
+      startedAt: new Date(Date.now() - 3 * 60000 - 5000),
+      finishedAt: new Date(Date.now() - 3 * 60000),
+    },
+    {
+      dbId: dbStgMyId,
+      dbName: 'INVENTORY_STG_MY',
+      status: 'failed',
+      errorMessage: 'Connection timeout: host 10.0.40.72 unreachable',
+      startedAt: new Date(Date.now() - 2 * 60000 - 15000),
+      finishedAt: new Date(Date.now() - 2 * 60000),
+    },
+  ];
+
+  // 10.9. Seed Alert Notification Queue
+  const alertNotificationQueueData = [
+    {
+      id: 'notif-q-01',
+      alertId: '1',
+      dbId: dbMyId,
+      dbName: 'CRM_PORTAL_MY',
+      metricName: 'Threads Connected',
+      attributeName: 'Threads_connected',
+      alertLevel: 'WARN',
+      eventType: 'TRIGGER',
+      dispatcherId: 'meth-slack-03',
+      dispatcherName: 'Slack NOC Incident Channel',
+      dispatcherType: 'SLACK',
+      status: 'PENDING',
+      scheduledAt: new Date(),
+      createdAt: new Date(),
+    },
+  ];
+
   // 11. Execute High-Performance Batched Inserters (Atomic Transaction)
   console.log('⚡ Executing optimized batch insertions...');
   await p.$transaction([
@@ -806,6 +868,9 @@ async function main() {
     p.alertHistory.createMany({ data: alertHistoryData, skipDuplicates: true }),
     p.metricDataPoint.createMany({ data: metricDataPointsData, skipDuplicates: true }),
     p.alertNotificationLog.createMany({ data: alertNotificationLogsData, skipDuplicates: true }),
+    p.databasePollQueue.createMany({ data: databasePollQueueData, skipDuplicates: true }),
+    p.databasePollLog.createMany({ data: databasePollLogData, skipDuplicates: true }),
+    p.alertNotificationQueue.createMany({ data: alertNotificationQueueData, skipDuplicates: true }),
   ]);
 
   // 12. Create views in database for mapping tables for analyze

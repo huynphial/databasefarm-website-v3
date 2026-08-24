@@ -13,6 +13,9 @@ import {
   SystemSettingsEntity,
   AuditLogEntity,
   AlertNotificationLogEntity,
+  DatabasePollQueueEntity,
+  DatabasePollLogEntity,
+  AlertNotificationQueueEntity,
 } from '../../src/types';
 
 export interface IStorageRepository {
@@ -75,6 +78,9 @@ export interface IStorageRepository {
   getRawMeasurements(limit?: number): Promise<RawMeasurementEntity[]>;
   addRawMeasurement(data: Partial<RawMeasurementEntity>): Promise<RawMeasurementEntity>;
   getAlertNotificationLogs(): Promise<AlertNotificationLogEntity[]>;
+  getAlertNotificationQueue(): Promise<AlertNotificationQueueEntity[]>;
+  getDatabasePollQueue(): Promise<DatabasePollQueueEntity[]>;
+  getDatabasePollLogs(): Promise<DatabasePollLogEntity[]>;
 
   // System Settings
   getSystemSettings(): Promise<SystemSettingsEntity>;

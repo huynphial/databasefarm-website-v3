@@ -13,6 +13,8 @@ import { SystemSettingsView } from './components/views/SystemSettingsView';
 import { AuditLogsView } from './components/views/AuditLogsView';
 import { RawMeasurementsView } from './components/views/RawMeasurementsView';
 import { AlertNotificationLogView } from './components/views/AlertNotificationLogView';
+import { MonitorPollLogView } from './components/views/MonitorPollLogView';
+import { AccountView } from './components/views/AccountView';
 import { LoginView } from './components/views/LoginView';
 import { ToastProvider, useToast } from './components/ui/Toast';
 import { ThemeProvider } from './context/ThemeContext';
@@ -25,6 +27,9 @@ import {
   DatabaseEngineEntity,
   AlertNotificationMethodEntity,
   AlertNotificationLogEntity,
+  AlertNotificationQueueEntity,
+  DatabasePollQueueEntity,
+  DatabasePollLogEntity,
   RawMeasurementEntity,
   MetricEntity,
   TemplateEntity,
@@ -62,6 +67,9 @@ function MainAppContent() {
   const [activeAlerts, setActiveAlerts] = useState<ActiveAlertEntity[]>([]);
   const [alertHistory, setAlertHistory] = useState<AlertHistoryEntity[]>([]);
   const [alertNotificationLogs, setAlertNotificationLogs] = useState<AlertNotificationLogEntity[]>([]);
+  const [alertNotificationQueue, setAlertNotificationQueue] = useState<AlertNotificationQueueEntity[]>([]);
+  const [databasePollQueue, setDatabasePollQueue] = useState<DatabasePollQueueEntity[]>([]);
+  const [databasePollLogs, setDatabasePollLogs] = useState<DatabasePollLogEntity[]>([]);
   const [metricHistory, setMetricHistory] = useState<MetricHistoryEntity[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettingsEntity>(() => storage.getSystemSettings());
 
@@ -80,6 +88,9 @@ function MainAppContent() {
         active,
         history,
         notifLogs,
+        notifQueue,
+        dbPollQueue,
+        dbPollLogs,
         mHistory,
         settings,
       ] = await Promise.all([
@@ -94,6 +105,9 @@ function MainAppContent() {
         api.getActiveAlerts().catch(() => storage.getActiveAlerts()),
         api.getAlertHistory().catch(() => storage.getAlertHistory()),
         api.getAlertNotificationLogs().catch(() => storage.getAlertNotificationLogs()),
+        api.getAlertNotificationQueue().catch(() => storage.getAlertNotificationQueue()),
+        api.getDatabasePollQueue().catch(() => storage.getDatabasePollQueue()),
+        api.getDatabasePollLogs().catch(() => storage.getDatabasePollLogs()),
         api.getMetricHistory().catch(() => storage.getMetricHistory()),
         api.getSystemSettings().catch(() => storage.getSystemSettings()),
       ]);
@@ -109,6 +123,9 @@ function MainAppContent() {
       setActiveAlerts(active);
       setAlertHistory(history);
       setAlertNotificationLogs(notifLogs);
+      setAlertNotificationQueue(notifQueue);
+      setDatabasePollQueue(dbPollQueue);
+      setDatabasePollLogs(dbPollLogs);
       setMetricHistory(mHistory);
       setSystemSettings(settings);
 
@@ -120,6 +137,9 @@ function MainAppContent() {
       storage.setActiveAlerts(active);
       storage.setAlertHistory(history);
       storage.setAlertNotificationLogs(notifLogs);
+      storage.setAlertNotificationQueue(notifQueue);
+      storage.setDatabasePollQueue(dbPollQueue);
+      storage.setDatabasePollLogs(dbPollLogs);
       storage.setMetricHistory(mHistory);
       storage.setSystemSettings(settings);
     } catch (e) {
@@ -201,6 +221,9 @@ function MainAppContent() {
       setActiveAlerts([]);
       setAlertHistory([]);
       setAlertNotificationLogs([]);
+      setAlertNotificationQueue([]);
+      setDatabasePollQueue([]);
+      setDatabasePollLogs([]);
       setMetricHistory([]);
       setRawMeasurements([]);
 
@@ -684,7 +707,7 @@ function MainAppContent() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50">
         {/* Top Header */}
-        <Header activeTab={activeTab} userRole={currentUser.role} storageType={storageType} onRoleChange={handleRoleChange} />
+        <Header activeTab={activeTab} userRole={currentUser.role} storageType={storageType} />
 
         {/* Tab View Routing */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50">
@@ -715,8 +738,22 @@ function MainAppContent() {
 
           {activeTab === 'alert-notification-logs' && (
             <AlertNotificationLogView
+              queue={alertNotificationQueue}
               logs={alertNotificationLogs}
               databases={databases}
+              databaseEngines={databaseEngines}
+              userRole={currentUser.role}
+              showInfoTips={systemSettings.showInfoTips !== false}
+              onRefresh={loadData}
+            />
+          )}
+
+          {activeTab === 'monitor-poll-logs' && (
+            <MonitorPollLogView
+              queue={databasePollQueue}
+              logs={databasePollLogs}
+              databases={databases}
+              databaseEngines={databaseEngines}
               userRole={currentUser.role}
               showInfoTips={systemSettings.showInfoTips !== false}
               onRefresh={loadData}
@@ -832,8 +869,13 @@ function MainAppContent() {
             />
           )}
 
+          {activeTab === 'account' && (
+            <AccountView currentUser={currentUser} />
+          )}
+
           {activeTab === 'audit-logs' && (
             <AuditLogsView
+              userRole={currentUser.role}
               showInfoTips={systemSettings.showInfoTips !== false}
             />
           )}

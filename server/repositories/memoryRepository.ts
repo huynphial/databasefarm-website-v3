@@ -14,12 +14,123 @@ import {
   SystemSettingsEntity,
   AuditLogEntity,
   AlertNotificationLogEntity,
+  DatabasePollQueueEntity,
+  DatabasePollLogEntity,
+  AlertNotificationQueueEntity,
 } from '../../src/types';
 import { IStorageRepository } from './types';
 
 export class MemoryRepository implements IStorageRepository {
   private userPasswords: Record<string, string> = {};
   private users: User[] = [];
+  private databasePollQueue: DatabasePollQueueEntity[] = [
+    {
+      id: '1',
+      dbId: 'db-01',
+      dbName: 'ERP_PROD_ORA',
+      status: 'pending',
+      lockedBy: null,
+      lockedAt: null,
+      scheduledAt: new Date(Date.now() + 5 * 60000).toISOString(),
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: '2',
+      dbId: 'db-02',
+      dbName: 'PAYMENT_API_PG',
+      status: 'processing',
+      lockedBy: 'collector-node-01',
+      lockedAt: new Date(Date.now() - 30 * 1000).toISOString(),
+      scheduledAt: new Date(Date.now() - 60000).toISOString(),
+      createdAt: new Date(Date.now() - 60000).toISOString(),
+    },
+    {
+      id: '3',
+      dbId: 'db-03',
+      dbName: 'AUTH_NODE_MYSQL',
+      status: 'pending',
+      lockedBy: null,
+      lockedAt: null,
+      scheduledAt: new Date(Date.now() + 2 * 60000).toISOString(),
+      createdAt: new Date().toISOString(),
+    },
+  ];
+  private databasePollLogs: DatabasePollLogEntity[] = [
+    {
+      id: '1',
+      dbId: 'db-01',
+      dbName: 'ERP_PROD_ORA',
+      status: 'success',
+      errorMessage: null,
+      startedAt: new Date(Date.now() - 3 * 60000 - 4500).toISOString(),
+      finishedAt: new Date(Date.now() - 3 * 60000).toISOString(),
+    },
+    {
+      id: '2',
+      dbId: 'db-02',
+      dbName: 'PAYMENT_API_PG',
+      status: 'success',
+      errorMessage: null,
+      startedAt: new Date(Date.now() - 4 * 60000 - 1200).toISOString(),
+      finishedAt: new Date(Date.now() - 4 * 60000).toISOString(),
+    },
+    {
+      id: '3',
+      dbId: 'db-04',
+      dbName: 'HR_PORTAL_MSSQL',
+      status: 'failed',
+      errorMessage: 'Connection timeout (3000ms exceeded): host 10.0.40.72 unreachable',
+      startedAt: new Date(Date.now() - 5 * 60000 - 15000).toISOString(),
+      finishedAt: new Date(Date.now() - 5 * 60000).toISOString(),
+    },
+    {
+      id: '4',
+      dbId: 'db-03',
+      dbName: 'AUTH_NODE_MYSQL',
+      status: 'success',
+      errorMessage: null,
+      startedAt: new Date(Date.now() - 8 * 60000 - 850).toISOString(),
+      finishedAt: new Date(Date.now() - 8 * 60000).toISOString(),
+    },
+  ];
+  private alertNotificationQueue: AlertNotificationQueueEntity[] = [
+    {
+      id: 'notif-q-01',
+      alertId: '1',
+      dbId: 'db-03',
+      dbName: 'AUTH_NODE_MYSQL',
+      metricName: 'Threads Connected',
+      attributeName: 'Threads_connected',
+      alertLevel: 'WARN',
+      eventType: 'TRIGGER',
+      dispatcherId: 'meth-slack-03',
+      dispatcherName: 'Slack NOC Incident Channel',
+      dispatcherType: 'SLACK',
+      status: 'PENDING',
+      lockedBy: null,
+      lockedAt: null,
+      scheduledAt: new Date(Date.now() + 60000).toISOString(),
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'notif-q-02',
+      alertId: '2',
+      dbId: 'db-01',
+      dbName: 'ERP_PROD_ORA',
+      metricName: 'Tablespace Usage %',
+      attributeName: 'used_space_pct',
+      alertLevel: 'CRITICAL',
+      eventType: 'TRIGGER',
+      dispatcherId: 'meth-tg-02',
+      dispatcherName: 'Telegram Incident Operations Bot',
+      dispatcherType: 'TELEGRAM',
+      status: 'PROCESSING',
+      lockedBy: 'dispatcher-worker-01',
+      lockedAt: new Date(Date.now() - 10000).toISOString(),
+      scheduledAt: new Date(Date.now() - 10000).toISOString(),
+      createdAt: new Date(Date.now() - 30000).toISOString(),
+    },
+  ];
 
   constructor() {
     this.initUsersFromEnv();
@@ -38,12 +149,14 @@ export class MemoryRepository implements IStorageRepository {
         username: adminUser,
         role: 'ADMIN',
         createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+        lastLogin: new Date(Date.now() - 15 * 60000).toISOString(),
       },
       {
         id: 'usr-viewer-02',
         username: viewerUser,
         role: 'VIEWER',
         createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+        lastLogin: new Date(Date.now() - 3 * 3600000).toISOString(),
       },
     ];
 
@@ -1008,6 +1121,7 @@ FROM pg_tablespace`,
         username: userData.username ?? this.users[idx].username,
         role: userData.role ?? this.users[idx].role,
         isLocked: userData.isLocked !== undefined ? userData.isLocked : this.users[idx].isLocked,
+        lastLogin: userData.lastLogin ?? this.users[idx].lastLogin,
       };
       userRecord = this.users[idx];
 
@@ -1584,6 +1698,18 @@ FROM pg_tablespace`,
     return this.alertNotificationLogs;
   }
 
+  async getAlertNotificationQueue(): Promise<AlertNotificationQueueEntity[]> {
+    return this.alertNotificationQueue;
+  }
+
+  async getDatabasePollQueue(): Promise<DatabasePollQueueEntity[]> {
+    return this.databasePollQueue;
+  }
+
+  async getDatabasePollLogs(): Promise<DatabasePollLogEntity[]> {
+    return this.databasePollLogs;
+  }
+
   // --- System Settings ---
   async getSystemSettings(): Promise<SystemSettingsEntity> {
     return this.systemSettings;
@@ -1689,5 +1815,8 @@ FROM pg_tablespace`,
     this.templates = [];
     this.metricHistory = [];
     this.rawMeasurements = [];
+    this.databasePollQueue = [];
+    this.databasePollLogs = [];
+    this.alertNotificationQueue = [];
   }
 }

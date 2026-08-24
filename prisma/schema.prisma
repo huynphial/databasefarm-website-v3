@@ -153,6 +153,8 @@ model Database {
   activeAlerts     ActiveAlert[]
   alertHistory     AlertHistory[]
   metricDataPoints MetricDataPoint[]
+  pollQueue        DatabasePollQueue[]
+  pollLogs         DatabasePollLog[]
 
   @@map("databases")
 }
@@ -474,13 +476,14 @@ model DatabaseEngine {
 
 /// AlertNotificationMethod Model: Protocol dispatcher parameters for alerting channels.
 model AlertNotificationMethod {
-  id          String   @id @default(uuid())
-  name        String
-  type        String   @default("EMAIL")
-  configJson  Json     @map("config_json")
-  statusOnOff String   @default("ACTIVE") @map("status_on_off")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                String                   @id @default(uuid())
+  name              String
+  type              String                   @default("EMAIL")
+  configJson        Json                     @map("config_json")
+  statusOnOff       String                   @default("ACTIVE") @map("status_on_off")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  notificationQueue AlertNotificationQueue[]
 
   @@map("alert_notification_methods")
 }
@@ -506,3 +509,70 @@ model AlertNotificationLog {
   @@index([timestamp(sort: Desc)])
   @@map("alert_notification_logs")
 }
+
+enum PollQueueStatus {
+  pending
+  processing
+}
+
+enum PollLogStatus {
+  success
+  failed
+}
+
+model DatabasePollQueue {
+  id          BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  dbId        String          @map("db_id")
+  dbName      String          @map("db_name") @db.VarChar(255)
+  status      PollQueueStatus @default(pending)
+  lockedBy    String?         @map("locked_by") @db.VarChar(100)
+  lockedAt    DateTime?       @map("locked_at")
+  scheduledAt DateTime        @default(now()) @map("scheduled_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  database    Database        @relation(fields: [dbId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt], map: "idx_status_scheduled")
+  @@map("database_poll_queue")
+}
+
+model DatabasePollLog {
+  id           BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  dbId         String        @map("db_id")
+  dbName       String        @map("db_name") @db.VarChar(255)
+  status       PollLogStatus
+  errorMessage String?       @map("error_message") @db.Text
+  startedAt    DateTime      @map("started_at")
+  finishedAt   DateTime      @default(now()) @map("finished_at")
+
+  database     Database      @relation(fields: [dbId], references: [id], onDelete: Cascade)
+
+  @@index([dbId, finishedAt], map: "idx_db_finished")
+  @@map("database_poll_log")
+}
+
+model AlertNotificationQueue {
+  id             String                  @id @default(uuid())
+  alertId        String                  @map("alert_id")
+  dbId           String                  @map("db_id")
+  dbName         String                  @map("db_name")
+  metricName     String                  @map("metric_name")
+  attributeName  String?                 @map("attribute_name")
+  alertLevel     String                  @map("alert_level")
+  eventType      String                  @map("event_type")
+  dispatcherId   String                  @map("dispatcher_id")
+  dispatcherName String                  @map("dispatcher_name")
+  dispatcherType String                  @map("dispatcher_type")
+  status         String                  @default("PENDING")
+  lockedBy       String?                 @map("locked_by")
+  lockedAt       DateTime?               @map("locked_at")
+  scheduledAt    DateTime                @default(now()) @map("scheduled_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+
+  dispatcher     AlertNotificationMethod @relation(fields: [dispatcherId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt], map: "alert_notification_queue_status_scheduled_idx")
+  @@index([alertId], map: "alert_notification_queue_alert_id_idx")
+  @@map("alert_notification_queue")
+}
+

@@ -7,6 +7,11 @@ import { getStorageRepository } from './server/repositories';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Global BigInt serialization patch for JSON.stringify support (MySQL BigInt values)
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -179,6 +184,12 @@ async function startServer() {
         return res.status(401).json(result);
       }
 
+      const nowIso = new Date().toISOString();
+      await repo.saveUser({
+        id: result.user.id,
+        lastLogin: nowIso,
+      }).catch(() => {});
+
       await repo.addAuditLog({
         userId: result.user.username,
         clientIp: getClientIp(req),
@@ -195,6 +206,7 @@ async function startServer() {
           username: result.user.username,
           role: result.user.role,
           isLocked: result.user.isLocked,
+          lastLogin: nowIso,
           fullName: result.user.username === 'admin' ? 'System Administrator' : result.user.username === 'viewer' ? 'Operations Viewer' : `${result.user.username.charAt(0).toUpperCase() + result.user.username.slice(1)} User`,
           email: `${result.user.username}@databasefarm.internal`,
         }
@@ -711,6 +723,33 @@ async function startServer() {
   app.get('/api/alert-notification-logs', async (req, res) => {
     try {
       const logs = await repo.getAlertNotificationLogs();
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/alert-notification-queue', async (req, res) => {
+    try {
+      const queue = await repo.getAlertNotificationQueue();
+      res.json(queue);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/database-poll-queue', async (req, res) => {
+    try {
+      const queue = await repo.getDatabasePollQueue();
+      res.json(queue);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/database-poll-logs', async (req, res) => {
+    try {
+      const logs = await repo.getDatabasePollLogs();
       res.json(logs);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
