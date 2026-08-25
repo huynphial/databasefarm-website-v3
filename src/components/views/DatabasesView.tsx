@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Plus,
   Edit2,
@@ -27,6 +27,13 @@ import {
   Tag,
   FileText,
   X,
+  Download,
+  Upload,
+  FileJson,
+  FileDown,
+  FileUp,
+  Layers,
+  Lock
 } from 'lucide-react';
 import { ActiveAlertEntity, DatabaseEntity, DatabaseEngineEntity, DbEngine, GroupEntity, MetricEntity, TemplateEntity, UserRole } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
@@ -96,6 +103,37 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDb, setEditingDb] = useState<DatabaseEntity | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Export / Import State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
+  const [importFileError, setImportFileError] = useState<string | null>(null);
+  const [importPreview, setImportPreview] = useState<{
+    type: 'BUNDLE' | 'SINGLE';
+    databases: Array<{
+      id?: string;
+      name: string;
+      dbType: DbEngine;
+      host: string;
+      port: number;
+      pollId?: number;
+      tags?: string[];
+      pollIntervalMinutes?: number;
+      note?: string;
+      username?: string;
+      password?: string;
+      databaseNameOrSid?: string;
+      sslMode?: string;
+      connectionConfig?: Record<string, any>;
+      groupIds?: string[];
+      isEnabled?: boolean;
+      status?: 'UP' | 'DOWN' | 'WARNING';
+    }>;
+  } | null>(null);
+  const [importAssignGroupIds, setImportAssignGroupIds] = useState<string[]>([]);
+  const [importGenerateNewIds, setImportGenerateNewIds] = useState<boolean>(true);
+  const [isImporting, setIsImporting] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const RECOMMENDED_TAGS = ['PRODUCTION', 'STAGING', 'LAB', 'DEV', 'CRITICAL', 'ANALYTICS', 'PRIMARY', 'REPLICA', 'FINANCE'];
 
@@ -222,6 +260,275 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         type: 'success',
       });
     }, 600);
+  };
+
+  // ----------------------------------------------------
+  // EXPORT ALL DATABASES (JSON BUNDLE)
+  // ----------------------------------------------------
+  const handleExportAllDatabases = () => {
+    if (databases.length === 0) {
+      toast({
+        title: 'No Databases to Export',
+        description: 'There are no monitored database configurations available to export.',
+        type: 'warning',
+      });
+      return;
+    }
+
+    const exportBundle = {
+      $schema: 'https://database-monitoring/schema/database-bundle-v1.json',
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      type: 'MONITORING_DATABASE_BUNDLE',
+      count: databases.length,
+      databases: databases.map((db) => ({
+        id: db.id,
+        name: db.name,
+        dbType: db.dbType,
+        host: db.host,
+        port: db.port,
+        pollId: db.pollId ?? 0,
+        tags: db.tags || [],
+        pollIntervalMinutes: db.pollIntervalMinutes ?? 5,
+        note: db.note || '',
+        username: db.username || db.connectionConfig?.username || '',
+        password: db.password || '', // password as stored in database save format (AES or plaintext)
+        databaseNameOrSid: db.connectionConfig?.databaseName || db.connectionConfig?.serviceName || '',
+        sslMode: db.connectionConfig?.sslMode || 'require',
+        connectionConfig: db.connectionConfig || {},
+        groupIds: db.groupIds || [],
+        isEnabled: db.isEnabled !== false,
+        status: db.status || 'UP',
+      })),
+    };
+
+    const jsonString = JSON.stringify(exportBundle, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `all_monitored_databases_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Databases Exported',
+      description: `Exported bundle with ${databases.length} monitored database(s) to JSON.`,
+      type: 'success',
+    });
+  };
+
+  // ----------------------------------------------------
+  // EXPORT SINGLE DATABASE (JSON)
+  // ----------------------------------------------------
+  const handleExportSingleDatabase = (db: DatabaseEntity) => {
+    const exportPayload = {
+      $schema: 'https://database-monitoring/schema/database-v1.json',
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      type: 'MONITORING_DATABASE',
+      database: {
+        id: db.id,
+        name: db.name,
+        dbType: db.dbType,
+        host: db.host,
+        port: db.port,
+        pollId: db.pollId ?? 0,
+        tags: db.tags || [],
+        pollIntervalMinutes: db.pollIntervalMinutes ?? 5,
+        note: db.note || '',
+        username: db.username || db.connectionConfig?.username || '',
+        password: db.password || '',
+        databaseNameOrSid: db.connectionConfig?.databaseName || db.connectionConfig?.serviceName || '',
+        sslMode: db.connectionConfig?.sslMode || 'require',
+        connectionConfig: db.connectionConfig || {},
+        groupIds: db.groupIds || [],
+        isEnabled: db.isEnabled !== false,
+        status: db.status || 'UP',
+      },
+    };
+
+    const safeName = db.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const jsonString = JSON.stringify(exportPayload, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `database_${safeName}_${db.dbType.toLowerCase()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Database Exported',
+      description: `Database "${db.name}" configuration exported to JSON.`,
+      type: 'success',
+    });
+  };
+
+  // ----------------------------------------------------
+  // IMPORT DATABASES FROM JSON
+  // ----------------------------------------------------
+  const parseDatabaseItem = (raw: any) => {
+    const name = raw.name || raw.databaseName || 'Imported Database';
+    const dbType = (raw.dbType || raw.engine || 'POSTGRES').toUpperCase() as DbEngine;
+    const host = raw.host || '127.0.0.1';
+    const port = Number(raw.port) || (dbType === 'MYSQL' ? 3306 : dbType === 'ORACLE' ? 1521 : dbType === 'MSSQL' ? 1433 : 5432);
+    const tags = Array.isArray(raw.tags) ? raw.tags : [];
+    const pollIntervalMinutes = Number(raw.pollIntervalMinutes) || 5;
+    const note = raw.note || '';
+    const username = raw.username || raw.connectionConfig?.username || '';
+    const password = raw.password || '';
+    const databaseNameOrSid =
+      raw.databaseNameOrSid || raw.connectionConfig?.databaseName || raw.connectionConfig?.serviceName || '';
+    const sslMode = raw.sslMode || raw.connectionConfig?.sslMode || 'require';
+    const connectionConfig = raw.connectionConfig || {};
+    const groupIds = Array.isArray(raw.groupIds) ? raw.groupIds : [];
+    const isEnabled = raw.isEnabled !== false;
+    const status = raw.status || 'UP';
+
+    return {
+      id: raw.id,
+      name,
+      dbType,
+      host,
+      port,
+      pollId: raw.pollId,
+      tags,
+      pollIntervalMinutes,
+      note,
+      username,
+      password,
+      databaseNameOrSid,
+      sslMode,
+      connectionConfig,
+      groupIds,
+      isEnabled,
+      status,
+    };
+  };
+
+  const parseJsonContent = (content: string) => {
+    setImportFileError(null);
+    setImportPreview(null);
+
+    try {
+      const parsed = JSON.parse(content);
+      if (!parsed) throw new Error('Empty or invalid JSON payload');
+
+      // Case 1: Database Bundle
+      if (parsed.type === 'MONITORING_DATABASE_BUNDLE' && Array.isArray(parsed.databases)) {
+        const dbs = parsed.databases.map(parseDatabaseItem);
+        if (dbs.length === 0) throw new Error('Bundle contains no database entries.');
+        setImportPreview({ type: 'BUNDLE', databases: dbs });
+        return;
+      }
+
+      // Case 2: Array of databases
+      if (Array.isArray(parsed)) {
+        const dbs = parsed.map(parseDatabaseItem);
+        if (dbs.length === 0) throw new Error('Array contains no database entries.');
+        setImportPreview({ type: 'BUNDLE', databases: dbs });
+        return;
+      }
+
+      // Case 3: Single Database object
+      const dbObj = parsed.database || parsed;
+      if (!dbObj.name && !dbObj.host) {
+        throw new Error('JSON is missing required database identifier (name or host).');
+      }
+      const singleDb = parseDatabaseItem(dbObj);
+      setImportPreview({
+        type: 'SINGLE',
+        databases: [singleDb],
+      });
+    } catch (err: any) {
+      setImportFileError(err.message || 'Failed to parse JSON file');
+      setImportPreview(null);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setImportJsonText(content);
+      parseJsonContent(content);
+    };
+    reader.onerror = () => {
+      setImportFileError('Failed to read file');
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExecuteImport = async () => {
+    if (!importPreview || importPreview.databases.length === 0) return;
+
+    setIsImporting(true);
+    try {
+      let count = 0;
+      for (const item of importPreview.databases) {
+        const dbId = importGenerateNewIds
+          ? `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`
+          : item.id || `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
+
+        const mergedGroups = Array.from(new Set([...(item.groupIds || []), ...importAssignGroupIds]));
+
+        const payload: Partial<DatabaseEntity> = {
+          id: dbId,
+          name: item.name.trim(),
+          dbType: item.dbType,
+          host: item.host.trim(),
+          port: Number(item.port),
+          tags: item.tags,
+          pollIntervalMinutes: Number(item.pollIntervalMinutes) || 5,
+          note: item.note,
+          username: item.username,
+          password: item.password, // Password format used directly as saved in DB (AES ciphertext or plain text)
+          isEnabled: item.isEnabled !== false,
+          status: item.status || 'UP',
+          connectionConfig: {
+            username: item.username,
+            ...(item.dbType === 'ORACLE'
+              ? { serviceName: item.databaseNameOrSid }
+              : { databaseName: item.databaseNameOrSid }),
+            sslMode: item.sslMode || 'require',
+            ...(item.connectionConfig || {}),
+          },
+          groupIds: mergedGroups,
+        };
+
+        await onSaveDatabase(payload);
+        count++;
+      }
+
+      toast({
+        title: 'Databases Imported',
+        description: `Successfully imported ${count} monitored database configuration(s).`,
+        type: 'success',
+      });
+
+      setIsImportModalOpen(false);
+      setImportJsonText('');
+      setImportPreview(null);
+      setImportFileError(null);
+      setImportAssignGroupIds([]);
+      onRefresh?.();
+    } catch (err: any) {
+      toast({
+        title: 'Import Error',
+        description: err.message || 'An error occurred during database import.',
+        type: 'error',
+      });
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const openCreateDialog = () => {
@@ -647,7 +954,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     {
       header: 'Actions',
       align: 'right',
-      width: '110px',
+      width: '130px',
       cell: (row) => (
         <div className="flex items-center justify-end gap-1">
           {onNavigateToAnalytics && (
@@ -659,6 +966,13 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               <BarChart3 className="w-3.5 h-3.5" />
             </button>
           )}
+          <button
+            onClick={() => handleExportSingleDatabase(row)}
+            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+            title="Export database configuration to JSON"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
           {userRole === 'ADMIN' ? (
             <>
               <button
@@ -781,6 +1095,32 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 justify-end shrink-0">
+          <button
+            onClick={handleExportAllDatabases}
+            title="Export all database connection configurations to JSON"
+            className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-600" />
+            <span>Export JSON</span>
+          </button>
+
+          {userRole === 'ADMIN' && (
+            <button
+              onClick={() => {
+                setImportJsonText('');
+                setImportFileError(null);
+                setImportPreview(null);
+                setImportAssignGroupIds([]);
+                setIsImportModalOpen(true);
+              }}
+              title="Import database configurations from JSON file or snippet"
+              className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5 text-slate-600" />
+              <span>Import JSON</span>
+            </button>
+          )}
+
           <button
             onClick={async () => {
               setIsCheckingHealth(true);
@@ -1140,6 +1480,226 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             </button>
           </div>
         </form>
+      </Dialog>
+
+      {/* Dialog for JSON Database Import */}
+      <Dialog
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        title="Import Monitored Databases from JSON"
+        description="Upload a JSON export bundle or paste raw JSON. Passwords remain encrypted and are saved directly into the configuration store."
+        maxWidth="2xl"
+      >
+        <div className="space-y-4 text-xs">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+
+          {/* Upload Dropzone / Button */}
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/70 hover:bg-indigo-50/30 rounded-xl p-5 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2"
+          >
+            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+              <FileUp className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="font-bold text-slate-800">Click to upload JSON database file</span>
+              <span className="text-slate-500 block text-[11px]">Supports exported database bundles (.json) or arrays of database objects</span>
+            </div>
+          </div>
+
+          {/* Or Paste Raw JSON */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-slate-700 font-semibold flex items-center gap-1.5">
+                <FileJson className="w-3.5 h-3.5 text-indigo-600" />
+                Or Paste JSON Definition
+              </label>
+              {importJsonText && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportJsonText('');
+                    setImportPreview(null);
+                    setImportFileError(null);
+                  }}
+                  className="text-[11px] text-slate-500 hover:text-rose-600 cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <textarea
+              rows={4}
+              placeholder={`{\n  "type": "MONITORING_DATABASE_BUNDLE",\n  "databases": [\n    {\n      "name": "Prod Postgres Main",\n      "dbType": "POSTGRES",\n      "host": "10.0.1.5",\n      "port": 5432,\n      "username": "dbmon_reader",\n      "password": "..."\n    }\n  ]\n}`}
+              value={importJsonText}
+              onChange={(e) => {
+                const text = e.target.value;
+                setImportJsonText(text);
+                if (text.trim()) {
+                  parseJsonContent(text);
+                } else {
+                  setImportPreview(null);
+                  setImportFileError(null);
+                }
+              }}
+              className="w-full bg-slate-900 text-slate-100 font-mono text-[11px] border border-slate-700 rounded-lg p-3 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          {/* Error Banner */}
+          {importFileError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-rose-800 text-xs">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{importFileError}</span>
+            </div>
+          )}
+
+          {/* Import Preview Section */}
+          {importPreview && (
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Validated: Found {importPreview.databases.length} Database Configuration(s)
+                </span>
+                <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  {importPreview.type}
+                </span>
+              </div>
+
+              {/* Scrollable list of parsed databases */}
+              <div className="max-h-48 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-200">
+                {importPreview.databases.map((db, idx) => {
+                  const cfg = getDbEngineConfig(db.dbType);
+                  const badgeClass = getDbEngineBadgeClass(db.dbType);
+                  return (
+                    <div key={idx} className="pt-2 first:pt-0 flex items-center justify-between text-xs">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeClass}`}
+                          >
+                            {cfg?.name || db.dbType}
+                          </span>
+                          <span className="font-bold text-slate-900">{db.name}</span>
+                          {db.id && (
+                            <span className="text-[10px] text-slate-400 font-mono">({db.id})</span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-mono">
+                          {db.host}:{db.port} • User: {db.username || '<none>'}
+                          {db.password && (
+                            <span className="ml-2 inline-flex items-center gap-0.5 text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 text-[9px] font-sans">
+                              <Lock className="w-2.5 h-2.5" /> Password Set
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        {db.tags && db.tags.length > 0 && (
+                          <div className="flex gap-1">
+                            {db.tags.slice(0, 2).map((t, ti) => (
+                              <span key={ti} className="text-[9px] font-semibold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Import Options */}
+              <div className="pt-3 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-700 block">ID Assignment Strategy</label>
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-700 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={importGenerateNewIds}
+                      onChange={(e) => setImportGenerateNewIds(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    />
+                    <span>Generate fresh unique IDs for imports</span>
+                  </label>
+                  <p className="text-[10px] text-slate-400">Uncheck to update existing database records matching ID</p>
+                </div>
+
+                {groups.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-700 block">Attach to Database Group(s)</label>
+                    <div className="max-h-24 overflow-y-auto space-y-1 bg-white p-2 rounded border border-slate-300">
+                      {groups.map((grp) => (
+                        <label key={grp.id} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={importAssignGroupIds.includes(grp.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setImportAssignGroupIds([...importAssignGroupIds, grp.id]);
+                              } else {
+                                setImportAssignGroupIds(importAssignGroupIds.filter((id) => id !== grp.id));
+                              }
+                            }}
+                            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                          <FolderKanban className="w-3 h-3 text-indigo-500" />
+                          <span className="truncate">{grp.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Action Footer */}
+          <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsImportModalOpen(false);
+                setImportJsonText('');
+                setImportPreview(null);
+                setImportFileError(null);
+                setImportAssignGroupIds([]);
+              }}
+              className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!importPreview || importPreview.databases.length === 0 || isImporting}
+              onClick={handleExecuteImport}
+              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {isImporting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Importing...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>
+                    Import {importPreview ? `${importPreview.databases.length} Database(s)` : 'Databases'}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

@@ -918,6 +918,7 @@ function MainAppContent() {
               groups={groups}
               databases={databases}
               templates={templates}
+              databaseEngines={databaseEngines}
               alertMethods={alertMethods}
               activeAlerts={activeAlerts}
               userRole={currentUser.role}

@@ -444,6 +444,7 @@ async function main() {
     { databaseId: dbPgId, groupId: grpFinanceId },
     { databaseId: dbMyId, groupId: grpProdId },
     { databaseId: dbMsId, groupId: grpAnalyticsId },
+    { databaseId: dbStgMyId, groupId: grpProdId },
   ];
 
   const dbMetricMappings = [
@@ -473,6 +474,13 @@ async function main() {
       templateId: tplPostgresId,
       templateName: 'PostgreSQL Core Health',
       targetDbType: DbType.POSTGRES,
+    },
+    {
+      groupId: grpProdId,
+      groupName: 'Production Mission Critical',
+      templateId: tplMysqlId,
+      templateName: 'MySQL Server Metrics',
+      targetDbType: DbType.MYSQL,
     },
     {
       groupId: grpFinanceId,
@@ -884,7 +892,7 @@ async function main() {
     `);
     await p.$executeRawUnsafe(`
       CREATE OR REPLACE VIEW \`view_active_database_active_metrics\` AS
-      SELECT 
+      SELECT DISTINCT
         \`d\`.\`id\` AS \`database_id\`,
         \`d\`.\`name\` AS \`database_name\`,
         \`d\`.\`dbType\` AS \`database_db_type\`,
@@ -902,6 +910,10 @@ async function main() {
         \`d\`.\`isEnabled\` AS \`database_is_enabled\`,
         \`d\`.\`createdAt\` AS \`database_created_at\`,
         \`d\`.\`updatedAt\` AS \`database_updated_at\`,
+        \`dg\`.\`id\` AS \`group_id\`,
+        \`dg\`.\`name\` AS \`group_name\`,
+        \`t\`.\`id\` AS \`template_id\`,
+        \`t\`.\`name\` AS \`template_name\`,
         \`m\`.\`id\` AS \`metric_id\`,
         \`m\`.\`name\` AS \`metric_name\`,
         \`m\`.\`sqlQuery\` AS \`metric_sql_query\`,
@@ -915,9 +927,15 @@ async function main() {
         \`m\`.\`createdAt\` AS \`metric_created_at\`,
         \`m\`.\`updatedAt\` AS \`metric_updated_at\`
       FROM \`databases\` \`d\`
-      JOIN \`database_metric_mappings\` \`dmm\` ON \`d\`.\`id\` = \`dmm\`.\`databaseId\`
-      JOIN \`metrics\` \`m\` ON \`dmm\`.\`metricId\` = \`m\`.\`id\`
-      WHERE \`d\`.\`isEnabled\` = true AND \`m\`.\`isEnabled\` = true;
+      JOIN \`database_group_mappings\` \`dgm\` ON \`d\`.\`id\` = \`dgm\`.\`databaseId\`
+      JOIN \`database_groups\` \`dg\` ON \`dgm\`.\`groupId\` = \`dg\`.\`id\`
+      JOIN \`group_template_mappings\` \`gtm\` ON \`dg\`.\`id\` = \`gtm\`.\`group_id\`
+      JOIN \`templates\` \`t\` ON \`gtm\`.\`template_id\` = \`t\`.\`id\`
+      JOIN \`metric_template_mappings\` \`mtm\` ON \`t\`.\`id\` = \`mtm\`.\`template_id\`
+      JOIN \`metrics\` \`m\` ON \`mtm\`.\`metric_id\` = \`m\`.\`id\`
+      WHERE \`d\`.\`isEnabled\` = true 
+        AND \`m\`.\`isEnabled\` = true
+        AND (\`t\`.\`targetDbType\` IS NULL OR \`t\`.\`targetDbType\` = \`d\`.\`dbType\`);
     `);
     console.log('✅ Analytical views created successfully.');
   } catch (err: any) {

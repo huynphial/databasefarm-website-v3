@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Plus,
   Edit2,
@@ -17,12 +17,17 @@ import {
   AlertOctagon,
   Search,
   BellRing,
-  Radio
+  Radio,
+  Database,
+  Filter,
+  ChevronDown,
+  X
 } from 'lucide-react';
-import { ActiveAlertEntity, DatabaseEntity, GroupEntity, TemplateEntity, AlertNotificationMethodEntity, UserRole } from '../../types';
+import { ActiveAlertEntity, DatabaseEntity, GroupEntity, TemplateEntity, AlertNotificationMethodEntity, UserRole, DatabaseEngineEntity } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
+import { getDbEngineBadgeClass } from '../../config/dbEngines';
 
 export function parseGroupSenderIds(senderIdsStr: string, activeMethodIds: string[]): { [key: string]: string } {
   const mapping: { [key: string]: string } = {};
@@ -68,6 +73,7 @@ interface GroupsViewProps {
   groups: GroupEntity[];
   databases: DatabaseEntity[];
   templates: TemplateEntity[];
+  databaseEngines?: DatabaseEngineEntity[];
   alertMethods?: AlertNotificationMethodEntity[];
   activeAlerts?: ActiveAlertEntity[];
   userRole: UserRole;
@@ -80,6 +86,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   groups,
   databases,
   templates,
+  databaseEngines = [],
   alertMethods = [],
   activeAlerts = [],
   userRole,
@@ -89,11 +96,64 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 }) => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEngineType, setSelectedEngineType] = useState<string>('ALL');
+  const [selectedDbId, setSelectedDbId] = useState<string>('ALL');
+  const [dbSearchQuery, setDbSearchQuery] = useState<string>('');
+  const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
+  const dbDropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<GroupEntity | null>(null);
   const [testingNotification, setTestingNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dbDropdownRef.current && !dbDropdownRef.current.contains(event.target as Node)) {
+        setIsDbDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsDbDropdownOpen(false);
+      }
+    };
+    if (isDbDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDbDropdownOpen]);
+
+  const selectedDb = databases.find((d) => d.id === selectedDbId);
+
+  const availableEngineCodes = useMemo(() => {
+    return Array.from(
+      new Set([
+        ...databaseEngines.map((e) => e.dbCode.toUpperCase()),
+        ...databases.map((d) => d.dbType.toUpperCase()),
+      ])
+    ).filter(Boolean);
+  }, [databaseEngines, databases]);
+
+  const filteredDatabasesForDropdown = useMemo(() => {
+    return databases.filter((db) => {
+      const matchEngine =
+        selectedEngineType === 'ALL' || db.dbType.toUpperCase() === selectedEngineType.toUpperCase();
+      const matchQuery =
+        !dbSearchQuery.trim() ||
+        db.name.toLowerCase().includes(dbSearchQuery.toLowerCase()) ||
+        db.host.toLowerCase().includes(dbSearchQuery.toLowerCase()) ||
+        db.dbType.toLowerCase().includes(dbSearchQuery.toLowerCase());
+      return matchEngine && matchQuery;
+    });
+  }, [databases, selectedEngineType, dbSearchQuery]);
 
   // Form State with Dynamic Alert Dispatchers
   const [formData, setFormData] = useState<{
@@ -409,16 +469,43 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     },
   ];
 
-  // Filter groups by search term
+  // Filter groups by search term, engine type, and specific database
   const filteredGroups = useMemo(() => {
-    if (!searchTerm.trim()) return groups;
-    const term = searchTerm.toLowerCase().trim();
-    return groups.filter(
-      (g) =>
-        g.name.toLowerCase().includes(term) ||
-        (g.description && g.description.toLowerCase().includes(term))
-    );
-  }, [groups, searchTerm]);
+    return groups.filter((g) => {
+      // 1. Database Engine Filter
+      if (selectedEngineType !== 'ALL') {
+        const groupDbs = databases.filter((d) => g.databaseIds.includes(d.id));
+        const hasMatchingEngine = groupDbs.some(
+          (d) => d.dbType.toUpperCase() === selectedEngineType.toUpperCase()
+        );
+        if (!hasMatchingEngine) return false;
+      }
+
+      // 2. Specific Database Filter
+      if (selectedDbId !== 'ALL') {
+        if (!g.databaseIds.includes(selectedDbId)) return false;
+      }
+
+      // 3. Text Search
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase().trim();
+        const groupDbs = databases.filter((d) => g.databaseIds.includes(d.id));
+        const matchesName = g.name.toLowerCase().includes(term);
+        const matchesDesc = g.description && g.description.toLowerCase().includes(term);
+        const matchesContainedDb = groupDbs.some(
+          (d) => d.name.toLowerCase().includes(term) || d.host.toLowerCase().includes(term)
+        );
+        if (!matchesName && !matchesDesc && !matchesContainedDb) return false;
+      }
+
+      return true;
+    });
+  }, [groups, searchTerm, selectedEngineType, selectedDbId, databases]);
+
+  const activeFiltersCount =
+    (selectedEngineType !== 'ALL' ? 1 : 0) +
+    (selectedDbId !== 'ALL' ? 1 : 0) +
+    (searchTerm.trim() ? 1 : 0);
 
   const totalPages = Math.ceil(filteredGroups.length / pageSize) || 1;
   const paginatedGroups = filteredGroups.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -440,43 +527,220 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Database Groups</h2>
-          <p className="text-xs text-slate-500">
-            Total active groups: {groups.length} {searchTerm && `(Filtered: ${filteredGroups.length})`}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          {/* Search by Group Name */}
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by Group Name..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full bg-white border border-slate-300 text-xs pl-8 pr-3 py-2 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-2xs"
-            />
+      {/* Header & Controls */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <FolderKanban className="w-5 h-5 text-indigo-600" />
+              <span>Database Groups</span>
+            </h2>
+            <p className="text-xs text-slate-500">
+              Total active groups: {groups.length} {activeFiltersCount > 0 && `(Filtered: ${filteredGroups.length})`}
+            </p>
           </div>
 
-          {userRole === 'ADMIN' ? (
-            <button
-              onClick={openCreateDialog}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-lg font-medium transition-colors shadow-2xs cursor-pointer shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              New Database Group
-            </button>
-          ) : (
-            <div className="text-xs text-slate-400 italic flex items-center gap-1.5 shrink-0">
-              <Shield className="w-3.5 h-3.5 text-slate-400" />
-              View-Only Mode (Read Only)
+          <div className="flex items-center gap-3">
+            {userRole === 'ADMIN' ? (
+              <button
+                onClick={openCreateDialog}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-lg font-medium transition-colors shadow-2xs cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                New Database Group
+              </button>
+            ) : (
+              <div className="text-xs text-slate-400 italic flex items-center gap-1.5 shrink-0">
+                <Shield className="w-3.5 h-3.5 text-slate-400" />
+                View-Only Mode (Read Only)
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Bar: Database Engine & Target Database Filter Header */}
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center gap-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 shrink-0">
+            <Filter className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Filters:</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:flex items-center gap-2.5 flex-1">
+            {/* Database Engine Filter */}
+            <div className="relative min-w-[170px]">
+              <select
+                value={selectedEngineType}
+                onChange={(e) => {
+                  setSelectedEngineType(e.target.value);
+                  setSelectedDbId('ALL');
+                  setCurrentPage(1);
+                }}
+                className="w-full appearance-none bg-slate-50 border border-slate-300 text-xs pl-3 pr-8 py-1.5 rounded-lg text-slate-900 focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
+              >
+                <option value="ALL">All Engine Types</option>
+                {availableEngineCodes.map((code) => {
+                  const eng = databaseEngines.find((e) => e.dbCode.toUpperCase() === code.toUpperCase());
+                  return (
+                    <option key={code} value={code}>
+                      {eng ? `${eng.dbName} (${eng.dbCode})` : `${code} Databases`}
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
             </div>
-          )}
+
+            {/* Target Database Selector Dropdown */}
+            <div className="relative flex-1 min-w-[220px]" ref={dbDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsDbDropdownOpen(!isDbDropdownOpen)}
+                className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-300 text-slate-900 text-xs font-medium rounded-lg px-3 py-1.5 transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-2 truncate min-w-0">
+                  <Database className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span className="truncate">
+                    {selectedDb ? selectedDb.name : 'All Databases'}
+                  </span>
+                  {selectedDb && (
+                    <span
+                      className={`px-1.5 py-0.2 border rounded text-[9px] font-bold tracking-wider shrink-0 ${getDbEngineBadgeClass(
+                        selectedDb.dbType
+                      )}`}
+                    >
+                      {selectedDb.dbType}
+                    </span>
+                  )}
+                </div>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
+                    isDbDropdownOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {/* Dropdown Menu */}
+              {isDbDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-2 space-y-2 max-w-md">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      value={dbSearchQuery}
+                      onChange={(e) => setDbSearchQuery(e.target.value)}
+                      placeholder="Search database name, host, or engine..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs pl-8 pr-3 py-1.5 focus:outline-none focus:border-indigo-500 text-slate-900"
+                    />
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+                    {/* All Databases Option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDbId('ALL');
+                        setIsDbDropdownOpen(false);
+                        setCurrentPage(1);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between rounded-lg transition-colors cursor-pointer ${
+                        selectedDbId === 'ALL'
+                          ? 'bg-indigo-50 text-indigo-900 font-bold'
+                          : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Database className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>All Databases (Show all groups)</span>
+                      </div>
+                      {selectedDbId === 'ALL' && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />}
+                    </button>
+
+                    {filteredDatabasesForDropdown.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-slate-400">
+                        No databases match filter
+                      </div>
+                    ) : (
+                      filteredDatabasesForDropdown.map((db) => (
+                        <button
+                          key={db.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDbId(db.id);
+                            setIsDbDropdownOpen(false);
+                            setCurrentPage(1);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between rounded-lg transition-colors cursor-pointer ${
+                            db.id === selectedDbId
+                              ? 'bg-indigo-50/80 text-indigo-900 font-bold'
+                              : 'hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`w-2 h-2 rounded-full shrink-0 ${
+                                db.isEnabled === false
+                                  ? 'bg-slate-400'
+                                  : db.status === 'DOWN'
+                                  ? 'bg-rose-500'
+                                  : db.status === 'WARNING'
+                                  ? 'bg-amber-500'
+                                  : 'bg-emerald-500'
+                              }`}
+                            />
+                            <span className="truncate">{db.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              ({db.host}:{db.port})
+                            </span>
+                          </div>
+                          <span
+                            className={`px-1.5 py-0.2 border rounded text-[9px] font-bold ${getDbEngineBadgeClass(
+                              db.dbType
+                            )}`}
+                          >
+                            {db.dbType}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Search by Group Name */}
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search group name..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full bg-slate-50 border border-slate-300 text-xs pl-8 pr-3 py-1.5 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            {/* Reset Filters button if active */}
+            {activeFiltersCount > 0 && (
+              <button
+                onClick={() => {
+                  setSelectedEngineType('ALL');
+                  setSelectedDbId('ALL');
+                  setDbSearchQuery('');
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
+                className="text-xs text-rose-600 hover:text-rose-700 font-medium px-2 py-1.5 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0 flex items-center gap-1"
+                title="Reset all active filters"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
