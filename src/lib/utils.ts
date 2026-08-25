@@ -74,17 +74,23 @@ export function autoSyncDatabaseTemplateMetrics<
   return { syncedDatabases, updatedDbIds };
 }
 
-export function formatTimeVN(dateString: string | Date | number): string {
+export function formatTimeVN(dateString: string | Date | number | null | undefined): string {
+  if (!dateString) return 'N/A';
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'N/A';
   // Timezone formatting for UTC+7 (Asia/Ho_Chi_Minh)
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).format(date);
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(date);
+  } catch (e) {
+    return date.toLocaleString();
+  }
 }

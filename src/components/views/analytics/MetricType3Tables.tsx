@@ -42,7 +42,15 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
         <div className="space-y-4">
           {type3Metrics.map((metric) => {
             // Discover all attributes and objects for this metric from unified measurements
-            const metricMeasurements = unifiedMeasurements.filter((m) => m.metricId === metric.id);
+            const metricMeasurements = unifiedMeasurements.filter((m) => {
+              const mId = String(m.metricId || '').trim();
+              const targetId = String(metric.id || '').trim();
+              if (mId && targetId && mId === targetId) return true;
+              if (m.metricName && metric.name && m.metricName.trim().toLowerCase() === metric.name.trim().toLowerCase()) {
+                return true;
+              }
+              return false;
+            });
 
             // Extract dynamic list of attribute names
             const attributeNamesSet = new Set<string>();

@@ -38,40 +38,56 @@ export const parseNumericValue = (val: string | number | undefined | null): numb
 export function combineTelemetryDataPoints(
   rawMeasurements: RawMeasurementEntity[],
   metricHistory: MetricHistoryEntity[],
-  selectedDbId: string
+  selectedDbId: string,
+  selectedDbName?: string
 ): UnifiedMeasurement[] {
   if (!selectedDbId) return [];
 
   const points: UnifiedMeasurement[] = [];
+  const targetIdStr = String(selectedDbId).trim().toLowerCase();
+  const targetNameStr = selectedDbName ? selectedDbName.trim().toLowerCase() : '';
+
+  const isMatchingDb = (dbIdVal?: string | null, dbNameVal?: string | null) => {
+    const idStr = String(dbIdVal || '').trim().toLowerCase();
+    if (idStr && idStr === targetIdStr) return true;
+    const nameStr = String(dbNameVal || '').trim().toLowerCase();
+    if (targetNameStr && nameStr && nameStr === targetNameStr) return true;
+    return false;
+  };
 
   // 1. Process Raw Measurements
-  const relevantRaws = rawMeasurements.filter((m) => String(m.dbId) === String(selectedDbId));
+  const relevantRaws = rawMeasurements.filter((m) =>
+    isMatchingDb(m.dbId || (m as any).databaseId, m.dbName)
+  );
   relevantRaws.forEach((m) => {
     points.push({
       id: m.id,
-      dbId: m.dbId,
+      dbId: m.dbId || (m as any).databaseId || selectedDbId,
       metricId: m.metricId,
       metricName: m.metricName,
       objectName: m.objectName || 'INSTANCE',
       attributeName: m.attributeName || 'value',
-      value: String(m.value),
+      value: String(m.value !== undefined && m.value !== null ? m.value : ''),
       status: m.status || 'NORMAL',
       triggeredThreshold: m.triggeredThreshold || null,
-      measuredAt: m.measuredAt,
+      measuredAt: m.measuredAt || new Date().toISOString(),
     });
   });
 
   // 2. Process Metric History Data Points (database table metric_data_points)
-  const relevantHistory = metricHistory.filter((h) => String(h.dbId) === String(selectedDbId));
+  const relevantHistory = metricHistory.filter((h) =>
+    isMatchingDb(h.dbId || (h as any).databaseId, h.dbName)
+  );
   relevantHistory.forEach((h) => {
-    const hTime = new Date(h.createdAt).getTime();
+    const timeVal = (h as any).measuredAt || h.createdAt || new Date().toISOString();
+    const hTime = new Date(timeVal).getTime();
     const objName = h.objectName || 'INSTANCE';
     const attrName = h.attributeName || 'value';
 
     // Avoid duplicate point if raw measurements already recorded it within 2 seconds
     const isDuplicate = points.some(
       (p) =>
-        p.metricId === h.metricId &&
+        (p.metricId === h.metricId || (p.metricName && h.metricName && p.metricName.toLowerCase() === h.metricName.toLowerCase())) &&
         p.objectName === objName &&
         p.attributeName === attrName &&
         Math.abs(new Date(p.measuredAt).getTime() - hTime) < 2000
@@ -80,15 +96,15 @@ export function combineTelemetryDataPoints(
     if (!isDuplicate) {
       points.push({
         id: h.id,
-        dbId: h.dbId,
+        dbId: h.dbId || (h as any).databaseId || selectedDbId,
         metricId: h.metricId,
         metricName: h.metricName,
         objectName: objName,
         attributeName: attrName,
-        value: String(h.value),
-        status: 'NORMAL',
-        triggeredThreshold: null,
-        measuredAt: h.createdAt,
+        value: String(h.value !== undefined && h.value !== null ? h.value : ''),
+        status: (h as any).status || 'NORMAL',
+        triggeredThreshold: (h as any).triggeredThreshold || null,
+        measuredAt: timeVal,
       });
     }
   });

@@ -2,26 +2,14 @@ import React, { useState, useMemo } from 'react';
 import {
   Activity,
   Search,
-  Filter,
   RefreshCw,
   Download,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
   Clock,
   Database,
-  Layers,
-  Sparkles,
-  ArrowUpDown,
-  FileCode,
-  Gauge,
-  SlidersHorizontal,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Info,
   Calendar,
-  RotateCcw,
 } from 'lucide-react';
 import { RawMeasurementEntity, DatabaseEntity, MetricEntity, DatabaseEngineEntity } from '../../types';
 import { getDbEngineBadgeClass, getDbEngineHexColor } from '../../config/dbEngines';
@@ -48,7 +36,6 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   showInfoTips = true,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'NORMAL' | 'WARN' | 'HIGH' | 'CRITICAL' | 'FATAL' | 'DOWN'>('ALL');
   const [engineFilter, setEngineFilter] = useState<string>('ALL');
   const [selectedDbFilter, setSelectedDbFilter] = useState<string>('ALL');
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<string>('ALL');
@@ -82,38 +69,9 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     currentPage !== 1 && setCurrentPage(1);
   };
 
-  // Statistics calculation
-  const stats = useMemo(() => {
-    const total = measurements.length;
-    const normal = measurements.filter((m) => (m.status || 'NORMAL').toUpperCase() === 'NORMAL').length;
-    const warn = measurements.filter((m) => {
-      const st = (m.status || '').toUpperCase();
-      return st === 'WARN' || st === 'WARNING';
-    }).length;
-    const high = measurements.filter((m) => (m.status || '').toUpperCase() === 'HIGH').length;
-    const critical = measurements.filter((m) => (m.status || '').toUpperCase() === 'CRITICAL').length;
-    const fatal = measurements.filter((m) => {
-      const st = (m.status || '').toUpperCase();
-      return st === 'FATAL' || st === 'DOWN';
-    }).length;
-    const uniqueDbs = new Set(measurements.map((m) => m.dbId)).size;
-    const uniqueMetrics = new Set(measurements.map((m) => m.metricId)).size;
-    return { total, normal, warn, high, critical, fatal, uniqueDbs, uniqueMetrics };
-  }, [measurements]);
-
   // Filtering
   const filteredMeasurements = useMemo(() => {
     return measurements.filter((item) => {
-      const itemSt = (item.status || 'NORMAL').toUpperCase();
-      let matchStatus = statusFilter === 'ALL';
-      if (!matchStatus) {
-        if (statusFilter === 'NORMAL') matchStatus = itemSt === 'NORMAL';
-        else if (statusFilter === 'WARN') matchStatus = itemSt === 'WARN' || itemSt === 'WARNING';
-        else if (statusFilter === 'HIGH') matchStatus = itemSt === 'HIGH';
-        else if (statusFilter === 'CRITICAL') matchStatus = itemSt === 'CRITICAL';
-        else if (statusFilter === 'FATAL') matchStatus = itemSt === 'FATAL';
-        else if (statusFilter === 'DOWN') matchStatus = itemSt === 'DOWN';
-      }
       const matchEngine = engineFilter === 'ALL' || (item.dbType || '').toUpperCase() === engineFilter.toUpperCase();
       const matchDb = selectedDbFilter === 'ALL' || item.dbId === selectedDbFilter;
       const matchMetric = selectedMetricFilter === 'ALL' || item.metricId === selectedMetricFilter;
@@ -141,9 +99,9 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         (item.value && item.value.toLowerCase().includes(q)) ||
         (item.dbType && item.dbType.toLowerCase().includes(q));
 
-      return matchStatus && matchEngine && matchDb && matchMetric && matchDate && matchSearch;
+      return matchEngine && matchDb && matchMetric && matchDate && matchSearch;
     });
-  }, [measurements, statusFilter, engineFilter, selectedDbFilter, selectedMetricFilter, fromDate, toDate, searchTerm]);
+  }, [measurements, engineFilter, selectedDbFilter, selectedMetricFilter, fromDate, toDate, searchTerm]);
 
   // Paginated Slices
   const totalPages = Math.max(1, Math.ceil(filteredMeasurements.length / pageSize));
@@ -243,7 +201,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   }
 
   return (
-    <div className="p-6 sm:p-8 flex-1 flex flex-col gap-6 overflow-y-auto bg-slate-50/50">
+    <div className="p-6 sm:p-8 flex-1 flex flex-col gap-5 overflow-y-auto bg-slate-50/50">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -252,7 +210,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
             Raw Query History & Telemetry Stream
           </h2>
           <p className="text-xs text-slate-500">
-            Real-time telemetry stream of multi-object query probes, granular attribute measurements, and threshold bounds.
+            Real-time telemetry stream of multi-object query probes, granular attribute measurements, and raw collected values.
           </p>
         </div>
 
@@ -282,111 +240,37 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
           <div className="text-[11px] leading-relaxed">
             <span className="font-bold">Multidimensional Telemetry Pipeline: </span>
-            Stream displays high-resolution metric data points collected across database targets with target engine types, measured entities, granular attributes, evaluated thresholds, and local UTC+7 timestamps.
+            Stream displays high-resolution raw metric data points collected across database targets with target engine types, measured entities, granular attributes, and measured values.
           </div>
         </div>
       )}
 
-      {/* Compact Metrics Summary KPI Cards - DESIGN CONSTRAINED ROW */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Entries</span>
-            <span className="text-base font-black text-slate-800">{stats.total}</span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-mono bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">{stats.uniqueDbs} DBs</span>
-        </div>
-
-        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Normal</span>
-            <span className="text-base font-black text-emerald-700">{stats.normal}</span>
-          </div>
-          <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">Healthy</span>
-        </div>
-
-        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Warn</span>
-            <span className="text-base font-black text-amber-700">{stats.warn}</span>
-          </div>
-          <span className="text-[10px] text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">Warn</span>
-        </div>
-
-        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider block">High</span>
-            <span className="text-base font-black text-orange-700">{stats.high}</span>
-          </div>
-          <span className="text-[10px] text-orange-600 font-semibold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">High</span>
-        </div>
-
-        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">Critical</span>
-            <span className="text-base font-black text-rose-700">{stats.critical}</span>
-          </div>
-          <span className="text-[10px] text-rose-600 font-semibold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">Crit</span>
-        </div>
-
-        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Fatal / Down</span>
-            <span className="text-base font-black text-purple-700">{stats.fatal}</span>
-          </div>
-          <span className="text-[10px] text-purple-600 font-semibold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">Fatal</span>
-        </div>
-      </div>
-
-      {/* Control Bar: Filters, Date Range & Search */}
+      {/* Control Bar: Date Range, Filters & Search */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-        {/* Row 1: Search & Status / Engine Filters */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Search Input */}
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              placeholder="Search database, metric, object (e.g. TS_DATA), attribute, or value..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
+        {/* Row 1: Search Input */}
+        <div className="relative w-full">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            placeholder="Search database, metric, object (e.g. TS_DATA), attribute, or value..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-8 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => {
+                setSearchTerm('');
                 setCurrentPage(1);
               }}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setCurrentPage(1);
-                }}
-                className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* Status Filter Chips */}
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0 flex-wrap">
-            {(['ALL', 'NORMAL', 'WARN', 'HIGH', 'CRITICAL', 'FATAL', 'DOWN'] as const).map((st) => (
-              <button
-                key={st}
-                onClick={() => {
-                  setStatusFilter(st);
-                  setCurrentPage(1);
-                }}
-                className={`px-2 py-1 rounded text-[10px] font-bold transition-all cursor-pointer ${
-                  statusFilter === st
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {st}
-              </button>
-            ))}
-          </div>
+              className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {/* Row 2: Date Range Filter + Select Dropdowns */}
@@ -463,7 +347,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 setEngineFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium font-semibold"
+              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
             >
               <option value="ALL">All Engines</option>
               {databaseEngines.map((eng) => (
@@ -491,7 +375,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 setSelectedDbFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium max-w-[150px] font-semibold truncate"
+              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 max-w-[150px] font-semibold truncate"
             >
               <option value="ALL">All Databases</option>
               {databases.map((db) => (
@@ -508,7 +392,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 setSelectedMetricFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium max-w-[160px] font-semibold truncate"
+              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 max-w-[160px] font-semibold truncate"
             >
               <option value="ALL">All Metrics</option>
               {metrics.map((m) => (
@@ -532,23 +416,21 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       {/* Raw Measurements Data Table Container */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs">
         <div className="overflow-x-auto w-full rounded-t-xl">
-          <table className="w-full text-left border-collapse text-xs min-w-[980px]">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-2.5 px-3">Timestamp</th>
-                <th className="py-2.5 px-3 text-center">Status</th>
-                <th className="py-2.5 px-3">Database</th>
-                <th className="py-2.5 px-3">Metric Name</th>
-                <th className="py-2.5 px-3">Object Attribute</th>
-                <th className="py-2.5 px-3">Measured Value</th>
-                <th className="py-2.5 px-3">Triggered Threshold</th>
-                <th className="py-2.5 px-3 text-center">Cycle</th>
+                <th className="py-2.5 px-3.5 w-[160px] whitespace-nowrap">Timestamp</th>
+                <th className="py-2.5 px-3.5 w-[200px]">Database</th>
+                <th className="py-2.5 px-3.5 w-[200px]">Metric Name</th>
+                <th className="py-2.5 px-3.5 w-[180px]">Object / Attribute</th>
+                <th className="py-2.5 px-3.5 min-w-[280px]">Measured Value</th>
+                <th className="py-2.5 px-3.5 w-[90px] text-center whitespace-nowrap">Cycle</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                  <td colSpan={6} className="py-12 text-center text-slate-500">
                     <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="font-semibold text-slate-700">No telemetry measurements found.</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
@@ -566,7 +448,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                       {/* 1. Timestamp */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
+                      <td className="py-2.5 px-3.5 whitespace-nowrap align-top">
                         <div className="font-mono text-[11px] text-slate-800 font-semibold">
                           {formatExactTime(item.measuredAt)}
                         </div>
@@ -576,86 +458,26 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 2. Status */}
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        {(() => {
-                          const st = (item.status || 'NORMAL').toUpperCase();
-                          if (st === 'NORMAL') {
-                            return (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                NORMAL
-                              </span>
-                            );
-                          }
-                          if (st === 'WARN' || st === 'WARNING') {
-                            return (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
-                                <AlertTriangle className="w-3 h-3 text-amber-600" />
-                                WARN
-                              </span>
-                            );
-                          }
-                          if (st === 'HIGH') {
-                            return (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-200">
-                                <AlertTriangle className="w-3 h-3 text-orange-600" />
-                                HIGH
-                              </span>
-                            );
-                          }
-                          if (st === 'CRITICAL') {
-                            return (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                                <XCircle className="w-3 h-3 text-rose-600" />
-                                CRITICAL
-                              </span>
-                            );
-                          }
-                          if (st === 'FATAL') {
-                            return (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200">
-                                <XCircle className="w-3 h-3 text-purple-600" />
-                                FATAL
-                              </span>
-                            );
-                          }
-                          if (st === 'DOWN') {
-                            return (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white border border-rose-700 shadow-md animate-pulse">
-                                <XCircle className="w-3.5 h-3.5 text-white" />
-                                DOWN
-                              </span>
-                            );
-                          }
-                          return (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
-                              {st}
-                            </span>
-                          );
-                        })()}
-                      </td>
-
-                      {/* 3. Database & Entity */}
-                      <td className="py-2.5 px-3">
+                      {/* 2. Database & Entity */}
+                      <td className="py-2.5 px-3.5 align-top">
                         <div className="space-y-0.5">
-                          {/* Line 1: Database Name (Bold, larger font size) */}
-                          <div className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                          {/* Line 1: Database Name */}
+                          <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                             <Database className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            {item.dbName}
+                            <span className="truncate max-w-[160px]" title={item.dbName}>{item.dbName}</span>
                           </div>
                           {/* Line 2: IP Address : Port */}
-                          <div className="text-[11px] text-slate-400 font-mono">
+                          <div className="text-[10px] text-slate-400 font-mono">
                             {ipPort}
                           </div>
                         </div>
                       </td>
 
-                      {/* 4. Metric Name Column */}
-                      <td className="py-2.5 px-3">
+                      {/* 3. Metric Name Column */}
+                      <td className="py-2.5 px-3.5 align-top">
                         <div className="space-y-1">
                           {/* Line 1: Metric Name */}
-                          <div className="text-xs font-bold text-slate-900">
+                          <div className="text-xs font-bold text-slate-900 leading-tight">
                             {item.metricName}
                           </div>
                           {/* Line 2: Database Type brand tag */}
@@ -670,53 +492,30 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 5. Object Attribute Column */}
-                      <td className="py-2.5 px-3 font-mono">
+                      {/* 4. Object Attribute Column */}
+                      <td className="py-2.5 px-3.5 font-mono align-top">
                         <div className="space-y-0.5">
                           {/* Line 1: Object Name */}
                           <div className="text-xs font-semibold text-slate-800">
                             {item.objectName || 'INSTANCE'}
                           </div>
                           {/* Line 2: Attribute Name */}
-                          <div className="text-[11px] text-slate-500">
+                          <div className="text-[10px] text-slate-500">
                             {item.attributeName || 'value'}
                           </div>
                         </div>
                       </td>
 
-                      {/* 6. Measured Value */}
-                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-slate-900">
-                        <span
-                          className={`px-2 py-0.5 rounded ${(() => {
-                            const st = (item.status || 'NORMAL').toUpperCase();
-                            if (st === 'NORMAL') return 'bg-emerald-50 text-emerald-800 border border-emerald-200';
-                            if (st === 'WARN' || st === 'WARNING') return 'bg-amber-50 text-amber-800 border border-amber-200';
-                            if (st === 'HIGH') return 'bg-orange-50 text-orange-800 border border-orange-200';
-                            if (st === 'CRITICAL') return 'bg-rose-50 text-rose-700 border border-rose-200';
-                            if (st === 'FATAL') return 'bg-purple-50 text-purple-800 border border-purple-200';
-                            if (st === 'DOWN') return 'bg-rose-100 text-rose-900 border border-rose-300 font-black';
-                            return 'bg-slate-50 text-slate-800 border border-slate-200';
-                          })()}`}
-                        >
-                          {item.value}
-                        </span>
+                      {/* 5. Measured Value (Expansive width) */}
+                      <td className="py-2.5 px-3.5 align-top">
+                        <div className="font-mono text-xs font-semibold text-slate-900 bg-slate-50/80 border border-slate-200/80 rounded-md px-2.5 py-1.5 break-all max-h-[120px] overflow-y-auto">
+                          {item.value !== undefined && item.value !== null && item.value !== '' ? item.value : '0'}
+                        </div>
                       </td>
 
-                      {/* 7. Triggered Threshold */}
-                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px]">
-                        {item.triggeredThreshold ? (
-                          <span className="inline-flex items-center gap-1 font-mono font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                            <AlertTriangle className="w-3 h-3 text-rose-500" />
-                            {item.triggeredThreshold}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-mono text-[10px]">Normal / In Bounds</span>
-                        )}
-                      </td>
-
-                      {/* 8. Cycle */}
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap font-mono text-[11px] text-slate-600">
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold">
+                      {/* 6. Cycle */}
+                      <td className="py-2.5 px-3.5 text-center whitespace-nowrap font-mono text-[11px] text-slate-600 align-top">
+                        <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-700 font-bold">
                           Cycle {item.cycle ?? 1}
                         </span>
                       </td>
@@ -795,3 +594,4 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     </div>
   );
 };
+

@@ -58,15 +58,54 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
             <tbody className="divide-y divide-slate-100">
               {type1Metrics.map((metric) => {
                 // Find most recent measurement for this metric from metric_data_points / unified Measurements
-                const latestMeasurement = unifiedMeasurements.find((m) => m.metricId === metric.id);
+                const latestMeasurement = unifiedMeasurements.find((m) => {
+                  const mId = String(m.metricId || '').trim();
+                  const targetId = String(metric.id || '').trim();
+                  if (mId && targetId && mId === targetId) return true;
+                  if (m.metricName && metric.name && m.metricName.trim().toLowerCase() === metric.name.trim().toLowerCase()) {
+                    return true;
+                  }
+                  return false;
+                });
 
-                const value = latestMeasurement ? latestMeasurement.value : 'N/A';
-                const status = latestMeasurement ? latestMeasurement.status : 'NORMAL';
+                const hasData = Boolean(
+                  latestMeasurement &&
+                  latestMeasurement.value !== undefined &&
+                  latestMeasurement.value !== null &&
+                  String(latestMeasurement.value).trim() !== ''
+                );
+
+                const rawVal = hasData ? String(latestMeasurement!.value).trim() : '';
+                const value = hasData ? rawVal : 'N/A';
+
+                // Determine evaluation status
+                let status = latestMeasurement?.status || 'NORMAL';
+                if (hasData && (!status || status === 'NORMAL')) {
+                  const numVal = parseFloat(rawVal.replace(/[^0-9.-]/g, ''));
+                  if (!isNaN(numVal)) {
+                    const warnVal = metric.thresholdWarn ? parseFloat(metric.thresholdWarn) : NaN;
+                    const highVal = metric.thresholdHigh ? parseFloat(metric.thresholdHigh) : NaN;
+                    const critVal = metric.thresholdCritical ? parseFloat(metric.thresholdCritical) : NaN;
+                    const op = String(metric.thresholdOperator || metric.relationalOperator || '>=');
+
+                    if (op === '>=' || op === '>') {
+                      if (!isNaN(critVal) && numVal >= critVal) status = 'CRITICAL';
+                      else if (!isNaN(highVal) && numVal >= highVal) status = 'HIGH';
+                      else if (!isNaN(warnVal) && numVal >= warnVal) status = 'WARN';
+                    } else if (op === '<=' || op === '<') {
+                      if (!isNaN(critVal) && numVal <= critVal) status = 'CRITICAL';
+                      else if (!isNaN(highVal) && numVal <= highVal) status = 'HIGH';
+                      else if (!isNaN(warnVal) && numVal <= warnVal) status = 'WARN';
+                    }
+                  }
+                }
 
                 const statusBadge =
-                  status === 'CRITICAL' || status === 'DOWN'
+                  status === 'CRITICAL' || status === 'FATAL' || status === 'DOWN'
                     ? 'bg-rose-50 text-rose-700 border-rose-200'
-                    : status === 'WARNING'
+                    : status === 'HIGH'
+                    ? 'bg-orange-50 text-orange-700 border-orange-200'
+                    : status === 'WARNING' || status === 'WARN'
                     ? 'bg-amber-50 text-amber-700 border-amber-200'
                     : 'bg-emerald-50 text-emerald-700 border-emerald-200';
 
@@ -74,6 +113,8 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
                   metric.thresholdWarn || metric.thresholdHigh || metric.thresholdCritical
                     ? `Warn: ${metric.thresholdWarn || '-'} / High: ${metric.thresholdHigh || '-'} / Crit: ${metric.thresholdCritical || '-'} (${metric.thresholdOperator || metric.relationalOperator || '>='})`
                     : 'No threshold';
+
+                const measuredTimestamp = latestMeasurement?.measuredAt || (latestMeasurement as any)?.createdAt;
 
                 return (
                   <tr key={metric.id} className="hover:bg-slate-50/80 transition-colors">
@@ -87,11 +128,11 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
                     </td>
                     <td className="py-3 px-3.5">
                       <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
-                        {metric.valueType}
+                        {metric.valueType || 'NUMBER'}
                       </span>
                     </td>
                     <td className="py-3 px-3.5">
-                      <span className="font-mono font-bold text-slate-900 text-sm">
+                      <span className={`font-mono font-bold text-sm ${hasData ? 'text-slate-900' : 'text-slate-400 italic'}`}>
                         {value}
                       </span>
                     </td>
@@ -107,8 +148,12 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
                     <td className="py-3 px-3.5 text-slate-500 font-medium">
                       Cycle {metric.cycle ?? 1}
                     </td>
-                    <td className="py-3 px-3.5 font-mono text-[11px] text-slate-500">
-                      {latestMeasurement ? formatTimeVN(latestMeasurement.measuredAt) : 'No data yet'}
+                    <td className="py-3 px-3.5 font-mono text-[11px] text-slate-600">
+                      {measuredTimestamp ? (
+                        <span className="text-slate-700 font-medium">{formatTimeVN(measuredTimestamp)}</span>
+                      ) : (
+                        <span className="text-slate-400 italic">No data yet</span>
+                      )}
                     </td>
                     <td className="py-3 px-3.5 text-right">
                       <button

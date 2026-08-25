@@ -110,7 +110,7 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
   // 3. COMBINE ALL TELEMETRY MEASUREMENTS (from rawMeasurements AND metricHistory [database table metric_data_points])
   const unifiedMeasurements = useMemo(() => {
     if (!selectedDb) return [];
-    return combineTelemetryDataPoints(rawMeasurements, metricHistory, selectedDb.id);
+    return combineTelemetryDataPoints(rawMeasurements, metricHistory, selectedDb.id, selectedDb.name);
   }, [selectedDb, rawMeasurements, metricHistory]);
 
   // Filter metrics applicable to selected DB (matching dbType or inherited from metricIds)

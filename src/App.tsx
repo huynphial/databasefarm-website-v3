@@ -866,6 +866,7 @@ function MainAppContent() {
               groups={groups}
               templates={templates}
               metrics={metrics}
+              activeAlerts={activeAlerts}
               userRole={currentUser.role}
               showInfoTips={systemSettings.showInfoTips !== false}
               onSaveDatabase={handleSaveDatabase}

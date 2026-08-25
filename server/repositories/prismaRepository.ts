@@ -923,7 +923,7 @@ export class PrismaRepository implements IStorageRepository {
   // --- Metric Value History ---
   async getMetricHistory(dbId?: string, metricId?: string): Promise<MetricHistoryEntity[]> {
     const whereDataPoint: any = {};
-    if (dbId) whereDataPoint.databaseId = dbId;
+    if (dbId) whereDataPoint.dbId = dbId;
     if (metricId) whereDataPoint.metricId = metricId;
 
     const list = await (this.prisma as any).metricDataPoint.findMany({
@@ -935,7 +935,7 @@ export class PrismaRepository implements IStorageRepository {
 
     return list.map((m: any) => ({
       id: m.id,
-      dbId: m.databaseId,
+      dbId: m.dbId || m.databaseId,
       dbName: m.database?.name,
       metricId: m.metricId,
       metricName: m.metric?.name,
@@ -949,7 +949,7 @@ export class PrismaRepository implements IStorageRepository {
   async addMetricHistory(historyData: Partial<MetricHistoryEntity>): Promise<MetricHistoryEntity> {
     const entry = await (this.prisma as any).metricDataPoint.create({
       data: {
-        databaseId: historyData.dbId!,
+        dbId: historyData.dbId!,
         metricId: historyData.metricId!,
         objectName: historyData.objectName || 'GLOBAL',
         attributeName: historyData.attributeName || 'value',
@@ -961,7 +961,7 @@ export class PrismaRepository implements IStorageRepository {
 
     return {
       id: entry.id,
-      dbId: entry.databaseId,
+      dbId: entry.dbId || entry.databaseId,
       dbName: entry.database?.name,
       metricId: entry.metricId,
       metricName: entry.metric?.name,
@@ -1502,7 +1502,7 @@ export class PrismaRepository implements IStorageRepository {
 
             return {
               id: dp.id,
-              dbId: dp.databaseId,
+              dbId: dp.dbId || dp.databaseId,
               dbName: dp.database?.name || 'Unknown DB',
               dbType: dp.database?.dbType || 'POSTGRES',
               metricId: dp.metricId,
@@ -1620,7 +1620,7 @@ export class PrismaRepository implements IStorageRepository {
       }
       const created = await client.create({
         data: {
-          databaseId: data.dbId || '',
+          dbId: data.dbId || '',
           metricId: data.metricId || '',
           objectName: data.objectName || 'INSTANCE',
           attributeName: data.attributeName || 'value',
@@ -1635,7 +1635,7 @@ export class PrismaRepository implements IStorageRepository {
 
       return {
         id: created.id,
-        dbId: created.databaseId,
+        dbId: created.dbId || created.databaseId,
         dbName: created.database?.name || data.dbName || 'Database',
         dbType: created.database?.dbType || data.dbType || 'POSTGRES',
         metricId: created.metricId,
@@ -1937,7 +1937,7 @@ export class PrismaRepository implements IStorageRepository {
       }),
       (this.prisma as any).metricDataPoint?.deleteMany({
         where: {
-          ...(dbId === 'ALL' ? {} : { databaseId: dbId }),
+          ...(dbId === 'ALL' ? {} : { dbId }),
           createdAt: { lte: cutoffDate },
         },
       }).catch(() => ({ count: 0 })) || { count: 0 },
@@ -1962,7 +1962,7 @@ export class PrismaRepository implements IStorageRepository {
 
     const metricsRes = await ((this.prisma as any).metricDataPoint?.deleteMany({
       where: {
-        ...(dbId === 'ALL' ? {} : { databaseId: dbId }),
+        ...(dbId === 'ALL' ? {} : { dbId }),
         createdAt: { lte: cutoffDate },
       },
     }).catch(() => ({ count: 0 })) || { count: 0 });

@@ -66,7 +66,15 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
     const numericAttributesForChart = useMemo(() => {
       if (!selectedMetric) return [{ key: 'value', label: 'value' }];
 
-      const metricPoints = unifiedMeasurements.filter((m) => m.metricId === selectedMetric.id);
+      const metricPoints = unifiedMeasurements.filter((m) => {
+        const mId = String(m.metricId || '').trim();
+        const targetId = String(selectedMetric.id || '').trim();
+        if (mId && targetId && mId === targetId) return true;
+        if (m.metricName && selectedMetric.name && m.metricName.trim().toLowerCase() === selectedMetric.name.trim().toLowerCase()) {
+          return true;
+        }
+        return false;
+      });
       const attrSet = new Set<string>();
 
       // Check perAttribute threshold configs if available
@@ -94,7 +102,15 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
     // Discover target objects for selected metric from unified measurements (includes metric_data_points)
     const availableObjectsForChart = useMemo(() => {
       if (!selectedMetric) return [];
-      const metricPoints = unifiedMeasurements.filter((m) => m.metricId === selectedMetric.id);
+      const metricPoints = unifiedMeasurements.filter((m) => {
+        const mId = String(m.metricId || '').trim();
+        const targetId = String(selectedMetric.id || '').trim();
+        if (mId && targetId && mId === targetId) return true;
+        if (m.metricName && selectedMetric.name && m.metricName.trim().toLowerCase() === selectedMetric.name.trim().toLowerCase()) {
+          return true;
+        }
+        return false;
+      });
       const objSet = new Set<string>();
       metricPoints.forEach((p) => {
         if (p.objectName) objSet.add(p.objectName);
@@ -108,7 +124,15 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
         return { timeSeriesData: [], objects: [], stats: { latest: '0', max: '0', min: '0', avg: '0', count: 0 } };
       }
 
-      let filtered = unifiedMeasurements.filter((m) => m.metricId === selectedMetric.id);
+      let filtered = unifiedMeasurements.filter((m) => {
+        const mId = String(m.metricId || '').trim();
+        const targetId = String(selectedMetric.id || '').trim();
+        if (mId && targetId && mId === targetId) return true;
+        if (m.metricName && selectedMetric.name && m.metricName.trim().toLowerCase() === selectedMetric.name.trim().toLowerCase()) {
+          return true;
+        }
+        return false;
+      });
 
       if (chartAttributeName) {
         filtered = filtered.filter((m) => m.attributeName === chartAttributeName || !m.attributeName);

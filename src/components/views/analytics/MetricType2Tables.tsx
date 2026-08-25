@@ -42,7 +42,15 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
         <div className="space-y-4">
           {type2Metrics.map((metric) => {
             // Filter all measurements for this metric from unified measurements (includes metric_data_points)
-            const metricMeasurements = unifiedMeasurements.filter((m) => m.metricId === metric.id);
+            const metricMeasurements = unifiedMeasurements.filter((m) => {
+              const mId = String(m.metricId || '').trim();
+              const targetId = String(metric.id || '').trim();
+              if (mId && targetId && mId === targetId) return true;
+              if (m.metricName && metric.name && m.metricName.trim().toLowerCase() === metric.name.trim().toLowerCase()) {
+                return true;
+              }
+              return false;
+            });
 
             // Group by objectName to get latest measurement per object
             const objectMap = new Map<string, UnifiedMeasurement>();

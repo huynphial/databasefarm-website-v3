@@ -362,9 +362,12 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const processedDatabases = useMemo(() => {
     return databases
       .map((db) => {
-        const dbAlerts = activeAlerts.filter(
-          (a) => String(a.dbId) === String(db.id) || (a.dbName && db.name && a.dbName.toLowerCase() === db.name.toLowerCase())
-        );
+        const dbAlerts = activeAlerts.filter((a) => {
+          const aDbId = String(a.dbId || (a as any).databaseId || '');
+          const matchId = aDbId && aDbId === String(db.id);
+          const matchName = Boolean(a.dbName && db.name && a.dbName.trim().toLowerCase() === db.name.trim().toLowerCase());
+          return matchId || matchName;
+        });
         const criticalCount = dbAlerts.filter((a) => {
           const lvl = (a.alertLevel || '').toUpperCase();
           return lvl === 'CRITICAL' || lvl === 'FATAL';
