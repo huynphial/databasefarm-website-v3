@@ -248,8 +248,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         let upCount = 0;
         assignedDbs.forEach((db) => {
           if (db.isEnabled === false) return;
-          const dbAlerts = activeAlerts.filter((a) => a.dbId === db.id);
-          const isDown = dbAlerts.some((a) => a.alertLevel === 'DOWN' || a.alertLevel === 'CRITICAL');
+          const isDown = (db.status || '').toUpperCase() === 'DOWN';
           if (!isDown) upCount++;
         });
 
@@ -269,8 +268,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         let downCount = 0;
         assignedDbs.forEach((db) => {
           if (db.isEnabled === false) return;
-          const dbAlerts = activeAlerts.filter((a) => a.dbId === db.id);
-          const isDown = dbAlerts.some((a) => a.alertLevel === 'DOWN' || a.alertLevel === 'CRITICAL');
+          const isDown = (db.status || '').toUpperCase() === 'DOWN';
           if (isDown) downCount++;
         });
 

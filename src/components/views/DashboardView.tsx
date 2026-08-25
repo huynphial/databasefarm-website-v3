@@ -90,16 +90,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Filter alerts by database engine type
   const dbTypeScopedAlerts = activeAlerts.filter((alert) => filteredDbIds.has(alert.dbId));
 
-  // Derive database statuses for the scoped databases
+  // Derive database statuses for the scoped databases based on table databases column status
   const dbStatuses = filteredDatabases.map((db) => {
     const dbAlerts = activeAlerts.filter((a) => a.dbId === db.id);
-    const hasDown = dbAlerts.some((a) => a.alertLevel === 'DOWN');
-    const hasCritical = dbAlerts.some((a) => a.alertLevel === 'CRITICAL');
-    const hasWarning = dbAlerts.some((a) => a.alertLevel === 'WARN' || a.alertLevel === 'HIGH');
+    const dbStatusUpper = (db.status || '').toUpperCase();
 
     let status: 'UP' | 'DOWN' | 'WARN' = 'UP';
-    if (hasDown || hasCritical) status = 'DOWN';
-    else if (hasWarning) status = 'WARN';
+    if (dbStatusUpper === 'DOWN') {
+      status = 'DOWN';
+    } else if (dbStatusUpper === 'WARNING' || dbStatusUpper === 'WARN') {
+      status = 'WARN';
+    } else if (dbAlerts.some((a) => a.alertLevel === 'WARN' || a.alertLevel === 'HIGH')) {
+      status = 'WARN';
+    }
 
     return {
       ...db,

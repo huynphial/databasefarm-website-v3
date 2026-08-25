@@ -114,6 +114,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     sslMode: string;
     groupIds: string[];
     isEnabled: boolean;
+    status?: 'UP' | 'DOWN' | 'WARNING';
   }>({
     name: '',
     dbType: DB_ENGINES[0]?.code || 'POSTGRES',
@@ -140,8 +141,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
 
     databases.forEach((db) => {
       if (db.isEnabled === false) return;
-      const dbAlerts = activeAlerts.filter((a) => a.dbId === db.id);
-      const isDown = dbAlerts.some((a) => a.alertLevel === 'DOWN' || a.alertLevel === 'CRITICAL');
+      const isDown = (db.status || '').toUpperCase() === 'DOWN';
       if (isDown) dbsDown++;
       else dbsUp++;
     });
@@ -234,6 +234,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       sslMode: 'require',
       groupIds: groups.length > 0 ? [groups[0].id] : [],
       isEnabled: true,
+      status: 'UP' as 'UP' | 'DOWN' | 'WARNING',
     });
     setIsDialogOpen(true);
   };
@@ -257,6 +258,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       sslMode: db.connectionConfig?.sslMode || 'require',
       groupIds: db.groupIds || [],
       isEnabled: db.isEnabled !== false,
+      status: (db.status || 'UP') as 'UP' | 'DOWN' | 'WARNING',
     });
     setIsDialogOpen(true);
   };
@@ -304,7 +306,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       username: formData.username.trim(),
       password: formData.password,
       isEnabled: formData.isEnabled,
-      status: editingDb?.status || 'UP',
+      status: formData.status || editingDb?.status || 'UP',
       lastCheckAt: editingDb?.lastCheckAt || new Date().toISOString(),
       connectionConfig: {
         username: formData.username.trim(),
@@ -358,15 +360,16 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         const downCount = dbAlerts.filter((a) => a.alertLevel === 'DOWN').length;
 
         const isPaused = db.isEnabled === false;
+        const dbStatusUpper = (db.status || '').toUpperCase();
         let statusScore = 2; // 0 = DOWN, 1 = WARN, 2 = UP, 3 = PAUSED
         let statusLabel = 'UP';
         if (isPaused) {
           statusScore = 3;
           statusLabel = 'PAUSED';
-        } else if (downCount > 0 || criticalCount > 0) {
+        } else if (dbStatusUpper === 'DOWN') {
           statusScore = 0;
           statusLabel = 'DOWN';
-        } else if (warnCount > 0 || highCount > 0) {
+        } else if (dbStatusUpper === 'WARNING' || dbStatusUpper === 'WARN' || warnCount > 0 || highCount > 0) {
           statusScore = 1;
           statusLabel = 'WARN';
         }
@@ -1028,25 +1031,39 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             </div>
           </div>
 
-          {/* Monitoring Active Toggle */}
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+          {/* Monitoring Active Toggle & Instance Status */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
             <div>
               <span className="font-bold text-slate-900 block text-xs">Enable Active Monitoring</span>
               <span className="text-[10px] text-slate-500">Instruct external collector daemon to gather metric probes for this instance</span>
+              <div className="flex items-center gap-2 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, isEnabled: !formData.isEnabled })}
+                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
+                    formData.isEnabled ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
+                  }`}
+                >
+                  <span className="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform" />
+                </button>
+                <span className="text-xs font-bold text-slate-700">
+                  {formData.isEnabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, isEnabled: !formData.isEnabled })}
-                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                  formData.isEnabled ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
-                }`}
+
+            <div>
+              <span className="font-bold text-slate-900 block text-xs">Instance Status (databases.status)</span>
+              <span className="text-[10px] text-slate-500">Operational state stored in table databases</span>
+              <select
+                value={formData.status || 'UP'}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                className="mt-1.5 w-full bg-white border border-slate-300 text-xs font-bold px-2.5 py-1 rounded-md text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
               >
-                <span className="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform" />
-              </button>
-              <span className="text-xs font-bold text-slate-700">
-                {formData.isEnabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}
-              </span>
+                <option value="UP">UP (Operational)</option>
+                <option value="DOWN">DOWN (Offline / Outage)</option>
+                <option value="WARNING">WARNING (Degraded)</option>
+              </select>
             </div>
           </div>
 

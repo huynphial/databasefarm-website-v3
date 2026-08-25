@@ -112,16 +112,19 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     });
   };
 
-  // Compute summary metrics
+  // Compute summary metrics based on table databases column status === 'DOWN'
   const dbStatuses = databases.map((db) => {
     const dbAlerts = activeAlerts.filter((a) => a.dbId === db.id);
-    const hasDown = dbAlerts.some((a) => a.alertLevel === 'DOWN');
-    const hasCritical = dbAlerts.some((a) => a.alertLevel === 'CRITICAL');
-    const hasWarning = dbAlerts.some((a) => a.alertLevel === 'WARN' || a.alertLevel === 'HIGH');
+    const dbStatusUpper = (db.status || '').toUpperCase();
 
     let status: 'UP' | 'DOWN' | 'WARN' = 'UP';
-    if (hasDown || hasCritical) status = 'DOWN';
-    else if (hasWarning) status = 'WARN';
+    if (dbStatusUpper === 'DOWN') {
+      status = 'DOWN';
+    } else if (dbStatusUpper === 'WARNING' || dbStatusUpper === 'WARN') {
+      status = 'WARN';
+    } else if (dbAlerts.some((a) => a.alertLevel === 'WARN' || a.alertLevel === 'HIGH')) {
+      status = 'WARN';
+    }
 
     return { ...db, derivedStatus: status };
   });
