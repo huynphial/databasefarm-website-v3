@@ -149,7 +149,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     });
 
     const downAlerts = activeAlerts.filter((a) => a.alertLevel === 'DOWN').length;
-    const criticalAlerts = activeAlerts.filter((a) => a.alertLevel === 'CRITICAL').length;
+    const criticalAlerts = activeAlerts.filter((a) => a.alertLevel === 'CRITICAL' || a.alertLevel === 'DOWN').length;
     const highAlerts = activeAlerts.filter((a) => a.alertLevel === 'HIGH').length;
     const warningAlerts = activeAlerts.filter((a) => a.alertLevel === 'WARN').length;
 
@@ -356,8 +356,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const processedDatabases = useMemo(() => {
     return databases
       .map((db) => {
-        const dbAlerts = activeAlerts.filter((a) => a.dbId === db.id);
-        const criticalCount = dbAlerts.filter((a) => a.alertLevel === 'CRITICAL').length;
+        const dbAlerts = activeAlerts.filter((a) => String(a.dbId) === String(db.id));
+        const criticalCount = dbAlerts.filter((a) => a.alertLevel === 'CRITICAL' || a.alertLevel === 'DOWN').length;
         const highCount = dbAlerts.filter((a) => a.alertLevel === 'HIGH').length;
         const warnCount = dbAlerts.filter((a) => a.alertLevel === 'WARN').length;
         const downCount = dbAlerts.filter((a) => a.alertLevel === 'DOWN').length;
@@ -369,10 +369,10 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         if (isPaused) {
           statusScore = 3;
           statusLabel = 'PAUSED';
-        } else if (dbStatusUpper === 'DOWN') {
+        } else if (dbStatusUpper === 'DOWN' || downCount > 0) {
           statusScore = 0;
           statusLabel = 'DOWN';
-        } else if (dbStatusUpper === 'WARNING' || dbStatusUpper === 'WARN' || warnCount > 0 || highCount > 0) {
+        } else if (dbStatusUpper === 'WARNING' || dbStatusUpper === 'WARN' || warnCount > 0 || highCount > 0 || criticalCount > 0) {
           statusScore = 1;
           statusLabel = 'WARN';
         }
@@ -768,13 +768,25 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
 
         <div className="flex items-center gap-2 justify-end shrink-0">
           <button
-            onClick={handleRunHealthCheckAll}
+            onClick={async () => {
+              setIsCheckingHealth(true);
+              try {
+                if (onRefresh) await onRefresh();
+                toast({
+                  title: 'Refreshed',
+                  description: 'Successfully refreshed database statuses and active alert counts.',
+                  type: 'success',
+                });
+              } finally {
+                setIsCheckingHealth(false);
+              }
+            }}
             disabled={isCheckingHealth}
-            title="Execute immediate health checks across all active databases"
-            className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer disabled:opacity-50"
+            title="Refresh database statuses and active alert telemetry"
+            className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isCheckingHealth ? 'animate-spin' : ''}`} />
-            <span>{isCheckingHealth ? 'Checking...' : 'Run Health Check'}</span>
+            <span>{isCheckingHealth ? 'Refreshing...' : 'Refresh'}</span>
           </button>
 
           {userRole === 'ADMIN' ? (
