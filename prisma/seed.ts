@@ -789,43 +789,10 @@ async function main() {
   ];
 
   // 10.7. Seed Database Poll Queue
-  const databasePollQueueData = [
-    {
-      dbId: dbOraId,
-      dbName: 'ERP_PROD_ORA',
-      status: 'pending',
-      scheduledAt: new Date(Date.now() + 5 * 60000),
-      createdAt: new Date(),
-    },
-    {
-      dbId: dbPgId,
-      dbName: 'PAYMENT_API_PG',
-      status: 'processing',
-      lockedBy: 'collector-node-01',
-      lockedAt: new Date(Date.now() - 30 * 1000),
-      scheduledAt: new Date(Date.now() - 1 * 60000),
-      createdAt: new Date(Date.now() - 1 * 60000),
-    },
-  ];
+  const databasePollQueueData: any[] = [];
 
   // 10.8. Seed Database Poll Log
-  const databasePollLogData = [
-    {
-      dbId: dbOraId,
-      dbName: 'ERP_PROD_ORA',
-      status: 'success',
-      startedAt: new Date(Date.now() - 3 * 60000 - 5000),
-      finishedAt: new Date(Date.now() - 3 * 60000),
-    },
-    {
-      dbId: dbStgMyId,
-      dbName: 'INVENTORY_STG_MY',
-      status: 'failed',
-      errorMessage: 'Connection timeout: host 10.0.40.72 unreachable',
-      startedAt: new Date(Date.now() - 2 * 60000 - 15000),
-      finishedAt: new Date(Date.now() - 2 * 60000),
-    },
-  ];
+  const databasePollLogData: any[] = [];
 
   // 10.9. Seed Alert Notification Queue
   const alertNotificationQueueData = [

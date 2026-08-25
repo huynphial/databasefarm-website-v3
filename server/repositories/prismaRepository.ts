@@ -1871,7 +1871,7 @@ export class PrismaRepository implements IStorageRepository {
       const records = await (this.prisma as any).databasePollQueue?.findMany({
         orderBy: { scheduledAt: 'desc' },
       });
-      if (records && records.length > 0) {
+      if (records) {
         return records.map((r: any) => ({
           id: String(r.id),
           dbId: r.dbId || '',
@@ -1884,41 +1884,10 @@ export class PrismaRepository implements IStorageRepository {
         }));
       }
     } catch (e) {
-      console.warn('Prisma getDatabasePollQueue failed, falling back:', e);
+      console.warn('Prisma getDatabasePollQueue failed:', e);
     }
 
-    return [
-      {
-        id: '1',
-        dbId: 'db-01',
-        dbName: 'ERP_PROD_ORA',
-        status: 'pending',
-        lockedBy: null,
-        lockedAt: null,
-        scheduledAt: new Date(Date.now() + 5 * 60000).toISOString(),
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: '2',
-        dbId: 'db-02',
-        dbName: 'PAYMENT_API_PG',
-        status: 'processing',
-        lockedBy: 'collector-node-01',
-        lockedAt: new Date(Date.now() - 30 * 1000).toISOString(),
-        scheduledAt: new Date(Date.now() - 60000).toISOString(),
-        createdAt: new Date(Date.now() - 60000).toISOString(),
-      },
-      {
-        id: '3',
-        dbId: 'db-03',
-        dbName: 'AUTH_NODE_MYSQL',
-        status: 'pending',
-        lockedBy: null,
-        lockedAt: null,
-        scheduledAt: new Date(Date.now() + 2 * 60000).toISOString(),
-        createdAt: new Date().toISOString(),
-      },
-    ];
+    return [];
   }
 
   async getDatabasePollLogs(): Promise<DatabasePollLogEntity[]> {
@@ -1927,7 +1896,7 @@ export class PrismaRepository implements IStorageRepository {
         orderBy: { finishedAt: 'desc' },
         take: 200,
       });
-      if (records && records.length > 0) {
+      if (records) {
         return records.map((r: any) => ({
           id: String(r.id),
           dbId: r.dbId || '',
@@ -1939,47 +1908,10 @@ export class PrismaRepository implements IStorageRepository {
         }));
       }
     } catch (e) {
-      console.warn('Prisma getDatabasePollLogs failed, falling back:', e);
+      console.warn('Prisma getDatabasePollLogs failed:', e);
     }
 
-    return [
-      {
-        id: '1',
-        dbId: 'db-01',
-        dbName: 'ERP_PROD_ORA',
-        status: 'success',
-        errorMessage: null,
-        startedAt: new Date(Date.now() - 3 * 60000 - 4500).toISOString(),
-        finishedAt: new Date(Date.now() - 3 * 60000).toISOString(),
-      },
-      {
-        id: '2',
-        dbId: 'db-02',
-        dbName: 'PAYMENT_API_PG',
-        status: 'success',
-        errorMessage: null,
-        startedAt: new Date(Date.now() - 4 * 60000 - 1200).toISOString(),
-        finishedAt: new Date(Date.now() - 4 * 60000).toISOString(),
-      },
-      {
-        id: '3',
-        dbId: 'db-04',
-        dbName: 'HR_PORTAL_MSSQL',
-        status: 'failed',
-        errorMessage: 'Connection timeout (3000ms exceeded): host 10.0.40.72 unreachable',
-        startedAt: new Date(Date.now() - 5 * 60000 - 15000).toISOString(),
-        finishedAt: new Date(Date.now() - 5 * 60000).toISOString(),
-      },
-      {
-        id: '4',
-        dbId: 'db-03',
-        dbName: 'AUTH_NODE_MYSQL',
-        status: 'success',
-        errorMessage: null,
-        startedAt: new Date(Date.now() - 8 * 60000 - 850).toISOString(),
-        finishedAt: new Date(Date.now() - 8 * 60000).toISOString(),
-      },
-    ];
+    return [];
   }
 
   async cleanAllMonitorData(daysToKeep = 0, dbId = 'ALL') {
