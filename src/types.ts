@@ -221,7 +221,7 @@ export interface GroupEntity {
 export type AlertSeverity = 'WARN' | 'HIGH' | 'CRITICAL' | 'DOWN';
 export type ActiveAlertStatus = 'OPEN' | 'ACKNOWLEDGED';
 export type NotificationDispatchStatus = 'NOT_DISPATCHED' | 'DISPATCHED';
-export type AlertResolutionStatus = 'CLOSED' | 'CLEARED_BY_USER' | 'AUTO_RESOLVED';
+export type AlertResolutionStatus = 'CLOSED' | 'CLEARED_BY_USER' | 'AUTO_RESOLVED' | 'RESOLVED_BY_LEVEL_CHANGE';
 export type NotificationDeliveryStatus = 'DISPATCHED' | 'FAILED' | 'PENDING';
 
 export interface ActiveAlertEntity {

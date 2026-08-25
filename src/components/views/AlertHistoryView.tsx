@@ -208,17 +208,38 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       header: 'Cleared At / Resolver',
       accessorKey: 'clearedAt',
       width: '180px',
-      cell: (row) => (
-        <div>
-          <div className="text-emerald-700 text-xs font-mono flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-            {formatTimeVN(row.clearedAt)}
+      cell: (row) => {
+        let resolverLabel = 'Clear normal';
+        let resolverStyle = 'text-slate-700 font-medium';
+
+        const status = row.resolutionStatus;
+        if (status === 'RESOLVED_BY_LEVEL_CHANGE') {
+          resolverLabel = 'change alert level';
+          resolverStyle = 'text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] inline-block';
+        } else if (status === 'AUTO_RESOLVED') {
+          resolverLabel = 'Clear normal';
+          resolverStyle = 'text-slate-600 font-medium';
+        } else if (row.clearedByName && row.clearedByName !== 'System Auto-Clear') {
+          resolverLabel = row.clearedByName;
+          resolverStyle = 'text-slate-700 font-medium';
+        } else {
+          resolverLabel = 'Clear normal';
+          resolverStyle = 'text-slate-600 font-medium';
+        }
+
+        return (
+          <div>
+            <div className="text-emerald-700 text-xs font-mono flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              {formatTimeVN(row.clearedAt)}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+              <span>By:</span>
+              <span className={resolverStyle}>{resolverLabel}</span>
+            </div>
           </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">
-            By: <span className="text-slate-700 font-medium">{row.clearedByName || 'System Auto-Clear'}</span>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
   ];
 
