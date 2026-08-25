@@ -148,10 +148,16 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       else dbsUp++;
     });
 
-    const downAlerts = activeAlerts.filter((a) => a.alertLevel === 'DOWN').length;
-    const criticalAlerts = activeAlerts.filter((a) => a.alertLevel === 'CRITICAL' || a.alertLevel === 'DOWN').length;
-    const highAlerts = activeAlerts.filter((a) => a.alertLevel === 'HIGH').length;
-    const warningAlerts = activeAlerts.filter((a) => a.alertLevel === 'WARN').length;
+    const downAlerts = activeAlerts.filter((a) => (a.alertLevel || '').toUpperCase() === 'DOWN').length;
+    const criticalAlerts = activeAlerts.filter((a) => {
+      const lvl = (a.alertLevel || '').toUpperCase();
+      return lvl === 'CRITICAL' || lvl === 'FATAL';
+    }).length;
+    const highAlerts = activeAlerts.filter((a) => (a.alertLevel || '').toUpperCase() === 'HIGH').length;
+    const warningAlerts = activeAlerts.filter((a) => {
+      const lvl = (a.alertLevel || '').toUpperCase();
+      return lvl === 'WARN' || lvl === 'WARNING';
+    }).length;
 
     return {
       totalDbs,
@@ -356,11 +362,19 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const processedDatabases = useMemo(() => {
     return databases
       .map((db) => {
-        const dbAlerts = activeAlerts.filter((a) => String(a.dbId) === String(db.id));
-        const criticalCount = dbAlerts.filter((a) => a.alertLevel === 'CRITICAL' || a.alertLevel === 'DOWN').length;
-        const highCount = dbAlerts.filter((a) => a.alertLevel === 'HIGH').length;
-        const warnCount = dbAlerts.filter((a) => a.alertLevel === 'WARN').length;
-        const downCount = dbAlerts.filter((a) => a.alertLevel === 'DOWN').length;
+        const dbAlerts = activeAlerts.filter(
+          (a) => String(a.dbId) === String(db.id) || (a.dbName && db.name && a.dbName.toLowerCase() === db.name.toLowerCase())
+        );
+        const criticalCount = dbAlerts.filter((a) => {
+          const lvl = (a.alertLevel || '').toUpperCase();
+          return lvl === 'CRITICAL' || lvl === 'FATAL';
+        }).length;
+        const highCount = dbAlerts.filter((a) => (a.alertLevel || '').toUpperCase() === 'HIGH').length;
+        const warnCount = dbAlerts.filter((a) => {
+          const lvl = (a.alertLevel || '').toUpperCase();
+          return lvl === 'WARN' || lvl === 'WARNING';
+        }).length;
+        const downCount = dbAlerts.filter((a) => (a.alertLevel || '').toUpperCase() === 'DOWN').length;
 
         const isPaused = db.isEnabled === false;
         const dbStatusUpper = (db.status || '').toUpperCase();
@@ -898,6 +912,59 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             </div>
           </div>
 
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1">
+              {formData.dbType === 'ORACLE' ? 'Service Name / SID' : 'Database Name'}
+            </label>
+            <input
+              type="text"
+              placeholder={formData.dbType === 'ORACLE' ? 'ORCLPDB1.internal' : 'app_production'}
+              value={formData.databaseNameOrSid}
+              onChange={(e) => setFormData({ ...formData, databaseNameOrSid: e.target.value })}
+              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          {/* Database Credentials */}
+          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+            <div className="text-slate-900 font-bold flex items-center gap-1.5 text-xs">
+              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+              Instance Credentials (Username & Password)
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-slate-600 font-medium mb-1">Username *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. dbmon_reader"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-600 font-medium mb-1">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Enter password..."
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg pl-3 pr-9 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Tags Selection & Custom Input */}
           <div>
             <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
@@ -1080,59 +1147,6 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                 <option value="WARNING">WARNING (Degraded)</option>
               </select>
             </div>
-          </div>
-
-          {/* Database Credentials */}
-          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
-            <div className="text-slate-900 font-bold flex items-center gap-1.5 text-xs">
-              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-              Instance Credentials (Username & Password)
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-slate-600 font-medium mb-1">Username *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. dbmon_reader"
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-600 font-medium mb-1">Password</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter password..."
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg pl-3 pr-9 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-slate-700 font-semibold mb-1">
-              {formData.dbType === 'ORACLE' ? 'Service Name / SID' : 'Database Name'}
-            </label>
-            <input
-              type="text"
-              placeholder={formData.dbType === 'ORACLE' ? 'ORCLPDB1.internal' : 'app_production'}
-              value={formData.databaseNameOrSid}
-              onChange={(e) => setFormData({ ...formData, databaseNameOrSid: e.target.value })}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-            />
           </div>
 
           {/* Group Selection (Many-to-Many) */}

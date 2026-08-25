@@ -103,9 +103,9 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     valueType: 'NUMBER',
     databaseEngineId: '',
     thresholdOperator: '>=',
-    thresholdWarn: '80',
-    thresholdHigh: '90',
-    thresholdCritical: '95',
+    thresholdWarn: '',
+    thresholdHigh: '',
+    thresholdCritical: '',
     cycle: 1,
     templateId: '',
     templateIds: [],
@@ -119,7 +119,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     setEditingMetric(null);
     setSqlValidationError(null);
     setType3Attributes([
-      { attributeName: 'value', valueType: 'NUMBER', operator: '>=', warn: '80', high: '90', critical: '95' },
+      { attributeName: 'value', valueType: 'NUMBER', operator: '>=', warn: '', high: '', critical: '' },
     ]);
     setFormData({
       name: '',
@@ -127,9 +127,9 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       valueType: 'NUMBER',
       databaseEngineId: '',
       thresholdOperator: '>=',
-      thresholdWarn: '80',
-      thresholdHigh: '90',
-      thresholdCritical: '95',
+      thresholdWarn: '',
+      thresholdHigh: '',
+      thresholdCritical: '',
       cycle: 1,
       templateId: '',
       templateIds: [],
@@ -1263,9 +1263,11 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
               </div>
             ) : formData.valueType === 'BOOLEAN' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-white p-2.5 rounded-lg border border-amber-200/80 shadow-2xs">
-                  <label className="block text-amber-800 text-[11px] font-bold mb-1">Warn if Value Equals</label>
+                  <label className="block text-amber-800 text-[11px] font-bold mb-1">
+                    Warn if Value Equals ({formData.thresholdOperator})
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. 1 or ON"
@@ -1274,8 +1276,22 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                     className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
+                <div className="bg-white p-2.5 rounded-lg border border-orange-200/80 shadow-2xs">
+                  <label className="block text-orange-800 text-[11px] font-bold mb-1">
+                    High if Value Equals ({formData.thresholdOperator})
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1 or TRUE"
+                    value={formData.thresholdHigh}
+                    onChange={(e) => setFormData({ ...formData, thresholdHigh: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-orange-500"
+                  />
+                </div>
                 <div className="bg-white p-2.5 rounded-lg border border-rose-200/80 shadow-2xs">
-                  <label className="block text-rose-800 text-[11px] font-bold mb-1">Critical if Value Equals</label>
+                  <label className="block text-rose-800 text-[11px] font-bold mb-1">
+                    Critical if Value Equals ({formData.thresholdOperator})
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. 0 or OFF"
@@ -1286,15 +1302,43 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-3 rounded-lg border border-rose-200/80 shadow-2xs">
-                <label className="block text-rose-800 text-[11px] font-bold mb-1">Critical if Output Matches (Regex or substring)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. DOWN or ERROR"
-                  value={formData.thresholdCritical}
-                  onChange={(e) => setFormData({ ...formData, thresholdCritical: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-rose-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-white p-2.5 rounded-lg border border-amber-200/80 shadow-2xs">
+                  <label className="block text-amber-800 text-[11px] font-bold mb-1">
+                    Warn Pattern / Substring ({formData.thresholdOperator})
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. WARN or DEGRADED"
+                    value={formData.thresholdWarn}
+                    onChange={(e) => setFormData({ ...formData, thresholdWarn: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-orange-200/80 shadow-2xs">
+                  <label className="block text-orange-800 text-[11px] font-bold mb-1">
+                    High Pattern / Substring ({formData.thresholdOperator})
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. HIGH or UNSTABLE"
+                    value={formData.thresholdHigh}
+                    onChange={(e) => setFormData({ ...formData, thresholdHigh: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-rose-200/80 shadow-2xs">
+                  <label className="block text-rose-800 text-[11px] font-bold mb-1">
+                    Critical Pattern / Substring ({formData.thresholdOperator})
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. DOWN or ERROR"
+                    value={formData.thresholdCritical}
+                    onChange={(e) => setFormData({ ...formData, thresholdCritical: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-rose-500"
+                  />
+                </div>
               </div>
             )}
           </div>

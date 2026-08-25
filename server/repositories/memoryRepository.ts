@@ -1255,7 +1255,63 @@ FROM pg_tablespace`,
   }
 
   // --- Databases ---
+  private syncDatabaseMetrics(): void {
+    const groupMap = new Map(this.groups.map((g) => [g.id, g]));
+    const templateMap = new Map(this.templates.map((t) => [t.id, t]));
+
+    this.databases = this.databases.map((db) => {
+      const attachedGroupIds = db.groupIds || [];
+      const attachedTemplateIds = new Set<string>();
+
+      attachedGroupIds.forEach((gid) => {
+        const group = groupMap.get(gid);
+        if (group && group.templateIds) {
+          group.templateIds.forEach((tid) => attachedTemplateIds.add(tid));
+        }
+      });
+
+      const compatibleTemplateIds = new Set<string>();
+      attachedTemplateIds.forEach((tid) => {
+        const tpl = templateMap.get(tid);
+        if (tpl) {
+          const tType = (tpl.targetDbType || 'ALL').toUpperCase();
+          const dbEngineType = (db.dbType || '').toUpperCase();
+          if (tType === 'ALL' || !tType || tType === dbEngineType) {
+            compatibleTemplateIds.add(tid);
+          }
+        }
+      });
+
+      const inheritedMetricIds = this.metrics
+        .filter((m) => {
+          if (m.isEnabled === false) return false;
+          const mTemplateIds = m.templateIds || (m.templateId ? [m.templateId] : []);
+          return mTemplateIds.some((tid) => compatibleTemplateIds.has(tid));
+        })
+        .map((m) => m.id);
+
+      const existingMetricSet = new Set(db.metricIds || []);
+      let hasNewMetric = false;
+      inheritedMetricIds.forEach((mid) => {
+        if (!existingMetricSet.has(mid)) {
+          existingMetricSet.add(mid);
+          hasNewMetric = true;
+        }
+      });
+
+      if (hasNewMetric) {
+        return {
+          ...db,
+          metricIds: Array.from(existingMetricSet),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return db;
+    });
+  }
+
   async getDatabases(): Promise<DatabaseEntity[]> {
+    this.syncDatabaseMetrics();
     return this.databases;
   }
 
@@ -1264,6 +1320,7 @@ FROM pg_tablespace`,
   }
 
   async saveDatabase(dbData: Partial<DatabaseEntity>): Promise<DatabaseEntity> {
+    let saved: DatabaseEntity;
     if (dbData.id) {
       const idx = this.databases.findIndex((d) => d.id === dbData.id);
       if (idx !== -1) {
@@ -1272,32 +1329,37 @@ FROM pg_tablespace`,
           ...dbData,
           updatedAt: new Date().toISOString(),
         } as DatabaseEntity;
-        return this.databases[idx];
+        saved = this.databases[idx];
+      } else {
+        saved = dbData as DatabaseEntity;
       }
+    } else {
+      const newDb: DatabaseEntity = {
+        id: dbData.id || `db-${Date.now().toString().slice(-4)}`,
+        name: dbData.name || 'New Database',
+        dbType: dbData.dbType || 'POSTGRES',
+        host: dbData.host || 'localhost',
+        port: dbData.port || 5432,
+        authMethod: dbData.authMethod || 'PASSWORD',
+        username: dbData.username || '',
+        password: dbData.password || '',
+        authKey: dbData.authKey || '',
+        databaseName: dbData.databaseName || '',
+        environment: dbData.environment || 'PRODUCTION',
+        connectionConfig: dbData.connectionConfig || {},
+        groupIds: dbData.groupIds || [],
+        metricIds: dbData.metricIds || [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: dbData.status || 'UP',
+        isEnabled: dbData.isEnabled !== false,
+        lastCheckAt: new Date().toISOString(),
+      };
+      this.databases = [newDb, ...this.databases];
+      saved = newDb;
     }
-    const newDb: DatabaseEntity = {
-      id: dbData.id || `db-${Date.now().toString().slice(-4)}`,
-      name: dbData.name || 'New Database',
-      dbType: dbData.dbType || 'POSTGRES',
-      host: dbData.host || 'localhost',
-      port: dbData.port || 5432,
-      authMethod: dbData.authMethod || 'PASSWORD',
-      username: dbData.username || '',
-      password: dbData.password || '',
-      authKey: dbData.authKey || '',
-      databaseName: dbData.databaseName || '',
-      environment: dbData.environment || 'PRODUCTION',
-      connectionConfig: dbData.connectionConfig || {},
-      groupIds: dbData.groupIds || [],
-      metricIds: dbData.metricIds || [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      status: dbData.status || 'UP',
-      isEnabled: dbData.isEnabled !== false,
-      lastCheckAt: new Date().toISOString(),
-    };
-    this.databases = [newDb, ...this.databases];
-    return newDb;
+    this.syncDatabaseMetrics();
+    return saved;
   }
 
   async deleteDatabase(id: string): Promise<boolean> {
@@ -1331,6 +1393,7 @@ FROM pg_tablespace`,
     const firstTemplateId = templateIds[0] || null;
     const firstTemplateName = firstTemplateId ? (this.templates.find((t) => t.id === firstTemplateId)?.name || null) : null;
 
+    let savedResult: MetricEntity;
     if (metricData.id) {
       const idx = this.metrics.findIndex((m) => m.id === metricData.id);
       if (idx !== -1) {
@@ -1343,38 +1406,43 @@ FROM pg_tablespace`,
           databaseEngineId: metricData.databaseEngineId !== undefined ? metricData.databaseEngineId : this.metrics[idx].databaseEngineId,
           updatedAt: new Date().toISOString(),
         } as MetricEntity;
-        return {
+        savedResult = {
           ...this.metrics[idx],
           databaseEngine: this.metrics[idx].databaseEngineId ? (this.databaseEngines.find((e) => e.id === this.metrics[idx].databaseEngineId) || null) : null,
         };
+      } else {
+        savedResult = metricData as MetricEntity;
       }
+    } else {
+      const newMetric: MetricEntity = {
+        id: metricData.id || `met-${Date.now().toString().slice(-4)}`,
+        name: metricData.name || 'New Metric',
+        sqlQuery: metricData.sqlQuery || 'SELECT 1 AS value',
+        valueType: metricData.valueType || 'NUMBER',
+        relationalOperator: metricData.relationalOperator || '>=',
+        thresholdOperator: metricData.thresholdOperator || '>=',
+        thresholdWarn: metricData.thresholdWarn || null,
+        thresholdHigh: metricData.thresholdHigh || null,
+        thresholdCritical: metricData.thresholdCritical || null,
+        cycle: metricData.cycle ?? 1,
+        templateId: firstTemplateId,
+        templateName: firstTemplateName,
+        templateIds,
+        databaseEngineId: metricData.databaseEngineId || null,
+        isEnabled: metricData.isEnabled !== false,
+        metricQueryType: metricData.metricQueryType || 1,
+        thresholdsConfig: metricData.thresholdsConfig || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      this.metrics = [newMetric, ...this.metrics];
+      savedResult = {
+        ...newMetric,
+        databaseEngine: newMetric.databaseEngineId ? (this.databaseEngines.find((e) => e.id === newMetric.databaseEngineId) || null) : null,
+      };
     }
-    const newMetric: MetricEntity = {
-      id: metricData.id || `met-${Date.now().toString().slice(-4)}`,
-      name: metricData.name || 'New Metric',
-      sqlQuery: metricData.sqlQuery || 'SELECT 1 AS value',
-      valueType: metricData.valueType || 'NUMBER',
-      relationalOperator: metricData.relationalOperator || '>=',
-      thresholdOperator: metricData.thresholdOperator || '>=',
-      thresholdWarn: metricData.thresholdWarn || null,
-      thresholdHigh: metricData.thresholdHigh || null,
-      thresholdCritical: metricData.thresholdCritical || null,
-      cycle: metricData.cycle ?? 1,
-      templateId: firstTemplateId,
-      templateName: firstTemplateName,
-      templateIds,
-      databaseEngineId: metricData.databaseEngineId || null,
-      isEnabled: metricData.isEnabled !== false,
-      metricQueryType: metricData.metricQueryType || 1,
-      thresholdsConfig: metricData.thresholdsConfig || null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    this.metrics = [newMetric, ...this.metrics];
-    return {
-      ...newMetric,
-      databaseEngine: newMetric.databaseEngineId ? (this.databaseEngines.find((e) => e.id === newMetric.databaseEngineId) || null) : null,
-    };
+    this.syncDatabaseMetrics();
+    return savedResult;
   }
 
   async deleteMetric(id: string): Promise<boolean> {
@@ -1417,6 +1485,7 @@ FROM pg_tablespace`,
     const targetDbType = matchedEngine ? (matchedEngine.dbCode as any) : (tplData.targetDbType || 'ALL');
     const databaseEngineId = matchedEngine ? matchedEngine.id : (tplData.databaseEngineId || null);
 
+    let savedTemplate: TemplateEntity;
     if (tplData.id) {
       const idx = this.templates.findIndex((t) => t.id === tplData.id);
       if (idx !== -1) {
@@ -1427,27 +1496,32 @@ FROM pg_tablespace`,
           databaseEngineId,
           updatedAt: new Date().toISOString(),
         } as TemplateEntity;
-        return {
+        savedTemplate = {
           ...this.templates[idx],
           databaseEngine: matchedEngine || null,
         };
+      } else {
+        savedTemplate = tplData as TemplateEntity;
       }
+    } else {
+      const newTemplate: TemplateEntity = {
+        id: tplData.id || `tpl-${Date.now().toString().slice(-4)}`,
+        name: tplData.name || 'New Template',
+        description: tplData.description || null,
+        targetDbType,
+        databaseEngineId,
+        metricIds: tplData.metricIds || [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      this.templates = [newTemplate, ...this.templates];
+      savedTemplate = {
+        ...newTemplate,
+        databaseEngine: matchedEngine || null,
+      };
     }
-    const newTemplate: TemplateEntity = {
-      id: tplData.id || `tpl-${Date.now().toString().slice(-4)}`,
-      name: tplData.name || 'New Template',
-      description: tplData.description || null,
-      targetDbType,
-      databaseEngineId,
-      metricIds: tplData.metricIds || [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    this.templates = [newTemplate, ...this.templates];
-    return {
-      ...newTemplate,
-      databaseEngine: matchedEngine || null,
-    };
+    this.syncDatabaseMetrics();
+    return savedTemplate;
   }
 
   async deleteTemplate(id: string): Promise<boolean> {
@@ -1510,6 +1584,7 @@ FROM pg_tablespace`,
       });
     }
 
+    this.syncDatabaseMetrics();
     return savedGroup;
   }
 

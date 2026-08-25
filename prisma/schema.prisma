@@ -327,8 +327,8 @@ model ActiveAlert {
   database Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
   metric   Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
 
-  /// Constraint: Ensures unique active alert record per database/metric pair.
-  @@unique([dbId, metricId])
+  /// Constraint: Ensures unique active alert record per database, metric, object_name, and attribute_name.
+  @@unique([dbId, metricId, objectName, attributeName], map: "active_alerts_dbId_metricId_key")
   @@map("active_alerts")
 }
 

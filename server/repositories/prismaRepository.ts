@@ -779,15 +779,18 @@ export class PrismaRepository implements IStorageRepository {
 
     const alert = await this.prisma.activeAlert.upsert({
       where: {
-        dbId_metricId: {
+        active_alerts_dbId_metricId_key: {
           dbId: alertData.dbId!,
           metricId: alertData.metricId!,
+          objectName: alertData.objectName || 'INSTANCE',
+          attributeName: alertData.attributeName || 'value',
         },
       },
       update: {
         alertLevel,
         message: alertData.message || '',
         objectName: alertData.objectName || 'INSTANCE',
+        attributeName: alertData.attributeName || 'value',
       },
       create: {
         dbId: alertData.dbId!,
@@ -795,6 +798,7 @@ export class PrismaRepository implements IStorageRepository {
         alertLevel,
         message: alertData.message || '',
         objectName: alertData.objectName || 'INSTANCE',
+        attributeName: alertData.attributeName || 'value',
       },
       include: { database: true, metric: true },
     });

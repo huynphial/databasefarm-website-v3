@@ -20,6 +20,7 @@ import { ToastProvider, useToast } from './components/ui/Toast';
 import { ThemeProvider } from './context/ThemeContext';
 import { storage } from './lib/storage';
 import { api } from './lib/api';
+import { autoSyncDatabaseTemplateMetrics } from './lib/utils';
 import { AUTH_CONFIG, getSessionTimeoutMs } from './config/authConfig';
 import {
   User,
@@ -149,8 +150,10 @@ function MainAppContent() {
 
       if (requestId !== loadDataCountRef.current) return;
 
+      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(dbs, grps, tpls, mets);
+
       setStorageType(sInfo.storageType);
-      setDatabases(dbs);
+      setDatabases(syncedDatabases);
       setDatabaseEngines(engines);
       setAlertMethods(methods);
       setRawMeasurements(raws);
@@ -167,7 +170,7 @@ function MainAppContent() {
       setSystemSettings(settings);
 
       // Cache locally for offline availability
-      storage.setDatabases(dbs);
+      storage.setDatabases(syncedDatabases);
       storage.setMetrics(mets);
       storage.setTemplates(tpls);
       storage.setGroups(grps);
@@ -553,9 +556,15 @@ function MainAppContent() {
       } else {
         await api.createMetric(metricData);
       }
-      const refreshed = await api.getMetrics();
-      setMetrics(refreshed);
-      storage.setMetrics(refreshed);
+      const [refreshedMets, refreshedDbs] = await Promise.all([
+        api.getMetrics(),
+        api.getDatabases(),
+      ]);
+      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(refreshedDbs, groups, templates, refreshedMets);
+      setMetrics(refreshedMets);
+      setDatabases(syncedDatabases);
+      storage.setMetrics(refreshedMets);
+      storage.setDatabases(syncedDatabases);
       toast({ title: 'Metric Saved', description: `${metricData.name || 'Metric'} persisted in ${storageType.toUpperCase()} store.`, type: 'success' });
     } catch (e) {
       let updated: MetricEntity[];
@@ -581,8 +590,11 @@ function MainAppContent() {
         };
         updated = [newMetric, ...metrics];
       }
+      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(databases, groups, templates, updated);
       setMetrics(updated);
+      setDatabases(syncedDatabases);
       storage.setMetrics(updated);
+      storage.setDatabases(syncedDatabases);
     }
   };
 
@@ -617,9 +629,15 @@ function MainAppContent() {
       } else {
         await api.createTemplate(tplData);
       }
-      const refreshed = await api.getTemplates();
-      setTemplates(refreshed);
-      storage.setTemplates(refreshed);
+      const [refreshedTpls, refreshedDbs] = await Promise.all([
+        api.getTemplates(),
+        api.getDatabases(),
+      ]);
+      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(refreshedDbs, groups, refreshedTpls, metrics);
+      setTemplates(refreshedTpls);
+      setDatabases(syncedDatabases);
+      storage.setTemplates(refreshedTpls);
+      storage.setDatabases(syncedDatabases);
       toast({ title: 'Template Saved', description: `${tplData.name || 'Template'} saved successfully.`, type: 'success' });
     } catch (e) {
       let updated: TemplateEntity[];
@@ -638,8 +656,11 @@ function MainAppContent() {
         };
         updated = [newTpl, ...templates];
       }
+      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(databases, groups, updated, metrics);
       setTemplates(updated);
+      setDatabases(syncedDatabases);
       storage.setTemplates(updated);
+      storage.setDatabases(syncedDatabases);
     }
   };
 
@@ -669,10 +690,11 @@ function MainAppContent() {
         api.getGroups(),
         api.getDatabases(),
       ]);
+      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(refreshedDbs, refreshedGroups, templates, metrics);
       setGroups(refreshedGroups);
-      setDatabases(refreshedDbs);
+      setDatabases(syncedDatabases);
       storage.setGroups(refreshedGroups);
-      storage.setDatabases(refreshedDbs);
+      storage.setDatabases(syncedDatabases);
       toast({ title: 'Group Saved', description: `${groupData.name || 'Group'} saved to ${storageType.toUpperCase()} database.`, type: 'success' });
     } catch (e) {
       let updated: GroupEntity[];
@@ -697,11 +719,10 @@ function MainAppContent() {
         };
         updated = [newGroup, ...groups];
       }
-      setGroups(updated);
-      storage.setGroups(updated);
 
+      let currentDbs = databases;
       if (assignedDbIds && targetGroupId) {
-        const updatedDbs = databases.map((db) => {
+        currentDbs = databases.map((db) => {
           const hasGroup = db.groupIds?.includes(targetGroupId!);
           const shouldHave = assignedDbIds.includes(db.id);
 
@@ -712,9 +733,13 @@ function MainAppContent() {
           }
           return db;
         });
-        setDatabases(updatedDbs);
-        storage.setDatabases(updatedDbs);
       }
+
+      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(currentDbs, updated, templates, metrics);
+      setGroups(updated);
+      setDatabases(syncedDatabases);
+      storage.setGroups(updated);
+      storage.setDatabases(syncedDatabases);
     }
   };
 
