@@ -300,9 +300,6 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       return;
     }
 
-    // Auto-derive inherited metric IDs from group templates
-    const autoMetricIds = inheritedMetrics.map((m) => m.id);
-
     const payload: Partial<DatabaseEntity> = {
       id: formData.id,
       name: formData.name.trim(),
@@ -315,7 +312,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       username: formData.username.trim(),
       password: formData.password,
       isEnabled: formData.isEnabled,
-      status: formData.status || editingDb?.status || 'UP',
+      status: editingDb?.status || formData.status || 'UP',
       lastCheckAt: editingDb?.lastCheckAt || new Date().toISOString(),
       connectionConfig: {
         username: formData.username.trim(),
@@ -324,15 +321,15 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           : { databaseName: formData.databaseNameOrSid.trim() }),
         sslMode: formData.sslMode,
       },
-      groupIds: formData.groupIds,
-      metricIds: autoMetricIds,
+      groupIds: editingDb?.groupIds || formData.groupIds || [],
+      metricIds: editingDb?.metricIds || [],
     };
 
     onSaveDatabase(payload);
     setIsDialogOpen(false);
     toast({
-      title: formData.id ? 'Database Metadata Updated' : 'Database Configured in Central MySQL',
-      description: `Target instance "${formData.name}" configuration saved with ${autoMetricIds.length} inherited metric probe(s).`,
+      title: formData.id ? 'Database Metadata Updated' : 'Database Registered',
+      description: `Target instance "${formData.name}" configuration saved successfully.`,
       type: 'success',
     });
   };
@@ -854,7 +851,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
         title={editingDb ? `Edit Database Metadata: ${editingDb.name}` : 'Register New Monitored Database'}
-        description="Save endpoint credentials and metadata to the central MySQL Configuration Database. Monitored instances inherit metric probes from attached Database Groups."
+        description="Save endpoint connection parameters, credentials, and polling intervals to the central Configuration Database."
         maxWidth="xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -1105,144 +1102,26 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             </div>
           </div>
 
-          {/* Read-Only Auto-Created Poll ID */}
+          {/* Monitoring Active Toggle */}
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
             <div>
-              <span className="font-bold text-slate-900 block text-xs">Poll Sequence ID (Read-Only)</span>
-              <span className="text-[10px] text-slate-500">Auto-created database polling sequence attribute (default = 0)</span>
-            </div>
-            <div className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded border border-indigo-200">
-              pollId: {editingDb?.pollId ?? 0}
-            </div>
-          </div>
-
-          {/* Monitoring Active Toggle & Instance Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
-            <div>
               <span className="font-bold text-slate-900 block text-xs">Enable Active Monitoring</span>
-              <span className="text-[10px] text-slate-500">Instruct external collector daemon to gather metric probes for this instance</span>
-              <div className="flex items-center gap-2 mt-1.5">
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, isEnabled: !formData.isEnabled })}
-                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                    formData.isEnabled ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
-                  }`}
-                >
-                  <span className="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform" />
-                </button>
-                <span className="text-xs font-bold text-slate-700">
-                  {formData.isEnabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}
-                </span>
-              </div>
+              <span className="text-[10px] text-slate-500">Instruct collector daemon to gather metric probes for this instance</span>
             </div>
-
-            <div>
-              <span className="font-bold text-slate-900 block text-xs">Instance Status (databases.status)</span>
-              <span className="text-[10px] text-slate-500">Operational state stored in table databases</span>
-              <select
-                value={formData.status || 'UP'}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                className="mt-1.5 w-full bg-white border border-slate-300 text-xs font-bold px-2.5 py-1 rounded-md text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, isEnabled: !formData.isEnabled })}
+                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
+                  formData.isEnabled ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
+                }`}
               >
-                <option value="UP">UP (Operational)</option>
-                <option value="DOWN">DOWN (Offline / Outage)</option>
-                <option value="WARNING">WARNING (Degraded)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Group Selection (Many-to-Many) */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-slate-800 font-semibold flex items-center gap-1.5">
-                <FolderKanban className="w-3.5 h-3.5 text-indigo-600" />
-                Select Database Group(s) *
-              </label>
-              <span className="text-[11px] text-slate-500 font-mono">
-                {formData.groupIds.length} group(s) selected
+                <span className="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform" />
+              </button>
+              <span className="text-xs font-bold text-slate-700">
+                {formData.isEnabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg max-h-36 overflow-y-auto">
-              {groups.map((g) => {
-                const isSelected = formData.groupIds.includes(g.id);
-                return (
-                  <label
-                    key={g.id}
-                    className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'bg-indigo-50/80 border-indigo-300 text-indigo-900 font-semibold shadow-2xs'
-                        : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setFormData({ ...formData, groupIds: [...formData.groupIds, g.id] });
-                        } else {
-                          setFormData({
-                            ...formData,
-                            groupIds: formData.groupIds.filter((id) => id !== g.id),
-                          });
-                        }
-                      }}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <div className="truncate">
-                      <div className="truncate text-xs">{g.name}</div>
-                      <div className="text-[10px] text-slate-500 font-normal">
-                        {g.templateIds?.length || 0} template(s)
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Automatic Metric Inheritance Preview */}
-          <div className="p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/40 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                Inherited Monitoring Metrics (Auto-Assigned from Group Templates)
-              </span>
-              <span className="text-[11px] font-bold text-indigo-700 px-2 py-0.5 bg-indigo-100 rounded">
-                {inheritedMetrics.length} probe{inheritedMetrics.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-
-            {inheritedMetrics.length > 0 ? (
-              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                {inheritedMetrics.map((m) => (
-                  <div
-                    key={m.id}
-                    className="p-2 bg-white rounded-lg border border-indigo-200/70 text-xs flex items-center justify-between shadow-2xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <div>
-                        <span className="font-semibold text-slate-900">{m.name}</span>
-                        <span className="text-[10px] text-slate-500 block">
-                          Template: {m.templateName || 'Template Bundle'} (Cycle {m.cycle ?? 1})
-                        </span>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                      {m.valueType}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-3 bg-white rounded-lg border border-dashed border-slate-300 text-center text-slate-500 text-xs">
-                {formData.groupIds.length === 0
-                  ? 'Select at least one Database Group above to automatically inherit its template metrics.'
-                  : 'Selected groups do not have templates matching this database engine type yet.'}
-              </div>
-            )}
           </div>
 
           <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">

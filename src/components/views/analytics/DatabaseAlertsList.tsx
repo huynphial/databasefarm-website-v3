@@ -35,52 +35,64 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
       </div>
 
       <div className="divide-y divide-rose-100 overflow-x-auto">
-        {activeAlerts.map((alert) => (
-          <div key={alert.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
-            <div className="space-y-0.5 min-w-0">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                    alert.alertLevel === 'CRITICAL' || alert.alertLevel === 'DOWN'
-                      ? 'bg-rose-100 text-rose-800 border-rose-300'
-                      : alert.alertLevel === 'HIGH'
-                      ? 'bg-orange-100 text-orange-800 border-orange-300'
-                      : 'bg-amber-100 text-amber-800 border-amber-300'
-                  }`}
-                >
-                  {alert.alertLevel}
-                </span>
-                <span className="font-bold text-slate-900 truncate">{alert.metricName}</span>
-                <span className="font-mono text-[11px] text-slate-500">({alert.objectName})</span>
-              </div>
-              <p className="text-slate-600 truncate">{alert.message}</p>
-              <p className="text-[10px] text-slate-400 font-mono">Triggered: {formatTimeVN(alert.createdAt)}</p>
-            </div>
+        {activeAlerts.map((alert) => {
+          const hasObject = Boolean(alert.objectName && alert.objectName.trim() !== '');
+          const alertTitle = hasObject ? `${alert.metricName} of ${alert.objectName}` : alert.metricName;
+          const isAck = alert.status === 'ACKNOWLEDGED' || Boolean(alert.acknowledgedAt);
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              {onAcknowledgeAlert && alert.status !== 'ACKNOWLEDGED' && !alert.acknowledgedAt && (
-                <button
-                  type="button"
-                  onClick={() => onAcknowledgeAlert(alert.id)}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <CheckCheck className="w-3.5 h-3.5 text-indigo-600" />
-                  Ack
-                </button>
-              )}
-              {onClearAlert && (
-                <button
-                  type="button"
-                  onClick={() => onClearAlert(alert.id)}
-                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <XCircle className="w-3.5 h-3.5" />
-                  Clear
-                </button>
-              )}
+          return (
+            <div key={alert.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                      alert.alertLevel === 'CRITICAL' || alert.alertLevel === 'DOWN'
+                        ? 'bg-rose-100 text-rose-800 border-rose-300'
+                        : alert.alertLevel === 'HIGH'
+                        ? 'bg-orange-100 text-orange-800 border-orange-300'
+                        : 'bg-amber-100 text-amber-800 border-amber-300'
+                    }`}
+                  >
+                    {alert.alertLevel}
+                  </span>
+                  {isAck && (
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                      ACK
+                    </span>
+                  )}
+                  <span className="font-bold text-slate-900 truncate" title={alertTitle}>
+                    {alertTitle}
+                  </span>
+                </div>
+                <p className="text-slate-600 truncate">{alert.message}</p>
+                <p className="text-[10px] text-slate-400 font-mono">Triggered: {formatTimeVN(alert.createdAt)}</p>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {onAcknowledgeAlert && !isAck && (
+                  <button
+                    type="button"
+                    onClick={() => onAcknowledgeAlert(alert.id)}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5 text-indigo-600" />
+                    Ack
+                  </button>
+                )}
+                {onClearAlert && (
+                  <button
+                    type="button"
+                    onClick={() => onClearAlert(alert.id)}
+                    className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

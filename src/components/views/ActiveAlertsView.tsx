@@ -58,7 +58,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(25);
   const [sortField, setSortField] = useState<string>('status');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -243,12 +243,14 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
   const totalPages = Math.ceil(filteredAlerts.length / pageSize) || 1;
   const paginatedAlerts = filteredAlerts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const handleAcknowledge = (alert: ActiveAlertEntity) => {
+  const handleAcknowledge = async (alert: ActiveAlertEntity) => {
     if (onAcknowledgeAlert) {
-      onAcknowledgeAlert(alert.id);
+      await onAcknowledgeAlert(alert.id);
+      const hasObj = Boolean(alert.objectName && alert.objectName.trim() !== '');
+      const metricTitle = hasObj ? `${alert.metricName} of ${alert.objectName}` : alert.metricName;
       toast({
         title: 'Alert Acknowledged',
-        description: `Alert for "${alert.metricName}" on "${alert.dbName}" updated from OPEN to ACK.`,
+        description: `Alert for "${metricTitle}" on "${alert.dbName}" updated from OPEN to ACK.`,
         type: 'info',
       });
     }
@@ -264,9 +266,11 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       return;
     }
     onClearAlert(alert.id);
+    const hasObj = Boolean(alert.objectName && alert.objectName.trim() !== '');
+    const metricTitle = hasObj ? `${alert.metricName} of ${alert.objectName}` : alert.metricName;
     toast({
       title: 'Incident Cleared',
-      description: `Alert for "${alert.metricName}" on "${alert.dbName}" cleared and archived.`,
+      description: `Alert for "${metricTitle}" on "${alert.dbName}" cleared and archived.`,
       type: 'success',
     });
   };
@@ -346,24 +350,23 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       header: 'Metric',
       accessorKey: 'metricName',
       sortable: true,
-      width: '200px',
-      cell: (row) => (
-        <div className="space-y-0.5">
-          <span className="text-slate-900 text-xs font-bold block">{row.metricName}</span>
-          <div className="flex items-center gap-1 flex-wrap">
-            {row.objectName && (
-              <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200 font-semibold">
-                Obj: {row.objectName}
-              </span>
-            )}
+      width: '240px',
+      cell: (row) => {
+        const hasObj = Boolean(row.objectName && row.objectName.trim() !== '');
+        const metricTitle = hasObj ? `${row.metricName} of ${row.objectName}` : row.metricName;
+        return (
+          <div className="space-y-0.5">
+            <span className="text-slate-900 text-xs font-bold block" title={metricTitle}>
+              {metricTitle}
+            </span>
             {row.attributeName && (
-              <span className="text-[10px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+              <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200 inline-block">
                 Attr: {row.attributeName}
               </span>
             )}
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       header: 'Incident Message',
@@ -738,7 +741,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       </div>
 
       {/* Active Alerts Table */}
-      <div className="flex-1 flex flex-col min-h-[400px]">
+      <div className="flex-1 flex flex-col min-h-[600px]">
         <DataTable
           columns={columns}
           data={paginatedAlerts}
@@ -746,7 +749,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
           totalPages={totalPages}
           totalCount={filteredAlerts.length}
           pageSize={pageSize}
-          pageSizeOptions={[10, 25, 50, 100]}
+          pageSizeOptions={[15, 25, 50, 100]}
           onPageChange={setCurrentPage}
           onPageSizeChange={(newSize) => {
             setPageSize(newSize);

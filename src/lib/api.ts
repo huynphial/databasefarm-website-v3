@@ -121,13 +121,11 @@ export const api = {
     return fetchJson('/api/active-alerts');
   },
   async acknowledgeActiveAlert(alertId: string, acknowledgedById?: string | null, acknowledgedByName?: string): Promise<boolean> {
-    try {
-      await fetchJson(`/api/active-alerts/${alertId}/acknowledge`, {
-        method: 'POST',
-        body: JSON.stringify({ acknowledgedById, acknowledgedByName }),
-      });
-    } catch {}
-    return true;
+    const res = await fetchJson<{ success: boolean; alertId: string }>(`/api/active-alerts/${alertId}/acknowledge`, {
+      method: 'POST',
+      body: JSON.stringify({ acknowledgedById, acknowledgedByName }),
+    });
+    return res?.success !== false;
   },
   async clearActiveAlert(alertId: string, clearedById?: string | null, clearedByName?: string): Promise<boolean> {
     await fetchJson(`/api/active-alerts/${alertId}/clear`, {

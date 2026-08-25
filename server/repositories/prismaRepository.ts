@@ -759,19 +759,30 @@ export class PrismaRepository implements IStorageRepository {
         database: true,
         metric: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
 
-    return alerts.map((a) => ({
-      id: String(a.id),
-      dbId: a.dbId,
-      dbName: a.database.name,
-      metricId: a.metricId,
-      metricName: a.metric.name,
-      objectName: a.objectName || 'INSTANCE',
-      alertLevel: a.alertLevel as any,
-      message: a.message,
-      createdAt: a.createdAt.toISOString(),
-    }));
+    return alerts.map((a) => {
+      const isAck = a.status === 'ACKNOWLEDGED';
+      return {
+        id: String(a.id),
+        dbId: a.dbId,
+        dbName: a.database.name,
+        metricId: a.metricId,
+        metricName: a.metric.name,
+        objectName: a.objectName || 'INSTANCE',
+        attributeName: a.attributeName || undefined,
+        alertLevel: a.alertLevel as any,
+        message: a.message,
+        status: (isAck ? 'ACKNOWLEDGED' : 'OPEN') as any,
+        dispatchStatus: ((a.dispatchStatus as any) || 'NOT_DISPATCHED'),
+        value: a.value || undefined,
+        threshold: a.threshold || undefined,
+        createdAt: a.createdAt.toISOString(),
+        acknowledgedAt: isAck ? new Date(a.createdAt).toISOString() : undefined,
+        acknowledgedByName: isAck ? 'User' : undefined,
+      };
+    });
   }
 
   async saveActiveAlert(alertData: Partial<ActiveAlertEntity>): Promise<ActiveAlertEntity> {
@@ -791,6 +802,7 @@ export class PrismaRepository implements IStorageRepository {
         message: alertData.message || '',
         objectName: alertData.objectName || 'INSTANCE',
         attributeName: alertData.attributeName || 'value',
+        status: alertData.status || 'OPEN',
       },
       create: {
         dbId: alertData.dbId!,
@@ -799,10 +811,12 @@ export class PrismaRepository implements IStorageRepository {
         message: alertData.message || '',
         objectName: alertData.objectName || 'INSTANCE',
         attributeName: alertData.attributeName || 'value',
+        status: alertData.status || 'OPEN',
       },
       include: { database: true, metric: true },
     });
 
+    const isAck = alert.status === 'ACKNOWLEDGED';
     return {
       id: String(alert.id),
       dbId: alert.dbId,
@@ -810,58 +824,82 @@ export class PrismaRepository implements IStorageRepository {
       metricId: alert.metricId,
       metricName: alert.metric.name,
       objectName: alert.objectName || 'INSTANCE',
+      attributeName: alert.attributeName || undefined,
       alertLevel: alert.alertLevel as any,
       message: alert.message,
-      status: (alert as any).status || 'OPEN',
+      status: (isAck ? 'ACKNOWLEDGED' : 'OPEN') as any,
       createdAt: alert.createdAt.toISOString(),
+      acknowledgedAt: isAck ? new Date(alert.createdAt).toISOString() : undefined,
+      acknowledgedByName: isAck ? 'User' : undefined,
     };
   }
 
   async acknowledgeActiveAlert(alertId: string, acknowledgedById?: string | null, acknowledgedByName?: string): Promise<boolean> {
-    const numId = Number(alertId);
+    let numId = Number(alertId);
+    if (isNaN(numId)) {
+      const digits = alertId.replace(/\D/g, '');
+      if (digits) {
+        numId = parseInt(digits, 10);
+      }
+    }
     if (isNaN(numId)) return false;
-    const target = await this.prisma.activeAlert.findUnique({
-      where: { id: numId },
+
+    return await (this.prisma as any).$transaction(async (tx: any) => {
+      const target = await tx.activeAlert.findUnique({
+        where: { id: numId },
+      });
+      if (!target) return false;
+
+      await tx.activeAlert.update({
+        where: { id: numId },
+        data: {
+          status: 'ACKNOWLEDGED',
+        },
+      });
+
+      return true;
     });
-    if (!target) return false;
-    await (this.prisma as any).activeAlert.update({
-      where: { id: numId },
-      data: {
-        status: 'ACKNOWLEDGED',
-        acknowledgedAt: new Date(),
-        acknowledgedById: acknowledgedById || null,
-        acknowledgedByName: acknowledgedByName || 'User',
-      },
-    }).catch(() => {});
-    return true;
   }
 
   async clearActiveAlert(alertId: string, clearedById?: string | null, clearedByName?: string): Promise<boolean> {
-    const numId = Number(alertId);
+    let numId = Number(alertId);
+    if (isNaN(numId)) {
+      const digits = alertId.replace(/\D/g, '');
+      if (digits) {
+        numId = parseInt(digits, 10);
+      }
+    }
     if (isNaN(numId)) return false;
-    const target = await this.prisma.activeAlert.findUnique({
-      where: { id: numId },
-      include: { database: true, metric: true },
+
+    return await (this.prisma as any).$transaction(async (tx: any) => {
+      const target = await tx.activeAlert.findUnique({
+        where: { id: numId },
+        include: { database: true, metric: true },
+      });
+
+      if (!target) return false;
+
+      await tx.activeAlert.delete({ where: { id: numId } });
+
+      await tx.alertHistory.create({
+        data: {
+          dbId: target.dbId,
+          metricId: target.metricId,
+          objectName: target.objectName || 'INSTANCE',
+          attributeName: target.attributeName || 'value',
+          alertLevel: target.alertLevel,
+          resolutionStatus: 'CLEARED_BY_USER',
+          message: target.message,
+          value: target.value,
+          threshold: target.threshold,
+          createdAt: target.createdAt,
+          clearedAt: new Date(),
+          clearedById: clearedById || null,
+        },
+      });
+
+      return true;
     });
-
-    if (!target) return false;
-
-    await this.prisma.activeAlert.delete({ where: { id: numId } });
-
-    await this.prisma.alertHistory.create({
-      data: {
-        dbId: target.dbId,
-        metricId: target.metricId,
-        objectName: target.objectName || 'INSTANCE',
-        alertLevel: target.alertLevel,
-        message: target.message,
-        createdAt: target.createdAt,
-        clearedAt: new Date(),
-        clearedById: clearedById || null,
-      },
-    });
-
-    return true;
   }
 
   // --- Alert History ---
