@@ -9,7 +9,7 @@ export interface UnifiedMeasurement {
   objectName: string;
   attributeName: string;
   value: string;
-  status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'DOWN';
+  status: 'NORMAL' | 'WARN' | 'WARNING' | 'HIGH' | 'CRITICAL' | 'FATAL' | 'DOWN' | string;
   triggeredThreshold?: string | null;
   measuredAt: string;
 }

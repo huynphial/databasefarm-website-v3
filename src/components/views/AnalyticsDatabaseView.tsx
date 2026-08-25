@@ -165,7 +165,7 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="p-6 sm:p-8 flex-1 flex flex-col gap-6 overflow-y-auto bg-slate-50/50">
       {/* 1. Filter Header (Engine, DB selector, Time range, Refresh) */}
       <DatabaseFilterHeader
         databases={databases}

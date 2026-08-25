@@ -187,7 +187,7 @@ export interface RawMeasurementEntity {
   thresholdOperator?: string;
   triggeredThreshold?: string | null; // e.g. "Warn: 80 / High: 90 / Crit: 95"
   cycle?: number;
-  status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'DOWN';
+  status: 'NORMAL' | 'WARN' | 'WARNING' | 'HIGH' | 'CRITICAL' | 'FATAL' | 'DOWN' | string;
   measuredAt: string;
 }
 
