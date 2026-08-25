@@ -41,6 +41,37 @@ import {
   UserRole,
 } from './types';
 
+const VALID_NAVIGATION_TABS: NavigationTab[] = [
+  'dashboard',
+  'raw-measurements',
+  'databases',
+  'groups',
+  'templates',
+  'analytics-database',
+  'metrics',
+  'active-alerts',
+  'alert-history',
+  'alert-notification-logs',
+  'monitor-poll-logs',
+  'audit-logs',
+  'system-settings',
+  'account',
+];
+
+const getInitialNavigationTab = (): NavigationTab => {
+  if (typeof window !== 'undefined') {
+    const hash = window.location.hash.replace('#', '').trim();
+    if (hash && (VALID_NAVIGATION_TABS as string[]).includes(hash)) {
+      return hash as NavigationTab;
+    }
+    const saved = localStorage.getItem('dbmon_active_tab');
+    if (saved && (VALID_NAVIGATION_TABS as string[]).includes(saved)) {
+      return saved as NavigationTab;
+    }
+  }
+  return 'dashboard';
+};
+
 function MainAppContent() {
   const { toast } = useToast();
 
@@ -49,8 +80,8 @@ function MainAppContent() {
     return storage.getUser();
   });
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState<NavigationTab>('dashboard');
+  // Active Tab persisted across F5 / page reloads
+  const [activeTab, setActiveTab] = useState<NavigationTab>(getInitialNavigationTab);
   const [analyticsInitialDbId, setAnalyticsInitialDbId] = useState<string | undefined>(undefined);
 
   // Storage Type state indicator
@@ -73,8 +104,12 @@ function MainAppContent() {
   const [metricHistory, setMetricHistory] = useState<MetricHistoryEntity[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettingsEntity>(() => storage.getSystemSettings());
 
-  // Load Initial Data from Backend API / Storage
-  const loadData = async () => {
+  // Ref to handle concurrent data load requests safely
+  const loadDataCountRef = useRef(0);
+
+  // Load Data from Backend API / Storage
+  const loadData = useCallback(async () => {
+    const requestId = ++loadDataCountRef.current;
     try {
       const [
         sInfo,
@@ -112,6 +147,8 @@ function MainAppContent() {
         api.getSystemSettings().catch(() => storage.getSystemSettings()),
       ]);
 
+      if (requestId !== loadDataCountRef.current) return;
+
       setStorageType(sInfo.storageType);
       setDatabases(dbs);
       setDatabaseEngines(engines);
@@ -145,7 +182,34 @@ function MainAppContent() {
     } catch (e) {
       console.warn('API sync warning, using local storage cache fallback:', e);
     }
-  };
+  }, []);
+
+  // Sync activeTab to localStorage and window hash
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dbmon_active_tab', activeTab);
+      if (window.location.hash !== `#${activeTab}`) {
+        window.history.replaceState(null, '', `#${activeTab}`);
+      }
+    }
+  }, [activeTab]);
+
+  // Handle browser navigation / hash change
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '').trim();
+      if (hash && (VALID_NAVIGATION_TABS as string[]).includes(hash)) {
+        setActiveTab(hash as NavigationTab);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Auto refresh newest data whenever activeTab changes (including initial load)
+  useEffect(() => {
+    loadData();
+  }, [activeTab, loadData]);
 
   const handleSaveEngine = async (engine: Partial<DatabaseEngineEntity>) => {
     try {
@@ -240,10 +304,6 @@ function MainAppContent() {
       });
     }
   };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   // Login handler
   const handleLogin = (username: string, role: UserRole) => {
@@ -786,6 +846,7 @@ function MainAppContent() {
               onSaveDatabase={handleSaveDatabase}
               onDeleteDatabase={handleDeleteDatabase}
               onNavigateToAnalytics={(dbId) => handleSelectTab('analytics-database', dbId)}
+              onRefresh={loadData}
             />
           )}
 

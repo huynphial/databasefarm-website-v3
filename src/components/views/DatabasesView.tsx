@@ -46,6 +46,7 @@ interface DatabasesViewProps {
   onSaveDatabase: (database: Partial<DatabaseEntity>) => void;
   onDeleteDatabase: (id: string) => void;
   onNavigateToAnalytics?: (dbId: string) => void;
+  onRefresh?: () => void;
 }
 
 export const DatabasesView: React.FC<DatabasesViewProps> = ({
@@ -60,6 +61,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   onSaveDatabase,
   onDeleteDatabase,
   onNavigateToAnalytics,
+  onRefresh,
 }) => {
   const { toast } = useToast();
   
@@ -207,6 +209,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         });
       });
       setIsCheckingHealth(false);
+      onRefresh?.();
       toast({
         title: 'Health Checks Completed',
         description: `Successfully executed health probes across ${activeDbs.length} active database instances. Last check timestamps refreshed.`,
