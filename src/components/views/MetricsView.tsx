@@ -23,6 +23,7 @@ import { DataTable, Column } from '../tables/DataTable';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { validateMetricSqlQuery } from '../../lib/sqlValidator';
+import { useTranslation } from '../../i18n';
 
 interface MetricsViewProps {
   metrics: MetricEntity[];
@@ -43,6 +44,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
   onSaveMetric,
   onDeleteMetric,
 }) => {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -373,7 +375,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
 
   const columns: Column<MetricEntity>[] = [
     {
-      header: 'Metric Name & Query',
+      header: t('metrics.colMetricName'),
       accessorKey: 'name',
       cell: (row) => (
         <div>
@@ -383,7 +385,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             {row.noAlertRequired && (
               <span className="text-[10px] bg-amber-50 text-amber-800 font-bold px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">
                 <BellOff className="w-2.5 h-2.5" />
-                No Alert
+                {t('metrics.noAlert')}
               </span>
             )}
           </div>
@@ -394,7 +396,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       ),
     },
     {
-      header: 'Database Engine',
+      header: t('metrics.colTargetEngine'),
       accessorKey: 'databaseEngineId',
       width: '140px',
       cell: (row) => {
@@ -405,7 +407,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
         return (
           <span
             className="text-xs font-bold font-mono px-2.5 py-1 rounded-md flex items-center gap-1.5 self-start max-w-fit uppercase shadow-2xs"
-            title={engine ? `${engine.dbName} (${engine.dbCode})` : 'ALL (Universal / All Engines)'}
+            title={engine ? `${engine.dbName} (${engine.dbCode})` : t('metrics.allEnginesOption')}
             style={{
               backgroundColor: dbColor + '15',
               color: dbColor,
@@ -419,7 +421,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       },
     },
     {
-      header: 'Monitoring State',
+      header: t('metrics.colMonitoringState'),
       accessorKey: 'isEnabled',
       width: '130px',
       cell: (row) => {
@@ -432,19 +434,19 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
                 isActive ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
               } ${userRole !== 'ADMIN' ? 'cursor-not-allowed opacity-60' : ''}`}
-              title={isActive ? 'Click to disable' : 'Click to enable'}
+              title={isActive ? t('metrics.clickToDisable') : t('metrics.clickToEnable')}
             >
               <span className="w-3.5 h-3.5 bg-white rounded-full shadow-xs transform transition-transform" />
             </button>
             <span className={`text-[11px] font-bold uppercase tracking-wider ${isActive ? 'text-emerald-700' : 'text-slate-500'}`}>
-              {isActive ? 'Active' : 'Off'}
+              {isActive ? t('metrics.active') : t('metrics.off')}
             </span>
           </div>
         );
       },
     },
     {
-      header: 'Thresholds (Operator & Warn/High/Crit)',
+      header: t('metrics.colThresholds'),
       width: '260px',
       cell: (row) => {
         const op = row.thresholdOperator || '>=';
@@ -454,7 +456,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
           return (
             <div className="flex flex-col gap-1 text-[11px] max-w-[240px]">
               <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded self-start mb-1 text-[9px] uppercase tracking-wider">
-                Type 3 (Multi-Attr)
+                {t('metrics.type3MultiAttr')}
               </span>
               {row.thresholdsConfig.perAttribute.map((attr: any, idx: number) => (
                 <div key={idx} className="flex items-center justify-between border-b border-slate-100 pb-0.5 last:border-0 gap-2">
@@ -474,7 +476,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
           );
         }
 
-        const queryTypeLabel = row.metricQueryType === 2 ? 'Type 2 (Multi-Obj)' : 'Type 1 (Single)';
+        const queryTypeLabel = row.metricQueryType === 2 ? t('metrics.type2MultiObj') : t('metrics.type1Single');
 
         return (
           <div className="flex flex-col gap-1 text-xs">
@@ -507,9 +509,9 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       header: (
         <span
           className="flex items-center justify-center gap-1 cursor-help"
-          title="Execution frequency per database polling run. E.g., Cycle = 1 executes every query run, Cycle = 3 executes every 3rd query run."
+          title={t('metrics.cycleHelp')}
         >
-          Cycle
+          {t('metrics.colCycle')}
           <Info className="w-3 h-3 text-slate-400" />
         </span>
       ),
@@ -519,14 +521,14 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       cell: (row) => (
         <span
           className="text-xs text-slate-700 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block"
-          title={`Cycle ${row.cycle ?? 1}: Executed every ${row.cycle ?? 1} database polling run(s).`}
+          title={`Cycle ${row.cycle ?? 1}`}
         >
           {row.cycle ?? 1}
         </span>
       ),
     },
     {
-      header: 'Template Bundle',
+      header: t('metrics.colBoundTemplates'),
       width: '110px',
       cell: (row) => {
         const templateCount = row.templateIds?.length || (row.templateId ? 1 : 0);
@@ -539,7 +541,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               setTemplateSearchQuery('');
             }}
             className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-            title="Click to manage template association"
+            title={t('metrics.clickToManageTemplates')}
           >
             {templateCount}
           </button>
@@ -547,7 +549,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       },
     },
     {
-      header: 'Actions',
+      header: t('metrics.colActions'),
       align: 'right',
       width: '150px',
       cell: (row) => (
@@ -560,27 +562,27 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 setTemplateSearchQuery('');
               }}
               className="p-1.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition-colors cursor-pointer"
-              title="Add Metric to Template"
+              title={t('metrics.addMetricToTemplate')}
             >
               <FolderPlus className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => openEditDialog(row)}
               className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-              title="Edit metric"
+              title={t('metrics.editMetric')}
             >
               <Edit2 className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => handleDelete(row)}
               className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-              title="Delete metric"
+              title={t('metrics.deleteMetric')}
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         ) : (
-          <span className="text-slate-400 text-xs italic">Read-only</span>
+          <span className="text-slate-400 text-xs italic">{t('common.readOnly')}</span>
         )
       ),
     },
@@ -609,10 +611,10 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
           <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
           <div className="space-y-1 leading-relaxed">
             <div>
-              <span className="font-bold text-slate-900">Standardized Multi-Object Metric Architecture:</span> Metric SQL queries can yield <span className="text-indigo-700 font-semibold">multiple rows</span>, where each row represents an individual sub-entity/target object (<code className="text-indigo-600 font-mono font-bold">name</code>) and its corresponding measured reading (<code className="text-indigo-600 font-mono font-bold">value</code>).
+              <span className="font-bold text-slate-900">{t('metrics.infoBannerTitle')}</span> {t('metrics.infoBannerDesc')}
             </div>
             <div className="text-slate-500 text-[11px]">
-              Standardized Pattern: <code className="text-indigo-600 font-mono bg-indigo-50/70 px-1 py-0.5 rounded font-bold">SELECT &lt;object_identifier&gt; AS name, &lt;measured_attribute&gt; AS value FROM ...</code>
+              {t('metrics.infoBannerPattern')}
             </div>
           </div>
         </div>
@@ -620,9 +622,9 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Metrics Management</h2>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">{t('metrics.title')}</h2>
           <p className="text-xs text-slate-500">
-            Configured health check queries and alerting thresholds ({metrics.length}) {searchTerm && `(Filtered: ${filteredMetrics.length})`}
+            {t('metrics.subtitle')} ({metrics.length}) {searchTerm && `(${t('common.filter')}: ${filteredMetrics.length})`}
           </p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -631,7 +633,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by Metric Name..."
+              placeholder={t('metrics.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -647,12 +649,12 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-lg font-medium transition-colors shadow-2xs cursor-pointer shrink-0"
             >
               <Plus className="w-4 h-4" />
-              New Metric Check
+              {t('metrics.newMetric')}
             </button>
           ) : (
             <div className="text-xs text-slate-400 italic flex items-center gap-1.5 shrink-0">
               <Shield className="w-3.5 h-3.5 text-slate-400" />
-              View-Only Mode
+              {t('metrics.viewOnlyMode')}
             </div>
           )}
         </div>
@@ -674,8 +676,8 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
           }}
           emptyMessage={
             searchTerm
-              ? `No metric definitions found matching "${searchTerm}".`
-              : 'No metric definitions configured.'
+              ? t('metrics.noMetricsFoundSearch', { term: searchTerm })
+              : t('metrics.noMetricsFound')
           }
         />
       </div>
@@ -684,19 +686,19 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       <Dialog
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        title={editingMetric ? `Edit Metric: ${editingMetric.name}` : 'Create Metric Check'}
-        description="Write the SQL health probe query and configure threshold breach boundaries."
+        title={editingMetric ? t('metrics.editMetricTitle', { name: editingMetric.name }) : t('metrics.createMetricTitle')}
+        description={t('metrics.dialogDesc')}
         maxWidth="2xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           {/* Metric Query Type */}
           <div className="space-y-2">
-            <label className="block text-slate-700 font-bold text-xs uppercase tracking-wider">Metric Query Type *</label>
+            <label className="block text-slate-700 font-bold text-xs uppercase tracking-wider">{t('metrics.metricQueryTypeLabel')}</label>
             <div className="grid grid-cols-3 gap-2.5">
               {[
-                { type: 1, label: 'Type 1', desc: 'Single Attr of Single Obj' },
-                { type: 2, label: 'Type 2', desc: 'Single Attr of Multi Objs' },
-                { type: 3, label: 'Type 3', desc: 'Multi Attrs of Multi Objs' },
+                { type: 1, label: t('metrics.type1'), desc: t('metrics.type1Desc') },
+                { type: 2, label: t('metrics.type2'), desc: t('metrics.type2Desc') },
+                { type: 3, label: t('metrics.type3'), desc: t('metrics.type3Desc') },
               ].map((item) => {
                 const isActive = formData.metricQueryType === item.type;
                 return (
@@ -723,11 +725,11 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
 
           <div className="space-y-3">
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Metric Name *</label>
+              <label className="block text-slate-700 font-semibold mb-1">{t('metrics.metricNameLabel')}</label>
               <input
                 type="text"
                 required
-                placeholder="e.g. Tablespace Usage %"
+                placeholder={t('metrics.metricNamePlaceholder')}
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
@@ -735,13 +737,13 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Database Engine *</label>
+              <label className="block text-slate-700 font-semibold mb-1">{t('metrics.targetEngineLabel')}</label>
               <select
                 value={formData.databaseEngineId}
                 onChange={(e) => setFormData({ ...formData, databaseEngineId: e.target.value })}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
               >
-                <option value="">ALL (All Database Engines)</option>
+                <option value="">{t('metrics.allEnginesOption')}</option>
                 {databaseEngines.map((eng) => (
                   <option key={eng.id} value={eng.id}>
                     {eng.dbName} ({eng.dbCode})
@@ -749,7 +751,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 ))}
               </select>
               <p className="text-[10px] text-slate-400 mt-1">
-                Specify which database engine type this metric query belongs to, or choose ALL.
+                {t('metrics.databaseEngineHelp')}
               </p>
             </div>
           </div>
@@ -759,14 +761,14 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             <div className="flex items-center justify-between">
               <label className="text-slate-800 font-bold flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                Associated Templates (Multi-Template Selection)
+                {t('metrics.associatedTemplates')}
               </label>
               <span className="text-[11px] text-slate-500 font-mono">
-                {formData.templateIds?.length || 0} of {templates.length} selected
+                {t('metrics.associatedTemplatesSelected', { selected: formData.templateIds?.length || 0, total: templates.length })}
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              Select the templates this metric should be assigned to. It will be evaluated on all databases inside groups with these templates applied.
+              {t('metrics.associatedTemplatesHelp')}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto p-2 bg-white border border-slate-200 rounded-lg">
               {templates.map((tpl) => {
@@ -811,8 +813,8 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
           {/* Active State Toggle */}
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
             <div>
-              <span className="font-bold text-slate-900 block text-xs">Active Monitoring State</span>
-              <span className="text-[10px] text-slate-500">Whether the collector worker executes this query during polling cycles</span>
+              <span className="font-bold text-slate-900 block text-xs">{t('metrics.activeMonitoringState')}</span>
+              <span className="text-[10px] text-slate-500">{t('metrics.activeMonitoringStateHelp')}</span>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -825,7 +827,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 <span className="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform" />
               </button>
               <span className="text-xs font-bold text-slate-700">
-                {formData.isEnabled ? 'ACTIVE (ON)' : 'PAUSED (OFF)'}
+                {formData.isEnabled ? t('metrics.activeOn') : t('metrics.pausedOff')}
               </span>
             </div>
           </div>
@@ -835,14 +837,14 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             <div className="flex items-center justify-between">
               <label className="text-slate-700 font-semibold flex items-center gap-1.5 text-xs">
                 <Code2 className="w-3.5 h-3.5 text-indigo-600" />
-                Query Command *
+                {t('metrics.sqlQueryLabel')}
               </label>
               <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded border border-indigo-200">
                 {formData.metricQueryType === 1
-                  ? 'Type 1 Schema: [value] (1 column)'
+                  ? t('metrics.schemaType1')
                   : formData.metricQueryType === 2
-                  ? 'Type 2 Schema: [name, value] (2 columns)'
-                  : 'Type 3 Schema: [name, attribute, value] (3 columns)'}
+                  ? t('metrics.schemaType2')
+                  : t('metrics.schemaType3')}
               </span>
             </div>
             <textarea
@@ -869,24 +871,24 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Expected Return Value Type *</label>
+              <label className="block text-slate-700 font-semibold mb-1">{t('metrics.expectedValueTypeLabel')}</label>
               <select
                 value={formData.valueType}
                 onChange={(e) => handleValueTypeChange(e.target.value as MetricValueType)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
               >
-                <option value="NUMBER">Numeric (Continuous / Gauge / Counter)</option>
-                <option value="BOOLEAN">Boolean Flag (1/0, TRUE/FALSE, ON/OFF)</option>
-                <option value="STRING">Text / Status Code</option>
+                <option value="NUMBER">{t('metrics.valTypeNumeric')}</option>
+                <option value="BOOLEAN">{t('metrics.valTypeBoolean')}</option>
+                <option value="STRING">{t('metrics.valTypeText')}</option>
               </select>
             </div>
             <div>
               <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1">
-                  Cycle (Default: 1)
+                  {t('metrics.cycleLabel')}
                   <span
                     className="cursor-help text-slate-400 hover:text-slate-600 transition-colors"
-                    title="Execution frequency multiplier per database poll run. Cycle = 1 queries on every poll run; Cycle = 3 queries every 3rd poll run."
+                    title={t('metrics.cycleHelp')}
                   >
                     <Info className="w-3.5 h-3.5 inline" />
                   </span>
@@ -901,7 +903,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
               />
               <p className="text-[11px] text-slate-500 mt-1">
-                Execution frequency per database polling run (e.g., Cycle = 1 queries every run, Cycle = 3 queries every 3rd run).
+                {t('metrics.cycleInputHelp')}
               </p>
             </div>
           </div>
@@ -911,10 +913,10 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             <div className="space-y-0.5 pr-3">
               <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <BellOff className="w-3.5 h-3.5 text-amber-600" />
-                <span>No Alert Required</span>
+                <span>{t('metrics.noAlertRequiredTitle')}</span>
               </div>
               <div className="text-[11px] text-slate-500">
-                Collect and graph telemetry measurements without triggering threshold breaches or dispatching incident alerts.
+                {t('metrics.noAlertRequiredSub')}
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -936,20 +938,20 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                   <Sliders className="w-3.5 h-3.5 text-indigo-600" />
-                  Type 3 Multi-Attribute Threshold Topology
+                  {t('metrics.type3TopologyTitle')}
                 </span>
                 <button
                   type="button"
                   onClick={() => setType3Attributes(prev => [...prev, { attributeName: '', valueType: 'NUMBER', operator: '>=', warn: '', high: '', critical: '' }])}
                   className="px-2.5 py-1.5 text-xs font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 flex items-center gap-1 cursor-pointer transition-colors"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Add Attribute
+                  <Plus className="w-3.5 h-3.5" /> {t('metrics.addAttribute')}
                 </button>
               </div>
 
               {type3Attributes.length === 0 ? (
                 <div className="text-center py-6 bg-white border border-dashed border-slate-200 rounded-xl text-slate-500 text-xs">
-                  No attributes configured yet. Click "Add Attribute" above to define monitored metrics.
+                  {t('metrics.noAttributesConfigured')}
                 </div>
               ) : (
                 <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
@@ -959,14 +961,14 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                         type="button"
                         onClick={() => setType3Attributes(prev => prev.filter((_, i) => i !== idx))}
                         className="absolute top-2.5 right-2.5 text-slate-400 hover:text-rose-600 cursor-pointer transition-colors"
-                        title="Remove Attribute"
+                        title={t('metrics.removeAttribute')}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         <div className="sm:col-span-1">
-                          <label className="block text-[10px] text-slate-600 font-bold mb-0.5">Attribute Name *</label>
+                          <label className="block text-[10px] text-slate-600 font-bold mb-0.5">{t('metrics.attributeNameLabel')}</label>
                           <input
                             type="text"
                             required
@@ -981,7 +983,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                         </div>
 
                         <div>
-                          <label className="block text-[10px] text-indigo-700 font-bold mb-0.5">Return Value Type *</label>
+                          <label className="block text-[10px] text-indigo-700 font-bold mb-0.5">{t('metrics.attributeValueTypeLabel')}</label>
                           <select
                             value={attr.valueType}
                             onChange={(e) => {
@@ -1007,14 +1009,14 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                             }}
                             className="w-full bg-white border border-indigo-300 rounded px-2 py-1 text-xs font-bold text-indigo-800 focus:outline-none focus:border-indigo-500"
                           >
-                            <option value="NUMBER">Numeric (Integer/Float)</option>
-                            <option value="BOOLEAN">Boolean (True/False)</option>
-                            <option value="STRING">String / Text</option>
+                            <option value="NUMBER">{t('metrics.valTypeIntegerFloat')}</option>
+                            <option value="BOOLEAN">{t('metrics.valTypeTrueFalse')}</option>
+                            <option value="STRING">{t('metrics.valTypeStringText')}</option>
                           </select>
                         </div>
 
                         <div>
-                          <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">Relational Operator</label>
+                          <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">{t('metrics.relationalOperatorLabel')}</label>
                           <select
                             value={attr.operator || '>='}
                             onChange={(e) => {
@@ -1037,7 +1039,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                       {attr.valueType === 'NUMBER' ? (
                         <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100">
                           <div>
-                            <label className="block text-[10px] text-amber-700 font-semibold mb-0.5">Warning Threshold</label>
+                            <label className="block text-[10px] text-amber-700 font-semibold mb-0.5">{t('metrics.warningThreshold')}</label>
                             <input
                               type="text"
                               placeholder="e.g. 80"
@@ -1050,7 +1052,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-orange-700 font-semibold mb-0.5">High Threshold</label>
+                            <label className="block text-[10px] text-orange-700 font-semibold mb-0.5">{t('metrics.highThreshold')}</label>
                             <input
                               type="text"
                               placeholder="e.g. 90"
@@ -1063,7 +1065,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-rose-700 font-semibold mb-0.5">Critical Threshold</label>
+                            <label className="block text-[10px] text-rose-700 font-semibold mb-0.5">{t('metrics.criticalThreshold')}</label>
                             <input
                               type="text"
                               placeholder="e.g. 95"
@@ -1093,7 +1095,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                         return (
                           <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
                             <div>
-                              <label className="block text-[10px] text-indigo-700 font-semibold mb-0.5">Alert Level (Severity)</label>
+                              <label className="block text-[10px] text-indigo-700 font-semibold mb-0.5">{t('metrics.alertLevelSeverity')}</label>
                               <select
                                 value={severity}
                                 onChange={(e) => {
@@ -1118,7 +1120,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                               </select>
                             </div>
                             <div>
-                              <label className="block text-[10px] text-rose-700 font-semibold mb-0.5">Alert When (Value)</label>
+                              <label className="block text-[10px] text-rose-700 font-semibold mb-0.5">{t('metrics.alertWhenValue')}</label>
                               <select
                                 value={triggerVal}
                                 onChange={(e) => {
@@ -1146,7 +1148,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                       })() : (
                         <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
                           <div>
-                            <label className="block text-[10px] text-amber-700 font-semibold mb-0.5">Warn Pattern / Substring</label>
+                            <label className="block text-[10px] text-amber-700 font-semibold mb-0.5">{t('metrics.warnPattern')}</label>
                             <input
                               type="text"
                               placeholder="e.g. DEGRADED"
@@ -1159,7 +1161,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-rose-700 font-semibold mb-0.5">Critical Pattern / Substring</label>
+                            <label className="block text-[10px] text-rose-700 font-semibold mb-0.5">{t('metrics.criticalPattern')}</label>
                             <input
                               type="text"
                               placeholder="e.g. ERROR|DOWN|FAILED"
@@ -1186,16 +1188,16 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 <div className="flex items-center gap-2">
                   <Sliders className="w-3.5 h-3.5 text-indigo-600" />
                   <span className="text-xs font-bold text-slate-800">
-                    Threshold Trigger Boundaries ({formData.valueType})
+                    {t('metrics.thresholdBoundaries', { type: formData.valueType })}
                   </span>
                   {formData.noAlertRequired && (
                     <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-300">
-                      Alerts Bypassed (Telemetry Mode)
+                      {t('metrics.alertsBypassed')}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-600 font-medium whitespace-nowrap">Relational Operator:</span>
+                  <span className="text-xs text-slate-600 font-medium whitespace-nowrap">{t('metrics.relationalOperator')}</span>
                   <select
                     value={formData.thresholdOperator}
                     onChange={(e) => setFormData({ ...formData, thresholdOperator: e.target.value as RelationalOperator })}
@@ -1203,20 +1205,20 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                   >
                     {formData.valueType === 'NUMBER' ? (
                       <>
-                        <option value=">=">&gt;= (Breach when value &gt;= threshold)</option>
-                        <option value="<=">&lt;= (Breach when value &lt;= threshold)</option>
+                        <option value=">=">{t('metrics.opGte')}</option>
+                        <option value="<=">{t('metrics.opLte')}</option>
                       </>
                     ) : formData.valueType === 'BOOLEAN' ? (
                       <>
-                        <option value="=">= (Equals - Breach when value equals threshold)</option>
-                        <option value="!=">!= (Not Equals - Breach when value not equal threshold)</option>
+                        <option value="=">{t('metrics.opEqBool')}</option>
+                        <option value="!=">{t('metrics.opNeqBool')}</option>
                       </>
                     ) : (
                       <>
-                        <option value="CONTAINS">CONTAINS (Substring Match)</option>
-                        <option value="DOES_NOT_CONTAIN">DOES_NOT_CONTAIN (Substring Absence)</option>
-                        <option value="=">= (Exact String Match)</option>
-                        <option value="!=">!= (Not Equals)</option>
+                        <option value="CONTAINS">{t('metrics.opContains')}</option>
+                        <option value="DOES_NOT_CONTAIN">{t('metrics.opDoesNotContain')}</option>
+                        <option value="=">{t('metrics.opEqStr')}</option>
+                        <option value="!=">{t('metrics.opNeqStr')}</option>
                       </>
                     )}
                   </select>
@@ -1227,7 +1229,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-white p-2.5 rounded-lg border border-amber-200/80 shadow-2xs">
                   <label className="block text-amber-800 text-[11px] font-bold mb-1">
-                    Warning ({formData.thresholdOperator})
+                    {t('metrics.warningThreshold')} ({formData.thresholdOperator})
                   </label>
                   <input
                     type="text"
@@ -1239,7 +1241,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-orange-200/80 shadow-2xs">
                   <label className="block text-orange-800 text-[11px] font-bold mb-1">
-                    High ({formData.thresholdOperator})
+                    {t('metrics.highThreshold')} ({formData.thresholdOperator})
                   </label>
                   <input
                     type="text"
@@ -1251,7 +1253,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-rose-200/80 shadow-2xs">
                   <label className="block text-rose-800 text-[11px] font-bold mb-1">
-                    Critical ({formData.thresholdOperator})
+                    {t('metrics.criticalThreshold')} ({formData.thresholdOperator})
                   </label>
                   <input
                     type="text"
@@ -1266,7 +1268,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-white p-2.5 rounded-lg border border-amber-200/80 shadow-2xs">
                   <label className="block text-amber-800 text-[11px] font-bold mb-1">
-                    Warn if Value Equals ({formData.thresholdOperator})
+                    {t('metrics.warnValueEquals', { op: formData.thresholdOperator })}
                   </label>
                   <input
                     type="text"
@@ -1278,7 +1280,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-orange-200/80 shadow-2xs">
                   <label className="block text-orange-800 text-[11px] font-bold mb-1">
-                    High if Value Equals ({formData.thresholdOperator})
+                    {t('metrics.highValueEquals', { op: formData.thresholdOperator })}
                   </label>
                   <input
                     type="text"
@@ -1290,7 +1292,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-rose-200/80 shadow-2xs">
                   <label className="block text-rose-800 text-[11px] font-bold mb-1">
-                    Critical if Value Equals ({formData.thresholdOperator})
+                    {t('metrics.critValueEquals', { op: formData.thresholdOperator })}
                   </label>
                   <input
                     type="text"
@@ -1305,7 +1307,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-white p-2.5 rounded-lg border border-amber-200/80 shadow-2xs">
                   <label className="block text-amber-800 text-[11px] font-bold mb-1">
-                    Warn Pattern / Substring ({formData.thresholdOperator})
+                    {t('metrics.warnPattern')} ({formData.thresholdOperator})
                   </label>
                   <input
                     type="text"
@@ -1317,7 +1319,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-orange-200/80 shadow-2xs">
                   <label className="block text-orange-800 text-[11px] font-bold mb-1">
-                    High Pattern / Substring ({formData.thresholdOperator})
+                    {t('metrics.highPattern')} ({formData.thresholdOperator})
                   </label>
                   <input
                     type="text"
@@ -1329,7 +1331,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-rose-200/80 shadow-2xs">
                   <label className="block text-rose-800 text-[11px] font-bold mb-1">
-                    Critical Pattern / Substring ({formData.thresholdOperator})
+                    {t('metrics.criticalPattern')} ({formData.thresholdOperator})
                   </label>
                   <input
                     type="text"
@@ -1352,14 +1354,14 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               onClick={() => setIsDialogOpen(false)}
               className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
             >
-              Cancel
+              {t('metrics.cancel')}
             </button>
             <button
               type="submit"
               disabled={!!sqlValidationError}
               className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium transition-colors shadow-2xs cursor-pointer"
             >
-              {editingMetric ? 'Save Metric' : 'Create Metric'}
+              {editingMetric ? t('metrics.saveMetric') : t('metrics.createMetricSubmit')}
             </button>
           </div>
         </form>
@@ -1369,8 +1371,8 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       <Dialog
         isOpen={!!assignMetricModal}
         onClose={() => setAssignMetricModal(null)}
-        title="Add Metric to Template Bundle"
-        description={assignMetricModal ? `Link metric probe "${assignMetricModal.name}" to a target template.` : ''}
+        title={t('metrics.assignTemplateTitle')}
+        description={assignMetricModal ? t('metrics.assignTemplateDesc', { name: assignMetricModal.name }) : ''}
         maxWidth="md"
       >
         <form onSubmit={handleAssignToTemplateSubmit} className="space-y-4 text-xs">
@@ -1378,21 +1380,21 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
           {top3Templates.length > 0 && (
             <div className="space-y-1.5">
               <label className="block text-slate-500 font-semibold text-[10px] uppercase tracking-wider">
-                Top 3 Recently Updated Templates
+                {t('metrics.top3TemplatesHeader')}
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {top3Templates.map((t) => {
-                  const isSelected = selectedAssignTemplateIds.has(t.id);
+                {top3Templates.map((tItem) => {
+                  const isSelected = selectedAssignTemplateIds.has(tItem.id);
                   return (
                     <button
-                      key={t.id}
+                      key={tItem.id}
                       type="button"
                       onClick={() => {
                         const nextSet = new Set(selectedAssignTemplateIds);
-                        if (nextSet.has(t.id)) {
-                          nextSet.delete(t.id);
+                        if (nextSet.has(tItem.id)) {
+                          nextSet.delete(tItem.id);
                         } else {
-                          nextSet.add(t.id);
+                          nextSet.add(tItem.id);
                         }
                         setSelectedAssignTemplateIds(nextSet);
                       }}
@@ -1403,13 +1405,13 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                       }`}
                     >
                       <div className="font-bold text-xs truncate flex items-center justify-between gap-1">
-                        <span className="truncate">{t.name}</span>
+                        <span className="truncate">{tItem.name}</span>
                         {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
                       </div>
                       <div className="text-[10px] text-slate-500 mt-0.5 flex items-center justify-between">
-                        <span className="font-semibold text-slate-600">{t.targetDbType || 'Universal'}</span>
+                        <span className="font-semibold text-slate-600">{tItem.targetDbType || 'Universal'}</span>
                         <span className="text-[9px] text-slate-400">
-                          {t.updatedAt ? new Date(t.updatedAt).toLocaleDateString() : 'Recent'}
+                          {tItem.updatedAt ? new Date(tItem.updatedAt).toLocaleDateString() : 'Recent'}
                         </span>
                       </div>
                     </button>
@@ -1423,17 +1425,17 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="block text-slate-700 font-semibold mb-1">
-                Select Target Templates (Multi-Select) *
+                {t('metrics.selectTargetTemplates')}
               </label>
               <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                {selectedAssignTemplateIds.size} Selected
+                {t('metrics.templatesSelectedCount', { count: selectedAssignTemplateIds.size })}
               </span>
             </div>
             <div className="relative mb-2">
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search templates by name or database engine..."
+                placeholder={t('metrics.searchTemplatesPlaceholder')}
                 value={templateSearchQuery}
                 onChange={(e) => setTemplateSearchQuery(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
@@ -1441,11 +1443,11 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             </div>
 
             <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white">
-              {filteredAssignTemplates.map((t) => {
-                const isChecked = selectedAssignTemplateIds.has(t.id);
+              {filteredAssignTemplates.map((tItem) => {
+                const isChecked = selectedAssignTemplateIds.has(tItem.id);
                 return (
                   <label
-                    key={t.id}
+                    key={tItem.id}
                     className={`flex items-center justify-between p-2.5 hover:bg-slate-50 cursor-pointer transition-colors ${
                       isChecked ? 'bg-indigo-50/50' : ''
                     }`}
@@ -1457,22 +1459,22 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                         onChange={(e) => {
                           const nextSet = new Set(selectedAssignTemplateIds);
                           if (e.target.checked) {
-                            nextSet.add(t.id);
+                            nextSet.add(tItem.id);
                           } else {
-                            nextSet.delete(t.id);
+                            nextSet.delete(tItem.id);
                           }
                           setSelectedAssignTemplateIds(nextSet);
                         }}
                         className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
                       />
                       <div>
-                        <div className="font-bold text-slate-900">{t.name}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">Engine: {t.targetDbType || 'Universal'}</div>
+                        <div className="font-bold text-slate-900">{tItem.name}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">Engine: {tItem.targetDbType || 'Universal'}</div>
                       </div>
                     </div>
                     {isChecked && (
                       <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
-                        Assigned
+                        {t('metrics.assigned')}
                       </span>
                     )}
                   </label>
@@ -1480,14 +1482,14 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               })}
               {filteredAssignTemplates.length === 0 && (
                 <div className="p-4 text-center text-slate-500 italic">
-                  No templates match search query "{templateSearchQuery}".
+                  {t('metrics.noTemplatesMatch', { query: templateSearchQuery })}
                 </div>
               )}
             </div>
           </div>
 
           <p className="text-[11px] text-slate-500 leading-relaxed bg-indigo-50/60 p-3 rounded-lg border border-indigo-100">
-            Databases assigned to groups referencing this template bundle will automatically inherit and monitor this metric probe.
+            {t('metrics.assignTemplateHelpNote')}
           </p>
 
           <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
@@ -1496,13 +1498,13 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               onClick={() => setAssignMetricModal(null)}
               className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
             >
-              Cancel
+              {t('metrics.cancel')}
             </button>
             <button
               type="submit"
               className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors shadow-2xs cursor-pointer"
             >
-              Save Template Link
+              {t('metrics.saveTemplateLink')}
             </button>
           </div>
         </form>

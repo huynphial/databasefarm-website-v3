@@ -3,6 +3,7 @@ import { Cpu, TrendingUp } from 'lucide-react';
 import { MetricEntity } from '../../../types';
 import { UnifiedMeasurement } from './analyticsUtils';
 import { formatTimeVN } from '../../../lib/utils';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface MetricType3TablesProps {
   type3Metrics: MetricEntity[];
@@ -15,6 +16,8 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
   unifiedMeasurements,
   onQuickChart,
 }) => {
+  const { t } = useLanguage();
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2.5">
@@ -23,20 +26,23 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
         </div>
         <div>
           <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            Metric Type 3: Multiple Attributes of Multiple Objects
+            {t('analytics.metricType3Title')}
             <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              {type3Metrics.length} Multi-Attribute {type3Metrics.length === 1 ? 'Table' : 'Tables'}
+              {t('analytics.metricType3Count', {
+                count: type3Metrics.length,
+                tables: type3Metrics.length === 1 ? t('analytics.table') : t('analytics.tables'),
+              })}
             </span>
           </h3>
           <p className="text-xs text-slate-500">
-            Rich multi-column analytics tables with per-attribute return types reading from database metric_data_points
+            {t('analytics.metricType3Desc')}
           </p>
         </div>
       </div>
 
       {type3Metrics.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-slate-500 text-xs">
-          No Type 3 metrics configured for this database instance.
+          {t('analytics.noType3Metrics')}
         </div>
       ) : (
         <div className="space-y-4">
@@ -111,14 +117,20 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-bold text-slate-900">{metric.name}</h4>
                       <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-                        Type 3 Multi-Attribute
+                        {t('analytics.type3MultiAttribute')}
                       </span>
                       <span className="text-xs text-slate-500 font-medium">
-                        ({objectRows.length} {objectRows.length === 1 ? 'object' : 'objects'})
+                        {t('analytics.objectsCount', {
+                          count: objectRows.length,
+                          objects: objectRows.length === 1 ? t('analytics.object') : t('analytics.objects'),
+                        })}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 font-medium">
-                      Columns: {attributeColumns.join(', ') || 'Dynamic'} • Cycle: {metric.cycle ?? 1}
+                      {t('analytics.columnsAndCycle', {
+                        cols: attributeColumns.join(', ') || 'Dynamic',
+                        cycle: metric.cycle ?? 1,
+                      })}
                     </p>
                   </div>
 
@@ -132,7 +144,7 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
                           className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg border border-emerald-200 transition-colors cursor-pointer flex items-center gap-1"
                         >
                           <TrendingUp className="w-3 h-3" />
-                          Chart {attr}
+                          {t('analytics.chartAttr', { attr })}
                         </button>
                       ))}
                     </div>
@@ -142,22 +154,22 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
                 {/* Multi-Column Table */}
                 {objectRows.length === 0 ? (
                   <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500">
-                    No multi-attribute measurements recorded yet for this metric.
+                    {t('analytics.noMultiAttrMeasurements')}
                   </div>
                 ) : (
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
                     <table className="w-full text-left text-xs text-slate-700">
                       <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                         <tr>
-                          <th className="py-2.5 px-3.5">Object Identifier</th>
+                          <th className="py-2.5 px-3.5">{t('analytics.colObjectIdentifier')}</th>
                           {attributeColumns.map((col) => (
                             <th key={col} className="py-2.5 px-3.5">
                               {col}
                             </th>
                           ))}
-                          <th className="py-2.5 px-3.5">Overall Status</th>
-                          <th className="py-2.5 px-3.5">Last Measured (UTC+7)</th>
-                          <th className="py-2.5 px-3.5 text-right">Action</th>
+                          <th className="py-2.5 px-3.5">{t('analytics.colOverallStatus')}</th>
+                          <th className="py-2.5 px-3.5">{t('analytics.colLastMeasured')}</th>
+                          <th className="py-2.5 px-3.5 text-right">{t('analytics.colAction')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -204,7 +216,7 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
                                   className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer inline-flex items-center gap-1"
                                 >
                                   <TrendingUp className="w-3 h-3" />
-                                  Chart Object
+                                  {t('analytics.chartObject')}
                                 </button>
                               </td>
                             </tr>

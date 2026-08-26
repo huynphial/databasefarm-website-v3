@@ -3,6 +3,7 @@ import { Layers, TrendingUp } from 'lucide-react';
 import { MetricEntity } from '../../../types';
 import { UnifiedMeasurement } from './analyticsUtils';
 import { formatTimeVN } from '../../../lib/utils';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface MetricType2TablesProps {
   type2Metrics: MetricEntity[];
@@ -15,6 +16,8 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
   unifiedMeasurements,
   onQuickChart,
 }) => {
+  const { t } = useLanguage();
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2.5">
@@ -23,20 +26,23 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
         </div>
         <div>
           <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            Metric Type 2: Single Attribute of Multiple Objects
+            {t('analytics.metricType2Title')}
             <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-purple-50 text-purple-700 border border-purple-200">
-              {type2Metrics.length} Metric {type2Metrics.length === 1 ? 'Table' : 'Tables'}
+              {t('analytics.metricType2Count', {
+                count: type2Metrics.length,
+                tables: type2Metrics.length === 1 ? t('analytics.table') : t('analytics.tables'),
+              })}
             </span>
           </h3>
           <p className="text-xs text-slate-500">
-            Individual breakdown tables per metric for multi-entity probes reading from database metric_data_points
+            {t('analytics.metricType2Desc')}
           </p>
         </div>
       </div>
 
       {type2Metrics.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-slate-500 text-xs">
-          No Type 2 metrics configured for this database instance.
+          {t('analytics.noType2Metrics')}
         </div>
       ) : (
         <div className="space-y-4">
@@ -66,8 +72,13 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
 
             const thresholdSummary =
               metric.thresholdWarn || metric.thresholdHigh || metric.thresholdCritical
-                ? `Warn: ${metric.thresholdWarn || '-'} / High: ${metric.thresholdHigh || '-'} / Crit: ${metric.thresholdCritical || '-'} (${metric.thresholdOperator || metric.relationalOperator || '>='})`
-                : 'No explicit threshold';
+                ? t('analytics.thresholdRuleSummary', {
+                    warn: metric.thresholdWarn || '-',
+                    high: metric.thresholdHigh || '-',
+                    crit: metric.thresholdCritical || '-',
+                    op: metric.thresholdOperator || metric.relationalOperator || '>=',
+                  })
+                : t('analytics.noExplicitThreshold');
 
             return (
               <div
@@ -80,14 +91,17 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-bold text-slate-900">{metric.name}</h4>
                       <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-bold">
-                        Type 2 Metric
+                        {t('analytics.type2MetricBadge')}
                       </span>
                       <span className="text-xs text-slate-500 font-medium">
-                        ({objectRows.length} {objectRows.length === 1 ? 'object' : 'objects'})
+                        {t('analytics.objectsCount', {
+                          count: objectRows.length,
+                          objects: objectRows.length === 1 ? t('analytics.object') : t('analytics.objects'),
+                        })}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 font-mono truncate max-w-xl">
-                      {thresholdSummary} • Cycle: {metric.cycle ?? 1}
+                      {thresholdSummary} • {t('analytics.cycleLabel', { cycle: metric.cycle ?? 1 })}
                     </p>
                   </div>
 
@@ -98,7 +112,7 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
                       className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-colors cursor-pointer flex items-center gap-1.5"
                     >
                       <TrendingUp className="w-3.5 h-3.5" />
-                      Chart Metric ({metric.name})
+                      {t('analytics.chartMetric', { name: metric.name })}
                     </button>
                   </div>
                 </div>
@@ -106,20 +120,20 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
                 {/* Objects Table */}
                 {objectRows.length === 0 ? (
                   <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500">
-                    No object telemetry records collected yet for this metric.
+                    {t('analytics.noObjectTelemetry')}
                   </div>
                 ) : (
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
                     <table className="w-full text-left text-xs text-slate-700">
                       <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                         <tr>
-                          <th className="py-2.5 px-3.5">Object Identifier</th>
-                          <th className="py-2.5 px-3.5">Attribute Name</th>
-                          <th className="py-2.5 px-3.5">Measured Value</th>
-                          <th className="py-2.5 px-3.5">Status</th>
-                          <th className="py-2.5 px-3.5">Threshold Evaluation</th>
-                          <th className="py-2.5 px-3.5">Last Measured (UTC+7)</th>
-                          <th className="py-2.5 px-3.5 text-right">Action</th>
+                          <th className="py-2.5 px-3.5">{t('analytics.colObjectIdentifier')}</th>
+                          <th className="py-2.5 px-3.5">{t('analytics.colAttributeName')}</th>
+                          <th className="py-2.5 px-3.5">{t('analytics.colMeasuredValue')}</th>
+                          <th className="py-2.5 px-3.5">{t('analytics.colStatus')}</th>
+                          <th className="py-2.5 px-3.5">{t('analytics.colThresholdEval')}</th>
+                          <th className="py-2.5 px-3.5">{t('analytics.colLastMeasured')}</th>
+                          <th className="py-2.5 px-3.5 text-right">{t('analytics.colAction')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -163,7 +177,7 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
                                   className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer inline-flex items-center gap-1"
                                 >
                                   <TrendingUp className="w-3 h-3" />
-                                  Chart Object
+                                  {t('analytics.chartObject')}
                                 </button>
                               </td>
                             </tr>

@@ -24,6 +24,7 @@ import { DB_ENGINES, getDbEngineBadgeClass, getDbEngineConfig, getDbEngineTagSty
 import { DataTable, Column } from '../tables/DataTable';
 import { formatTimeVN, cn } from '../../lib/utils';
 import { useToast } from '../ui/Toast';
+import { useTranslation } from '../../i18n/LanguageContext';
 
 interface DashboardViewProps {
   databases: DatabaseEntity[];
@@ -47,6 +48,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToActiveAlerts,
 }) => {
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [selectedDbType, setSelectedDbType] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
@@ -156,7 +158,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white border border-slate-200 p-2.5 rounded-xl shadow-2xs text-xs">
         <div className="flex items-center gap-2">
           <Filter className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-          <span className="font-bold text-slate-900 tracking-tight whitespace-nowrap">Engine Scope:</span>
+          <span className="font-bold text-slate-900 tracking-tight whitespace-nowrap">{t('dashboard.engineScope')}:</span>
           <select
             id="dbTypeFilter"
             value={selectedDbType}
@@ -166,7 +168,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             }}
             className="bg-slate-50 border border-slate-300 text-xs px-2.5 py-1 rounded-lg text-slate-800 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
           >
-            <option value="ALL">All Database Engines ({databases.length})</option>
+            <option value="ALL">{t('dashboard.allDatabaseEngines')} ({databases.length})</option>
             {DB_ENGINES.map((engine) => {
               const count = databases.filter((d) => d.dbType === engine.code).length;
               return (
@@ -186,7 +188,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               setAutoRefreshEnabled(nextVal);
               if (nextVal) setSecondsRemaining(60);
               toast({
-                title: nextVal ? 'Auto-Refresh Enabled' : 'Auto-Refresh Paused',
+                title: nextVal ? t('activeAlerts.autoRefreshEnabled') : t('activeAlerts.autoRefreshPaused'),
                 description: nextVal ? 'Overview metrics will auto-update every 60s.' : 'Auto-refresh paused.',
                 type: 'info',
               });
@@ -202,12 +204,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {autoRefreshEnabled ? (
               <>
                 <Pause className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Auto ({secondsRemaining}s)</span>
+                <span>{t('common.auto')} ({secondsRemaining}s)</span>
               </>
             ) : (
               <>
                 <Play className="w-3.5 h-3.5 text-slate-500" />
-                <span>Auto OFF</span>
+                <span>{t('common.autoOff')}</span>
               </>
             )}
           </button>
@@ -221,7 +223,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1 rounded-lg font-bold transition-colors shadow-2xs cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Refresh Now</span>
+            <span>{t('common.refreshNow')}</span>
           </button>
         </div>
       </div>
@@ -231,7 +233,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Monitored Databases */}
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-            Monitored DBs {selectedDbType !== 'ALL' && `(${selectedDbType})`}
+            {t('dashboard.monitoredDbs')} {selectedDbType !== 'ALL' && `(${selectedDbType})`}
           </div>
           <div className="flex items-end justify-between">
             <div className="text-2xl font-bold text-slate-900 tracking-tight">{filteredDatabases.length}</div>
@@ -241,7 +243,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
                 : 'text-amber-700 bg-amber-50 border-amber-200'
             )}>
-              {upPercentage}% HEALTHY
+              {upPercentage}% {t('dashboard.healthy')}
             </div>
           </div>
         </div>
@@ -257,7 +259,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             'text-[10px] font-bold uppercase tracking-wider mb-1',
             downCount > 0 ? 'text-rose-100' : 'text-emerald-800'
           )}>
-            Databases Down
+            {t('dashboard.databasesDown')}
           </div>
           <div className="flex items-end justify-between">
             <div className={cn('text-2xl font-extrabold tracking-tight', downCount > 0 ? 'text-white' : 'text-emerald-700')}>
@@ -269,14 +271,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ? 'bg-rose-700/80 text-white border-rose-500 animate-pulse'
                 : 'bg-emerald-100 text-emerald-800 border-emerald-200'
             )}>
-              {downCount > 0 ? 'ATTENTION REQUIRED' : 'ALL INSTANCES UP'}
+              {downCount > 0 ? t('common.attentionRequired') : t('common.allInstancesUp')}
             </div>
           </div>
 
           {/* Hover Tooltip */}
           <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-rose-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-              Down Databases ({affectedDownDbs.length})
+              {t('dashboard.downDatabasesTooltip')} ({affectedDownDbs.length})
             </div>
             {affectedDownDbs.length > 0 ? (
               <div className="space-y-1 max-h-[150px] overflow-y-auto pr-1">
@@ -288,7 +290,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ))}
               </div>
             ) : (
-              <div className="text-slate-400 italic">No offline databases</div>
+              <div className="text-slate-400 italic">{t('dashboard.noOfflineDatabases')}</div>
             )}
           </div>
         </div>
@@ -296,7 +298,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Critical Alerts Summary Card with Rich Tooltip */}
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative group cursor-help">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-            Critical Alerts
+            {t('dashboard.criticalAlerts')}
           </div>
           <div className="flex items-end justify-between">
             <div className={cn('text-2xl font-bold tracking-tight', criticalAlertsCount > 0 ? 'text-rose-600' : 'text-slate-400')}>
@@ -306,14 +308,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               'text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded',
               criticalAlertsCount > 0 ? 'text-rose-700 bg-rose-50' : 'text-slate-500 bg-slate-100'
             )}>
-              {criticalAlertsCount > 0 ? 'ACTION REQUIRED' : 'NOMINAL'}
+              {criticalAlertsCount > 0 ? t('common.actionRequired') : t('common.nominal')}
             </div>
           </div>
 
           {/* Hover Tooltip */}
           <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-rose-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-              Critical Alert Details
+              {t('dashboard.criticalAlertsTooltip')}
             </div>
             {affectedCriticalDbs.length > 0 ? (
               <div className="space-y-1 max-h-[150px] overflow-y-auto pr-1">
@@ -325,7 +327,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ))}
               </div>
             ) : (
-              <div className="text-slate-400 italic">No critical incidents</div>
+              <div className="text-slate-400 italic">{t('dashboard.noCriticalIncidents')}</div>
             )}
           </div>
         </div>
@@ -333,7 +335,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* High Alerts Summary Card with Rich Tooltip */}
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative group cursor-help">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-            High Alerts
+            {t('dashboard.highAlerts')}
           </div>
           <div className="flex items-end justify-between">
             <div className={cn('text-2xl font-bold tracking-tight', highAlertsCount > 0 ? 'text-orange-600' : 'text-slate-400')}>
@@ -343,14 +345,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               'text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded',
               highAlertsCount > 0 ? 'text-orange-700 bg-orange-50 border border-orange-200' : 'text-slate-500 bg-slate-100'
             )}>
-              {highAlertsCount > 0 ? 'ACTION REQUIRED' : 'NOMINAL'}
+              {highAlertsCount > 0 ? t('common.actionRequired') : t('common.nominal')}
             </div>
           </div>
 
           {/* Hover Tooltip */}
           <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-orange-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-              High Alert Details
+              {t('dashboard.highAlertsTooltip')}
             </div>
             {affectedHighDbs.length > 0 ? (
               <div className="space-y-1 max-h-[150px] overflow-y-auto pr-1">
@@ -362,7 +364,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ))}
               </div>
             ) : (
-              <div className="text-slate-400 italic">No high priority alerts</div>
+              <div className="text-slate-400 italic">{t('dashboard.noHighPriorityAlerts')}</div>
             )}
           </div>
         </div>
@@ -370,7 +372,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Warning Level Summary Card with Rich Tooltip */}
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative group cursor-help">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-            Warning Level
+            {t('dashboard.warningLevel')}
           </div>
           <div className="flex items-end justify-between">
             <div className={cn('text-2xl font-bold tracking-tight', warnAlertsCount > 0 ? 'text-amber-600' : 'text-slate-400')}>
@@ -380,14 +382,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               'text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded',
               warnAlertsCount > 0 ? 'text-amber-700 bg-amber-50 border border-amber-200' : 'text-slate-500 bg-slate-100'
             )}>
-              {warnAlertsCount > 0 ? 'THRESHOLD' : 'NOMINAL'}
+              {warnAlertsCount > 0 ? t('common.threshold') : t('common.nominal')}
             </div>
           </div>
 
           {/* Hover Tooltip */}
           <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-amber-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-              Warning Alert Details
+              {t('dashboard.warningAlertsTooltip')}
             </div>
             {affectedWarnDbs.length > 0 ? (
               <div className="space-y-1 max-h-[150px] overflow-y-auto pr-1">
@@ -399,7 +401,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ))}
               </div>
             ) : (
-              <div className="text-slate-400 italic">No warnings active</div>
+              <div className="text-slate-400 italic">{t('dashboard.noWarningsActive')}</div>
             )}
           </div>
         </div>
@@ -407,12 +409,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* System Collector */}
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-            Collector Service
+            {t('dashboard.collectorService')}
           </div>
           <div className="flex items-end justify-between">
-            <div className="text-2xl font-bold text-indigo-600 tracking-tight">ONLINE</div>
+            <div className="text-2xl font-bold text-indigo-600 tracking-tight">{t('dashboard.online')}</div>
             <div className="text-indigo-700 text-[9px] font-bold tracking-wider bg-indigo-50 px-2 py-0.5 rounded">
-              SYNCED (UTC+7)
+              {t('dashboard.syncedUtc')}
             </div>
           </div>
         </div>
@@ -424,22 +426,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Server className="w-4 h-4 text-indigo-600" />
-              Database Status Grid {selectedDbType !== 'ALL' && `— ${selectedDbType}`}
+              {t('dashboard.statusGrid')} {selectedDbType !== 'ALL' && `— ${selectedDbType}`}
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">Showing {filteredDatabases.length} instance{filteredDatabases.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{t('dashboard.showingInstances', { count: filteredDatabases.length })}</p>
           </div>
           <button
             onClick={onNavigateToDatabases}
             className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-semibold cursor-pointer"
           >
-            Manage Databases
+            {t('dashboard.manageDatabases')}
             <ArrowUpRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {filteredDatabases.length === 0 ? (
           <div className="text-center py-8 text-slate-500 text-xs">
-            No registered databases found for engine type <span className="font-bold">{selectedDbType}</span>.
+            {t('dashboard.noDatabasesFound')} <span className="font-bold">{selectedDbType}</span>.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -497,7 +499,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
 
                   <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500 font-medium text-[10px] uppercase tracking-wider">Alerts (C/H/W)</span>
+                    <span className="text-slate-500 font-medium text-[10px] uppercase tracking-wider">{t('dashboard.alertsCountFormat')}</span>
                     <span className={cn(
                       'font-mono font-bold text-xs',
                       db.alertCount > 0 ? 'text-slate-800' : 'text-slate-400'

@@ -28,6 +28,7 @@ import {
 import { MetricEntity } from '../../../types';
 import { UnifiedMeasurement, OBJECT_COLORS, parseNumericValue } from './analyticsUtils';
 import { formatTimeVN } from '../../../lib/utils';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface TelemetryVisualizerProps {
   applicableMetrics: MetricEntity[];
@@ -54,6 +55,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
     },
     ref
   ) => {
+    const { t } = useLanguage();
     const [chartType, setChartType] = useState<'area' | 'line' | 'table'>('area');
     const [historyPage, setHistoryPage] = useState<number>(1);
     const [historySearch, setHistorySearch] = useState<string>('');
@@ -264,10 +266,10 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                Interactive Performance & Telemetry Visualizer
+                {t('analytics.visualizerTitle')}
               </h3>
               <p className="text-xs text-slate-500">
-                Plot responsive time-series trends reading directly from database metric_data_points
+                {t('analytics.visualizerDesc')}
               </p>
             </div>
           </div>
@@ -283,7 +285,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
                 }`}
               >
                 <AreaChartIcon className="w-3.5 h-3.5" />
-                Area
+                {t('analytics.areaChart')}
               </button>
               <button
                 type="button"
@@ -293,7 +295,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
                 }`}
               >
                 <LineChartIcon className="w-3.5 h-3.5" />
-                Line
+                {t('analytics.lineChart')}
               </button>
               <button
                 type="button"
@@ -303,7 +305,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
                 }`}
               >
                 <TableIcon className="w-3.5 h-3.5" />
-                History Table
+                {t('analytics.tabularData')}
               </button>
             </div>
           </div>
@@ -315,7 +317,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
           <div className="space-y-1.5">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
               <Gauge className="w-3.5 h-3.5 text-indigo-500" />
-              1. Choose Metric Check *
+              {t('analytics.chooseMetricCheck')}
             </label>
             <div className="relative">
               <select
@@ -325,7 +327,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
               >
                 {applicableMetrics.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name} ({m.metricQueryType ? `Type ${m.metricQueryType}` : 'Type 1'})
+                    {m.name} ({t('analytics.typeLabel', { type: m.metricQueryType ?? 1 })})
                   </option>
                 ))}
               </select>
@@ -337,7 +339,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
           <div className="space-y-1.5">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
               <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-              2. Choose Attribute (Only Number) *
+              {t('analytics.chooseAttribute')}
             </label>
             <div className="relative">
               <select
@@ -359,7 +361,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
           <div className="space-y-1.5">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
               <Layers className="w-3.5 h-3.5 text-purple-500" />
-              3. Choose Object (Optional)
+              {t('analytics.chooseObject')}
             </label>
             <div className="relative">
               <select
@@ -367,10 +369,10 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
                 onChange={(e) => setChartObjectName(e.target.value)}
                 className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-900 text-xs font-semibold rounded-xl px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-2xs"
               >
-                <option value="ALL">ALL (Compare All Objects)</option>
+                <option value="ALL">{t('analytics.allObjectsCompare')}</option>
                 {availableObjectsForChart.map((obj) => (
                   <option key={obj} value={obj}>
-                    Object: {obj}
+                    {t('analytics.objectItem', { obj })}
                   </option>
                 ))}
               </select>
@@ -382,24 +384,24 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
         {/* Quick Stat Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Latest Value</div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('analytics.latestValue')}</div>
             <div className="text-base font-extrabold text-slate-900 font-mono mt-0.5">{chartDataResult.stats.latest}</div>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Maximum Peak</div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('analytics.maxPeak')}</div>
             <div className="text-base font-extrabold text-rose-600 font-mono mt-0.5">{chartDataResult.stats.max}</div>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Minimum Value</div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('analytics.minVal')}</div>
             <div className="text-base font-extrabold text-emerald-600 font-mono mt-0.5">{chartDataResult.stats.min}</div>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Average Value</div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('analytics.avgVal')}</div>
             <div className="text-base font-extrabold text-indigo-600 font-mono mt-0.5">{chartDataResult.stats.avg}</div>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Samples Collected</div>
-            <div className="text-base font-extrabold text-slate-700 font-mono mt-0.5">{chartDataResult.stats.count} pts</div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('analytics.samplesCollected')}</div>
+            <div className="text-base font-extrabold text-slate-700 font-mono mt-0.5">{t('analytics.ptsCount', { count: chartDataResult.stats.count })}</div>
           </div>
         </div>
 
@@ -414,7 +416,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
                   setHistorySearch(e.target.value);
                   setHistoryPage(1);
                 }}
-                placeholder="Search history data points..."
+                placeholder={t('analytics.searchHistoryPlaceholder')}
                 className="bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-1.5 focus:outline-none focus:border-indigo-500 w-64"
               />
               <button
@@ -423,7 +425,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
                 className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <Download className="w-3.5 h-3.5" />
-                Export CSV
+                {t('analytics.exportCsv')}
               </button>
             </div>
 
@@ -436,21 +438,21 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
                       onClick={() => setHistorySortOrder(historySortOrder === 'desc' ? 'asc' : 'desc')}
                     >
                       <div className="flex items-center gap-1">
-                        Measured At (UTC+7)
+                        {t('analytics.colMeasuredAt')}
                         <ArrowUpDown className="w-3 h-3 text-slate-400" />
                       </div>
                     </th>
-                    <th className="py-2.5 px-3.5">Object Identifier</th>
-                    <th className="py-2.5 px-3.5">Attribute Name</th>
-                    <th className="py-2.5 px-3.5">Measured Value</th>
-                    <th className="py-2.5 px-3.5 text-right">Status</th>
+                    <th className="py-2.5 px-3.5">{t('analytics.colObjectIdentifier')}</th>
+                    <th className="py-2.5 px-3.5">{t('analytics.colAttributeName')}</th>
+                    <th className="py-2.5 px-3.5">{t('analytics.colMeasuredValue')}</th>
+                    <th className="py-2.5 px-3.5 text-right">{t('analytics.colStatus')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {paginatedHistory.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-6 text-center text-slate-400 text-xs">
-                        No telemetry history points found in metric_data_points table for this selection.
+                        {t('analytics.noTelemetryHistory')}
                       </td>
                     </tr>
                   ) : (
@@ -482,7 +484,11 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
             {totalPages > 1 && (
               <div className="flex items-center justify-between text-xs text-slate-500 pt-2">
                 <div>
-                  Showing {(historyPage - 1) * pageSize + 1} to {Math.min(historyPage * pageSize, historyTableItems.length)} of {historyTableItems.length} records
+                  {t('analytics.paginationShowing', {
+                    from: (historyPage - 1) * pageSize + 1,
+                    to: Math.min(historyPage * pageSize, historyTableItems.length),
+                    total: historyTableItems.length,
+                  })}
                 </div>
                 <div className="flex items-center gap-1">
                   <button
@@ -512,7 +518,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
           <div className="h-72 w-full pt-2">
             {chartDataResult.timeSeriesData.length === 0 ? (
               <div className="h-full bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 text-xs">
-                No telemetry time-series points available in database table metric_data_points.
+                {t('analytics.noDataToPlot')}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">

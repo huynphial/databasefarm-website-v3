@@ -40,6 +40,7 @@ import { DataTable, Column } from '../tables/DataTable';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { DB_ENGINES, getDbEngineBadgeClass, getDbEngineConfig, getDbEngineHexColor } from '../../config/dbEngines';
+import { useTranslation } from '../../i18n/LanguageContext';
 
 interface DatabasesViewProps {
   databases: DatabaseEntity[];
@@ -71,6 +72,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   onRefresh,
 }) => {
   const { toast } = useToast();
+  const { t } = useTranslation();
   
   // Available engines (dynamic from registry if available, fallback to config)
   const availableEngines = useMemo(() => {
@@ -255,8 +257,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       setIsCheckingHealth(false);
       onRefresh?.();
       toast({
-        title: 'Health Checks Completed',
-        description: `Successfully executed health probes across ${activeDbs.length} active database instances. Last check timestamps refreshed.`,
+        title: t('databases.healthChecksCompleted'),
+        description: t('databases.healthChecksDesc', { count: activeDbs.length }),
         type: 'success',
       });
     }, 600);
@@ -289,8 +291,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const handleExportAllDatabases = () => {
     if (databases.length === 0) {
       toast({
-        title: 'No Databases to Export',
-        description: 'There are no monitored database configurations available to export.',
+        title: t('databases.noDbsToExport'),
+        description: t('databases.noDbsToExportDesc'),
         type: 'warning',
       });
       return;
@@ -340,8 +342,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     URL.revokeObjectURL(url);
 
     toast({
-      title: 'Databases Exported',
-      description: `Exported bundle with ${databases.length} monitored database(s) (with ciphertext passwords).`,
+      title: t('databases.dbsExported'),
+      description: t('databases.dbsExportedDesc', { count: databases.length }),
       type: 'success',
     });
   };
@@ -392,8 +394,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     URL.revokeObjectURL(url);
 
     toast({
-      title: 'Database Exported',
-      description: `Database "${db.name}" configuration exported to JSON.`,
+      title: t('databases.dbExportedSingle'),
+      description: t('databases.dbExportedSingleDesc', { name: db.name }),
       type: 'success',
     });
   };
@@ -541,8 +543,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       }
 
       toast({
-        title: 'Databases Imported',
-        description: `Successfully imported ${count} monitored database configuration(s).`,
+        title: t('databases.dbsImported'),
+        description: t('databases.dbsImportedDesc', { count }),
         type: 'success',
       });
 
@@ -554,7 +556,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       onRefresh?.();
     } catch (err: any) {
       toast({
-        title: 'Import Error',
+        title: t('databases.importError'),
         description: err.message || 'An error occurred during database import.',
         type: 'error',
       });
@@ -614,8 +616,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const handleToggleEnable = (db: DatabaseEntity) => {
     if (userRole !== 'ADMIN') {
       toast({
-        title: 'Permission Denied',
-        description: 'Only users with the ADMIN role can toggle database monitoring.',
+        title: t('databases.permissionDenied'),
+        description: t('databases.adminOnlyToggle'),
         type: 'error',
       });
       return;
@@ -626,8 +628,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       isEnabled: nextState,
     });
     toast({
-      title: nextState ? 'Database Monitoring Enabled' : 'Database Monitoring Paused',
-      description: `Monitoring metadata for instance "${db.name}" is now ${nextState ? 'ACTIVE' : 'PAUSED'}.`,
+      title: nextState ? t('databases.monitoringEnabled') : t('databases.monitoringPaused'),
+      description: t('databases.monitoringToastDesc', { name: db.name, state: nextState ? 'ACTIVE' : 'PAUSED' }),
       type: 'info',
     });
   };
@@ -635,7 +637,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.host || !formData.port) {
-      toast({ title: 'Validation Error', description: 'Please fill in all required fields.', type: 'error' });
+      toast({ title: t('databases.validationError'), description: t('databases.fillRequiredFields'), type: 'error' });
       return;
     }
 
@@ -667,18 +669,18 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     onSaveDatabase(payload);
     setIsDialogOpen(false);
     toast({
-      title: formData.id ? 'Database Metadata Updated' : 'Database Registered',
-      description: `Target instance "${formData.name}" configuration saved successfully.`,
+      title: formData.id ? t('databases.metadataUpdated') : t('databases.databaseRegistered'),
+      description: t('databases.saveSuccessDesc', { name: formData.name }),
       type: 'success',
     });
   };
 
   const handleDelete = (db: DatabaseEntity) => {
-    if (confirm(`Are you sure you want to delete database "${db.name}"? This will remove its configuration record from the central MySQL Configuration Database.`)) {
+    if (confirm(t('databases.deleteConfirm', { name: db.name }))) {
       onDeleteDatabase(db.id);
       toast({
-        title: 'Database Removed',
-        description: `Database ${db.name} was removed from configuration.`,
+        title: t('databases.databaseRemoved'),
+        description: t('databases.databaseRemovedDesc', { name: db.name }),
         type: 'info',
       });
     }
@@ -798,7 +800,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
 
   const columns: Column<typeof processedDatabases[0]>[] = [
     {
-      header: 'Database Name & Endpoint',
+      header: t('databases.databaseNameAndEndpoint'),
       accessorKey: 'name',
       sortable: true,
       cell: (row) => (
@@ -809,23 +811,23 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           </div>
           <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-2 flex-wrap">
             <span>{row.host}:{row.port}</span>
-            <span className="text-[10px] text-slate-700 font-semibold bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200" title="Auto-created Poll ID (Read-only)">
+            <span className="text-[10px] text-slate-700 font-semibold bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200" title={t('databases.pollIdTitle')}>
               Poll ID: {row.pollId ?? 0}
             </span>
             {row.pollIntervalMinutes && (
               <span className="text-[10px] text-indigo-700 font-semibold bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100">
-                {row.pollIntervalMinutes}m freq
+                {t('databases.freqMins', { min: row.pollIntervalMinutes })}
               </span>
             )}
           </div>
           {row.tags && row.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
-              {row.tags.map((t) => (
+              {row.tags.map((tTag) => (
                 <span
-                  key={t}
+                  key={tTag}
                   className="text-[9px] font-bold tracking-wider uppercase bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200"
                 >
-                  {t}
+                  {tTag}
                 </span>
               ))}
             </div>
@@ -834,7 +836,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       ),
     },
     {
-      header: 'Engine Type',
+      header: t('databases.engineType'),
       accessorKey: 'dbType',
       width: '120px',
       sortable: true,
@@ -849,7 +851,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       },
     },
     {
-      header: 'Status & Alerts (C/H/W)',
+      header: t('databases.statusAndAlerts'),
       accessorKey: 'statusScore',
       width: '185px',
       sortable: true,
@@ -867,15 +869,15 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               {statusText}
             </span>
             <span className="text-slate-300 font-semibold">/</span>
-            <span className={`font-bold ${row.criticalCount > 0 ? 'text-rose-600 font-extrabold' : 'text-slate-400'}`} title="Critical Alerts Count">
+            <span className={`font-bold ${row.criticalCount > 0 ? 'text-rose-600 font-extrabold' : 'text-slate-400'}`} title={t('databases.criticalAlertsCount')}>
               {row.criticalCount}
             </span>
             <span className="text-slate-300">/</span>
-            <span className={`font-bold ${row.highCount > 0 ? 'text-orange-600 font-extrabold' : 'text-slate-400'}`} title="High Alerts Count">
+            <span className={`font-bold ${row.highCount > 0 ? 'text-orange-600 font-extrabold' : 'text-slate-400'}`} title={t('databases.highAlertsCount')}>
               {row.highCount}
             </span>
             <span className="text-slate-300">/</span>
-            <span className={`font-bold ${row.warnCount > 0 ? 'text-amber-600 font-extrabold' : 'text-slate-400'}`} title="Warning Alerts Count">
+            <span className={`font-bold ${row.warnCount > 0 ? 'text-amber-600 font-extrabold' : 'text-slate-400'}`} title={t('databases.warningAlertsCount')}>
               {row.warnCount}
             </span>
           </div>
@@ -883,14 +885,14 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       },
     },
     {
-      header: 'Last Check',
+      header: t('databases.lastCheck'),
       accessorKey: 'lastCheckAt',
       width: '160px',
       sortable: true,
       cell: (row) => {
         const lastCheck = row.lastCheckAt;
         if (!lastCheck) {
-          return <span className="text-xs text-slate-400 italic">Never checked</span>;
+          return <span className="text-xs text-slate-400 italic">{t('common.never')}</span>;
         }
         const dateObj = new Date(lastCheck);
         const formattedDate = dateObj.toLocaleDateString();
@@ -899,11 +901,11 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         // Calculate relative time (e.g. "2m ago")
         const diffMs = Date.now() - dateObj.getTime();
         const diffMins = Math.floor(diffMs / 60000);
-        let relative = `${diffMins}m ago`;
-        if (diffMins < 1) relative = 'Just now';
+        let relative = t('common.minsAgo', { count: diffMins });
+        if (diffMins < 1) relative = t('common.justNow');
         else if (diffMins >= 60) {
           const diffHours = Math.floor(diffMins / 60);
-          relative = `${diffHours}h ago`;
+          relative = t('common.hoursAgo', { count: diffHours });
         }
 
         return (
@@ -921,7 +923,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       },
     },
     {
-      header: 'Enable',
+      header: t('databases.enable'),
       accessorKey: 'isEnabled',
       width: '95px',
       sortable: true,
@@ -935,24 +937,24 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
                 isEnabled ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
               } ${userRole !== 'ADMIN' ? 'cursor-not-allowed opacity-60' : ''}`}
-              title={isEnabled ? 'Click to pause monitoring' : 'Click to enable monitoring'}
+              title={isEnabled ? t('databases.clickToPauseMonitoring') : t('databases.clickToEnableMonitoring')}
             >
               <span className="w-3.5 h-3.5 bg-white rounded-full shadow-xs transform transition-transform" />
             </button>
             <span className={`text-[10px] font-bold uppercase tracking-wider ${isEnabled ? 'text-emerald-700' : 'text-slate-500'}`}>
-              {isEnabled ? 'ON' : 'OFF'}
+              {isEnabled ? t('databases.statusOn') : t('databases.statusOff')}
             </span>
           </div>
         );
       },
     },
     {
-      header: 'Assigned Groups',
+      header: t('databases.assignedGroups'),
       width: '170px',
       cell: (row) => {
         const assignedGroups = groups.filter((g) => row.groupIds?.includes(g.id));
         if (assignedGroups.length === 0) {
-          return <span className="text-slate-400 text-xs italic">Ungrouped</span>;
+          return <span className="text-slate-400 text-xs italic">{t('databases.ungrouped')}</span>;
         }
         return (
           <div className="flex flex-wrap gap-1">
@@ -970,7 +972,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       },
     },
     {
-      header: 'Assigned Metrics',
+      header: t('databases.assignedMetrics'),
       accessorKey: 'probeCount',
       width: '120px',
       sortable: true,
@@ -984,7 +986,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       },
     },
     {
-      header: 'Actions',
+      header: t('databases.actions'),
       align: 'right',
       width: '130px',
       cell: (row) => (
@@ -993,7 +995,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             <button
               onClick={() => onNavigateToAnalytics(row.id)}
               className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
-              title="Open in Analytics Database"
+              title={t('databases.openInAnalytics')}
             >
               <BarChart3 className="w-3.5 h-3.5" />
             </button>
@@ -1001,7 +1003,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           <button
             onClick={() => handleExportSingleDatabase(row)}
             className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-            title="Export database configuration to JSON"
+            title={t('databases.exportConfigJson')}
           >
             <Download className="w-3.5 h-3.5" />
           </button>
@@ -1010,20 +1012,20 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               <button
                 onClick={() => openEditDialog(row)}
                 className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-                title="Edit database configuration"
+                title={t('databases.editConfig')}
               >
                 <Edit2 className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => handleDelete(row)}
                 className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-                title="Delete database configuration"
+                title={t('databases.deleteConfig')}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </>
           ) : (
-            !onNavigateToAnalytics && <span className="text-slate-400 text-xs italic">Read-only</span>
+            !onNavigateToAnalytics && <span className="text-slate-400 text-xs italic">{t('common.readOnly')}</span>
           )}
         </div>
       ),
@@ -1038,10 +1040,10 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <div>
-              <span className="font-bold text-slate-900">Decoupled Architecture & Metadata Console:</span> This web interface strictly manages database metadata within the central MySQL Configuration Database. Target monitoring execution and metric probe collection are handled asynchronously by an external standalone collector daemon.
+              <span className="font-bold text-slate-900">{t('databases.guidanceTitle')}</span> {t('databases.guidanceDesc')}
             </div>
             <div className="text-[11px] text-slate-500">
-              Databases inherit all metric probes from templates attached to their assigned Database Group(s).
+              {t('databases.guidanceSub')}
             </div>
           </div>
         </div>
@@ -1054,7 +1056,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         <div className="flex flex-wrap items-center gap-2 flex-1">
           <div className="flex items-center gap-1 text-slate-800 font-bold shrink-0">
             <Filter className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Filters:</span>
+            <span>{t('common.filter')}:</span>
           </div>
 
           {/* Engine Type Filter */}
@@ -1066,7 +1068,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             }}
             className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-medium focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
           >
-            <option value="ALL">All Engine Types ({databases.length})</option>
+            <option value="ALL">{t('common.allEngines')} ({databases.length})</option>
             {availableEngines.map((engine) => {
               const count = databases.filter((db) => db.dbType.toUpperCase() === engine.code.toUpperCase()).length;
               return (
@@ -1086,10 +1088,10 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             }}
             className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-medium focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
           >
-            <option value="ALL">All Statuses</option>
-            <option value="UP">UP Only</option>
-            <option value="DOWN">DOWN Only</option>
-            <option value="PAUSED">PAUSED Only</option>
+            <option value="ALL">{t('common.allStatuses')}</option>
+            <option value="UP">{t('databases.upOnly')}</option>
+            <option value="DOWN">{t('databases.downOnly')}</option>
+            <option value="PAUSED">{t('databases.pausedOnly')}</option>
           </select>
 
           {/* Alert Severity Filter */}
@@ -1101,13 +1103,13 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             }}
             className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-medium focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
           >
-            <option value="ALL">All Alert Levels</option>
-            <option value="CRITICAL">Critical Alerts Present</option>
-            <option value="HIGH">High Alerts Present</option>
-            <option value="WARN">Warning Alerts Present</option>
-            <option value="DOWN">Down Alerts Present</option>
-            <option value="HAS_ALERTS">Any Active Alert</option>
-            <option value="NO_ALERTS">Zero Alerts (Nominal)</option>
+            <option value="ALL">{t('common.allAlertLevels')}</option>
+            <option value="CRITICAL">{t('databases.sevCriticalPresent')}</option>
+            <option value="HIGH">{t('databases.sevHighPresent')}</option>
+            <option value="WARN">{t('databases.sevWarnPresent')}</option>
+            <option value="DOWN">{t('databases.sevDownPresent')}</option>
+            <option value="HAS_ALERTS">{t('databases.sevAnyActiveAlert')}</option>
+            <option value="NO_ALERTS">{t('databases.sevZeroAlerts')}</option>
           </select>
 
           {/* Search Input */}
@@ -1115,7 +1117,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search Name or Host..."
+              placeholder={t('databases.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -1133,7 +1135,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-slate-600" />
-            <span>Export JSON</span>
+            <span>{t('databases.exportJson')}</span>
           </button>
 
           {userRole === 'ADMIN' && (
@@ -1149,7 +1151,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer"
             >
               <Upload className="w-3.5 h-3.5 text-slate-600" />
-              <span>Import JSON</span>
+              <span>{t('databases.importJson')}</span>
             </button>
           )}
 
@@ -1159,7 +1161,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               try {
                 if (onRefresh) await onRefresh();
                 toast({
-                  title: 'Refreshed',
+                  title: t('common.refreshed'),
                   description: 'Successfully refreshed database statuses and active alert counts.',
                   type: 'success',
                 });
@@ -1172,7 +1174,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isCheckingHealth ? 'animate-spin' : ''}`} />
-            <span>{isCheckingHealth ? 'Refreshing...' : 'Refresh'}</span>
+            <span>{isCheckingHealth ? t('common.loading') : t('common.refresh')}</span>
           </button>
 
           {userRole === 'ADMIN' ? (
@@ -1181,12 +1183,12 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1 rounded-lg font-bold transition-colors shadow-2xs cursor-pointer shrink-0"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Add Database</span>
+              <span>{t('databases.addDatabase')}</span>
             </button>
           ) : (
             <div className="text-xs text-slate-400 italic flex items-center gap-1 shrink-0">
               <Shield className="w-3.5 h-3.5 text-slate-400" />
-              <span>View-Only</span>
+              <span>{t('common.readOnly')}</span>
             </div>
           )}
         </div>
@@ -1212,8 +1214,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           onSortChange={handleSortChange}
           emptyMessage={
             searchTerm || selectedEngine !== 'ALL' || selectedStatus !== 'ALL' || selectedSeverity !== 'ALL'
-              ? 'No monitored databases match the specified filter criteria.'
-              : 'No monitored databases configured yet.'
+              ? t('databases.noDatabasesFound')
+              : t('common.noDataFound')
           }
         />
       </div>
@@ -1222,25 +1224,25 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       <Dialog
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        title={editingDb ? `Edit Database Metadata: ${editingDb.name}` : 'Register New Monitored Database'}
-        description="Save endpoint connection parameters, credentials, and polling intervals to the central Configuration Database."
+        title={editingDb ? t('databases.editDatabaseTitle', { name: editingDb.name }) : t('databases.registerDatabaseTitle')}
+        description={t('databases.dialogDesc')}
         maxWidth="xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Database Identifier *</label>
+              <label className="block text-slate-700 font-semibold mb-1">{t('databases.databaseIdentifierLabel')}</label>
               <input
                 type="text"
                 required
-                placeholder="e.g. ERP_PROD_ORA"
+                placeholder={t('databases.databaseIdentifierPlaceholder')}
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
             </div>
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Engine Type (Registry Driven) *</label>
+              <label className="block text-slate-700 font-semibold mb-1">{t('databases.engineTypeLabel')}</label>
               <select
                 value={formData.dbType}
                 onChange={(e) => {
@@ -1262,18 +1264,18 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
 
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-2">
-              <label className="block text-slate-700 font-semibold mb-1">Host / IP Address *</label>
+              <label className="block text-slate-700 font-semibold mb-1">{t('databases.hostLabel')}</label>
               <input
                 type="text"
                 required
-                placeholder="e.g. 10.0.12.44 or db.internal.net"
+                placeholder={t('databases.hostPlaceholder')}
                 value={formData.host}
                 onChange={(e) => setFormData({ ...formData, host: e.target.value })}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
               />
             </div>
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Port *</label>
+              <label className="block text-slate-700 font-semibold mb-1">{t('databases.portLabel')}</label>
               <input
                 type="number"
                 required
@@ -1286,7 +1288,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
 
           <div>
             <label className="block text-slate-700 font-semibold mb-1">
-              {formData.dbType === 'ORACLE' ? 'Service Name / SID' : 'Database Name'}
+              {formData.dbType === 'ORACLE' ? t('databases.serviceNameOrSidLabel') : t('databases.databaseNameLabel')}
             </label>
             <input
               type="text"
@@ -1301,11 +1303,11 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
             <div className="text-slate-900 font-bold flex items-center gap-1.5 text-xs">
               <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-              Instance Credentials (Username & Password)
+              {t('databases.instanceCredentials')}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-600 font-medium mb-1">Username *</label>
+                <label className="block text-slate-600 font-medium mb-1">{t('databases.usernameLabel')}</label>
                 <input
                   type="text"
                   required
@@ -1316,11 +1318,11 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-slate-600 font-medium mb-1">Password</label>
+                <label className="block text-slate-600 font-medium mb-1">{t('databases.passwordLabel')}</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter password..."
+                    placeholder={t('databases.passwordPlaceholder')}
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-lg pl-3 pr-9 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
@@ -1342,9 +1344,9 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5 text-indigo-600" />
-                Tags / Classification Array
+                {t('databases.tagsLabel')}
               </span>
-              <span className="text-[10px] text-slate-500 font-normal">Click recommended or type custom tag</span>
+              <span className="text-[10px] text-slate-500 font-normal">{t('databases.tagsHelp')}</span>
             </label>
 
             {/* Recommended Tags Buttons */}
@@ -1395,14 +1397,14 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                     </span>
                   ))
                 ) : (
-                  <span className="text-[11px] text-slate-400 italic">No tags selected</span>
+                  <span className="text-[11px] text-slate-400 italic">{t('databases.noTagsSelected')}</span>
                 )}
               </div>
 
               <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
                 <input
                   type="text"
-                  placeholder="Type custom tag name and press Enter..."
+                  placeholder={t('databases.typeCustomTagPlaceholder')}
                   value={customTagInput}
                   onChange={(e) => setCustomTagInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -1428,7 +1430,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                   }}
                   className="bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer"
                 >
-                  Add Tag
+                  {t('databases.addTag')}
                 </button>
               </div>
             </div>
@@ -1440,7 +1442,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               <label className="block text-slate-700 font-semibold mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                  Query Frequency *
+                  {t('databases.queryFrequencyLabel')}
                 </span>
               </label>
               <div className="relative">
@@ -1453,20 +1455,20 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                   className="w-full bg-white border border-slate-300 rounded-lg pl-3 pr-10 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
-                  min
+                  {t('databases.minutesAbbr')}
                 </span>
               </div>
-              <p className="text-[10px] text-slate-500 mt-1">Default polling frequency (5 minutes)</p>
+              <p className="text-[10px] text-slate-500 mt-1">{t('databases.queryFrequencyHelp')}</p>
             </div>
 
             <div className="sm:col-span-2">
               <label className="block text-slate-700 font-semibold mb-1 flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                Operational Note (Long Text)
+                {t('databases.operationalNoteLabel')}
               </label>
               <textarea
                 rows={2}
-                placeholder="Instance documentation, architecture details, maintenance window, on-call contacts..."
+                placeholder={t('databases.operationalNotePlaceholder')}
                 value={formData.note}
                 onChange={(e) => setFormData({ ...formData, note: e.target.value })}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 text-xs"
@@ -1477,8 +1479,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           {/* Monitoring Active Toggle */}
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
             <div>
-              <span className="font-bold text-slate-900 block text-xs">Enable Active Monitoring</span>
-              <span className="text-[10px] text-slate-500">Instruct collector daemon to gather metric probes for this instance</span>
+              <span className="font-bold text-slate-900 block text-xs">{t('databases.enableActiveMonitoring')}</span>
+              <span className="text-[10px] text-slate-500">{t('databases.enableActiveMonitoringHelp')}</span>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -1491,7 +1493,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                 <span className="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform" />
               </button>
               <span className="text-xs font-bold text-slate-700">
-                {formData.isEnabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}
+                {formData.isEnabled ? t('databases.enabledOn') : t('databases.disabledOff')}
               </span>
             </div>
           </div>
@@ -1502,13 +1504,13 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               onClick={() => setIsDialogOpen(false)}
               className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors shadow-2xs cursor-pointer"
             >
-              {editingDb ? 'Save Changes' : 'Register Database'}
+              {editingDb ? t('databases.saveChanges') : t('databases.registerDatabase')}
             </button>
           </div>
         </form>
@@ -1518,8 +1520,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       <Dialog
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        title="Import Monitored Databases from JSON"
-        description="Upload a JSON export bundle or paste raw JSON. Passwords remain encrypted and are saved directly into the configuration store."
+        title={t('databases.importModalTitle')}
+        description={t('databases.importModalDesc')}
         maxWidth="2xl"
       >
         <div className="space-y-4 text-xs">
@@ -1540,8 +1542,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               <FileUp className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-slate-800">Click to upload JSON database file</span>
-              <span className="text-slate-500 block text-[11px]">Supports exported database bundles (.json) or arrays of database objects</span>
+              <span className="font-bold text-slate-800">{t('databases.clickToUploadJson')}</span>
+              <span className="text-slate-500 block text-[11px]">{t('databases.uploadJsonDesc')}</span>
             </div>
           </div>
 
@@ -1550,7 +1552,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             <div className="flex items-center justify-between mb-1">
               <label className="block text-slate-700 font-semibold flex items-center gap-1.5">
                 <FileJson className="w-3.5 h-3.5 text-indigo-600" />
-                Or Paste JSON Definition
+                {t('databases.orPasteJsonLabel')}
               </label>
               {importJsonText && (
                 <button
@@ -1562,7 +1564,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                   }}
                   className="text-[11px] text-slate-500 hover:text-rose-600 cursor-pointer"
                 >
-                  Clear
+                  {t('databases.clear')}
                 </button>
               )}
             </div>
@@ -1598,7 +1600,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-900 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  Validated: Found {importPreview.databases.length} Database Configuration(s)
+                  {t('databases.validatedCount', { count: importPreview.databases.length })}
                 </span>
                 <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
                   {importPreview.type}
@@ -1653,7 +1655,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               {/* Import Options */}
               <div className="pt-3 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-700 block">ID Assignment Strategy</label>
+                  <label className="text-[11px] font-semibold text-slate-700 block">{t('databases.idAssignmentStrategy')}</label>
                   <label className="flex items-center gap-2 cursor-pointer text-slate-700 text-xs">
                     <input
                       type="checkbox"
@@ -1661,14 +1663,14 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                       onChange={(e) => setImportGenerateNewIds(e.target.checked)}
                       className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
-                    <span>Generate fresh unique IDs for imports</span>
+                    <span>{t('databases.generateFreshIds')}</span>
                   </label>
-                  <p className="text-[10px] text-slate-400">Uncheck to update existing database records matching ID</p>
+                  <p className="text-[10px] text-slate-400">{t('databases.uncheckToUpdate')}</p>
                 </div>
 
                 {groups.length > 0 && (
                   <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-slate-700 block">Attach to Database Group(s)</label>
+                    <label className="text-[11px] font-semibold text-slate-700 block">{t('databases.attachToGroupsLabel')}</label>
                     <div className="max-h-24 overflow-y-auto space-y-1 bg-white p-2 rounded border border-slate-300">
                       {groups.map((grp) => (
                         <label key={grp.id} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
@@ -1708,7 +1710,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               }}
               className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -1719,13 +1721,13 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               {isImporting ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Importing...</span>
+                  <span>{t('databases.importing')}</span>
                 </>
               ) : (
                 <>
                   <Upload className="w-3.5 h-3.5" />
                   <span>
-                    Import {importPreview ? `${importPreview.databases.length} Database(s)` : 'Databases'}
+                    {t('databases.importDatabasesCount', { count: importPreview ? importPreview.databases.length : '' })}
                   </span>
                 </>
               )}

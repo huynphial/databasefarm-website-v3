@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { DatabaseEntity, DatabaseEngineEntity } from '../../../types';
 import { getDbEngineBadgeClass } from '../../../config/dbEngines';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface DatabaseFilterHeaderProps {
   databases: DatabaseEntity[];
@@ -45,6 +46,7 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
   onToDateTimeChange,
   onRefresh,
 }) => {
+  const { t } = useLanguage();
   const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const dbDropdownRef = useRef<HTMLDivElement>(null);
@@ -116,10 +118,10 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
               onChange={(e) => onSelectEngineType(e.target.value)}
               className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold rounded-xl pl-8 pr-7 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
             >
-              <option value="ALL">All Engine Types</option>
+              <option value="ALL">{t('analytics.allEngineTypes')}</option>
               {availableEngineCodes.map((code) => (
                 <option key={code} value={code}>
-                  {code} Databases
+                  {t('analytics.engineDatabases', { code })}
                 </option>
               ))}
             </select>
@@ -135,7 +137,7 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
             >
               <div className="flex items-center gap-2.5 truncate min-w-0">
                 <Database className="w-4 h-4 text-indigo-600 shrink-0" />
-                <span className="truncate">{selectedDb ? selectedDb.name : 'Select Target Database...'}</span>
+                <span className="truncate">{selectedDb ? selectedDb.name : t('analytics.selectDatabase')}</span>
                 {selectedDb && (
                   <span
                     className={`px-2 py-0.5 border rounded text-[10px] font-bold tracking-wider shrink-0 ${getDbEngineBadgeClass(
@@ -163,14 +165,14 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
                     type="text"
                     value={dbSearchQuery}
                     onChange={(e) => onSearchQueryChange(e.target.value)}
-                    placeholder="Search database name, host, or engine..."
+                    placeholder={t('analytics.searchPlaceholder')}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs pl-8 pr-3 py-1.5 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
                   {filteredDatabasesForDropdown.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-slate-400">No databases match filter</div>
+                    <div className="py-4 text-center text-xs text-slate-400">{t('analytics.noDatabasesMatch')}</div>
                   ) : (
                     filteredDatabasesForDropdown.map((db) => (
                       <button
@@ -219,20 +221,23 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
         <div className="flex flex-wrap items-center gap-2 justify-end">
           {/* Time Presets */}
           <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
-            {['1h', '6h', '24h', '7d', 'custom'].map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => onSelectTimePreset(preset)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  timePreset === preset
-                    ? 'bg-white text-indigo-600 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {preset.toUpperCase()}
-              </button>
-            ))}
+            {['1h', '6h', '24h', '7d', 'custom'].map((preset) => {
+              const labelKey = preset === 'custom' ? 'analytics.presetCustom' : `analytics.preset${preset}`;
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => onSelectTimePreset(preset)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    timePreset === preset
+                      ? 'bg-white text-indigo-600 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {t(labelKey)}
+                </button>
+              );
+            })}
           </div>
 
           {/* Refresh Button */}
@@ -243,7 +248,7 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
             className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs px-3 py-1.5 rounded-xl font-bold transition-colors cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+            <span>{isRefreshing ? t('analytics.refreshing') : t('analytics.refresh')}</span>
           </button>
         </div>
       </div>
@@ -253,7 +258,7 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 text-xs">
           <div className="flex items-center gap-1.5 text-slate-600 font-semibold">
             <Clock className="w-3.5 h-3.5 text-indigo-500" />
-            <span>From:</span>
+            <span>{t('analytics.from')}</span>
             <input
               type="datetime-local"
               value={fromDateTime}
@@ -263,7 +268,7 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 text-slate-600 font-semibold">
-            <span>To:</span>
+            <span>{t('analytics.to')}</span>
             <input
               type="datetime-local"
               value={toDateTime}

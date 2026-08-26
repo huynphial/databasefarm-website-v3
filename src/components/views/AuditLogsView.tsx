@@ -22,6 +22,7 @@ import { api } from '../../lib/api';
 import { DataTable, Column } from '../tables/DataTable';
 import { formatTimeVN, cn } from '../../lib/utils';
 import { useToast } from '../ui/Toast';
+import { useTranslation } from '../../i18n';
 
 interface AuditLogsViewProps {
   showInfoTips?: boolean;
@@ -29,6 +30,7 @@ interface AuditLogsViewProps {
 }
 
 export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = true, userRole = 'ADMIN' }) => {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const isAdmin = userRole === 'ADMIN';
   const [logs, setLogs] = useState<AuditLogEntity[]>([]);
@@ -68,9 +70,9 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
           <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-600 border border-amber-200">
             <ShieldAlert className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-slate-900">Administrator Access Required</h3>
+          <h3 className="text-base font-bold text-slate-900">{t('auditLogs.accessRestrictedTitle')}</h3>
           <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
-            Audit Trail Log inspection is restricted to System Administrators. Operations Viewers can inspect telemetry metrics, database health, and active alerts.
+            {t('auditLogs.accessRestrictedSub')}
           </p>
         </div>
       </div>
@@ -94,7 +96,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
 
   const columns: Column<AuditLogEntity>[] = [
     {
-      header: 'Timestamp',
+      header: t('auditLogs.colTimestamp'),
       accessorKey: 'createdAt',
       width: '170px',
       cell: (row) => (
@@ -105,7 +107,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
       ),
     },
     {
-      header: 'Event Type',
+      header: t('auditLogs.colActionType'),
       accessorKey: 'actionType',
       width: '150px',
       cell: (row) => {
@@ -144,7 +146,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
       },
     },
     {
-      header: 'User & Client IP',
+      header: t('auditLogs.colUser'),
       accessorKey: 'userId',
       width: '180px',
       cell: (row) => (
@@ -161,7 +163,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
       ),
     },
     {
-      header: 'Target Entity',
+      header: t('auditLogs.colTargetEntity'),
       accessorKey: 'targetEntity',
       width: '140px',
       cell: (row) => (
@@ -176,7 +178,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
       ),
     },
     {
-      header: 'Operation Details / Metadata',
+      header: t('auditLogs.colDetails'),
       accessorKey: 'details',
       cell: (row) => (
         <span className="text-slate-700 text-xs leading-relaxed block">
@@ -193,9 +195,9 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
         <div className="p-4 bg-white border border-slate-200 rounded-xl flex items-start gap-3 text-xs text-slate-600 shadow-2xs">
           <FileText className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <div className="font-bold text-slate-900 text-sm">System Audit Trail & Access Log</div>
+            <div className="font-bold text-slate-900 text-sm">{t('auditLogs.infoTipTitle')}</div>
             <div>
-              Comprehensive audit log capturing authentication attempts, page navigation events, entity CRUD operations, and system configuration changes with client IP tracking.
+              {t('auditLogs.infoTipDesc')}
             </div>
           </div>
         </div>
@@ -206,10 +208,10 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <FileText className="w-6 h-6 text-indigo-600" />
-            User Activity Audit Logs ({filteredLogs.length})
+            {t('auditLogs.title')} ({filteredLogs.length})
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Real-time audit stream tracking all system interactions and configuration operations.
+            {t('auditLogs.subtitle')}
           </p>
         </div>
 
@@ -220,7 +222,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
             className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs px-3.5 py-2 rounded-lg font-semibold border border-slate-200 shadow-2xs transition-colors cursor-pointer disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh Logs</span>
+            <span>{t('alertHistory.refreshLog')}</span>
           </button>
         </div>
       </div>
@@ -229,7 +231,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
       <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-indigo-600" />
-          <span className="text-xs font-bold text-slate-800">Filter Event Types:</span>
+          <span className="text-xs font-bold text-slate-800">{t('auditLogs.allActions')}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -241,7 +243,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
             }}
             className="bg-slate-50 border border-slate-300 text-xs px-3 py-2 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold cursor-pointer shadow-2xs"
           >
-            <option value="ALL">All Event Types</option>
+            <option value="ALL">{t('auditLogs.allActions')}</option>
             <option value="LOGIN_SUCCESS">LOGIN_SUCCESS</option>
             <option value="LOGIN_FAILED">LOGIN_FAILED</option>
             <option value="PAGE_VIEW">PAGE_VIEW</option>
@@ -255,7 +257,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ showInfoTips = tru
             <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Search user, IP, entity or details..."
+              placeholder={t('auditLogs.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);

@@ -28,6 +28,7 @@ import { DataTable, Column } from '../tables/DataTable';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { getDbEngineBadgeClass } from '../../config/dbEngines';
+import { useTranslation } from '../../i18n/LanguageContext';
 
 export function parseGroupSenderIds(senderIdsStr: string, activeMethodIds: string[]): { [key: string]: string } {
   const mapping: { [key: string]: string } = {};
@@ -95,6 +96,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   onDeleteGroup,
 }) => {
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEngineType, setSelectedEngineType] = useState<string>('ALL');
   const [selectedDbId, setSelectedDbId] = useState<string>('ALL');
@@ -264,7 +266,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   };
 
   const handleDelete = (group: GroupEntity) => {
-    if (confirm(`Are you sure you want to delete group "${group.name}"? Databases assigned to this group will remain in storage but will be unmapped from this group.`)) {
+    if (confirm(t('groups.deleteGroupConfirm'))) {
       onDeleteGroup(group.id);
       toast({ title: 'Group Deleted', description: `Group "${group.name}" was removed.`, type: 'info' });
     }
@@ -272,7 +274,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
   const columns: Column<GroupEntity>[] = [
     {
-      header: 'Group Name & Purpose',
+      header: t('groups.groupNameAndPurpose'),
       accessorKey: 'name',
       cell: (row) => (
         <div>
@@ -287,7 +289,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       ),
     },
     {
-      header: 'Total DBs',
+      header: t('groups.totalDbs'),
       width: '100px',
       cell: (row) => {
         const assignedDbs = databases.filter((db) => row.databaseIds?.includes(db.id));
@@ -301,7 +303,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       },
     },
     {
-      header: 'UP',
+      header: t('groups.up'),
       width: '90px',
       cell: (row) => {
         const assignedDbs = databases.filter((db) => row.databaseIds?.includes(db.id));
@@ -321,7 +323,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       },
     },
     {
-      header: 'DOWN',
+      header: t('groups.down'),
       width: '95px',
       cell: (row) => {
         const assignedDbs = databases.filter((db) => row.databaseIds?.includes(db.id));
@@ -347,7 +349,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       },
     },
     {
-      header: 'Active Alerts (C/H/W)',
+      header: t('groups.activeAlerts'),
       width: '150px',
       cell: (row) => {
         const assignedDbIds = row.databaseIds || [];
@@ -395,25 +397,25 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       },
     },
     {
-      header: 'Applied Templates',
+      header: t('groups.appliedTemplates'),
       width: '180px',
       cell: (row) => {
         const appliedTpls = templates.filter((t) => row.templateIds?.includes(t.id));
         if (appliedTpls.length === 0) {
-          return <span className="text-xs text-slate-400 italic">No templates linked</span>;
+          return <span className="text-xs text-slate-400 italic">{t('groups.noTemplatesLinked')}</span>;
         }
         if (appliedTpls.length >= 1) {
-          const templateNamesList = appliedTpls.map((t) => `${t.name}${t.targetDbType ? ` [${t.targetDbType}]` : ''}`).join('\n');
+          const templateNamesList = appliedTpls.map((tpl) => `${tpl.name}${tpl.targetDbType ? ` [${tpl.targetDbType}]` : ''}`).join('\n');
           return (
             <div className="group relative inline-block">
               <span className="text-xs px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold inline-flex items-center gap-1 cursor-help shadow-2xs">
                 <Layers className="w-3 h-3 text-indigo-600" />
-                {appliedTpls.length} Templates
+                {appliedTpls.length} {t('groups.templates')}
               </span>
               {/* Hover Tooltip showing template names */}
               <div className="hidden group-hover:block absolute left-0 bottom-full mb-1.5 z-50 min-w-[180px] max-w-xs p-2 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none whitespace-pre-line leading-relaxed">
                 <div className="font-bold text-indigo-300 pb-1 mb-1 border-b border-slate-800 text-[10px] uppercase tracking-wider">
-                  Linked Templates ({appliedTpls.length})
+                  {t('groups.appliedTemplates')} ({appliedTpls.length})
                 </div>
                 {templateNamesList}
               </div>
@@ -423,11 +425,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       },
     },
     {
-      header: 'Notification Dispatchers',
+      header: t('groups.notificationDispatchers'),
       width: '180px',
       cell: (row) => {
         const count = (row.alertMethodIds || []).length;
-        const text = count === 0 ? 'No Dispatchers' : count === 1 ? '1 Dispatcher' : `${count} Dispatchers`;
+        const text = count === 0 ? t('groups.noDispatchers') : count === 1 ? '1 Dispatcher' : `${count} Dispatchers`;
         return (
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${
             count > 0 
@@ -441,7 +443,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       },
     },
     {
-      header: 'Actions',
+      header: t('groups.actions'),
       align: 'right',
       width: '90px',
       cell: (row) => (
@@ -518,10 +520,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
           <div className="space-y-1 leading-relaxed">
             <div>
-              <span className="font-bold text-slate-900">Database Group Mappings & Real-Time Aggregates:</span> Groups establish a <strong>Many-to-Many relationship</strong> with databases and provide live rollups of total databases, UP/DOWN operational state, and active triggered alerts.
+              <span className="font-bold text-slate-900">{t('groups.guidanceTitle')}</span> {t('groups.guidanceDesc')}
             </div>
             <div className="text-slate-500 text-[11px]">
-              Alerts triggered on any database in a group are automatically routed to the group's configured Telegram Chat IDs (via base URL <code className="text-indigo-600 font-mono">https://api.telegram.org</code>) and Email distribution lists.
+              {t('groups.guidanceSub')}
             </div>
           </div>
         </div>
@@ -533,10 +535,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           <div>
             <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <FolderKanban className="w-5 h-5 text-indigo-600" />
-              <span>Database Groups</span>
+              <span>{t('groups.databaseGroups')}</span>
             </h2>
             <p className="text-xs text-slate-500">
-              Total active groups: {groups.length} {activeFiltersCount > 0 && `(Filtered: ${filteredGroups.length})`}
+              {t('groups.totalActiveGroups')}: {groups.length} {activeFiltersCount > 0 && `(Filtered: ${filteredGroups.length})`}
             </p>
           </div>
 
@@ -547,12 +549,12 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-lg font-medium transition-colors shadow-2xs cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                New Database Group
+                {t('groups.newDatabaseGroup')}
               </button>
             ) : (
               <div className="text-xs text-slate-400 italic flex items-center gap-1.5 shrink-0">
                 <Shield className="w-3.5 h-3.5 text-slate-400" />
-                View-Only Mode (Read Only)
+                {t('common.readOnly')}
               </div>
             )}
           </div>
@@ -562,7 +564,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center gap-3">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 shrink-0">
             <Filter className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Filters:</span>
+            <span>{t('common.filter')}:</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:flex items-center gap-2.5 flex-1">
@@ -577,7 +579,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 }}
                 className="w-full appearance-none bg-slate-50 border border-slate-300 text-xs pl-3 pr-8 py-1.5 rounded-lg text-slate-900 focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
               >
-                <option value="ALL">All Engine Types</option>
+                <option value="ALL">{t('common.allEngines')}</option>
                 {availableEngineCodes.map((code) => {
                   const eng = databaseEngines.find((e) => e.dbCode.toUpperCase() === code.toUpperCase());
                   return (
@@ -600,7 +602,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 <div className="flex items-center gap-2 truncate min-w-0">
                   <Database className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                   <span className="truncate">
-                    {selectedDb ? selectedDb.name : 'All Databases'}
+                    {selectedDb ? selectedDb.name : t('databases.allDatabases')}
                   </span>
                   {selectedDb && (
                     <span
@@ -629,7 +631,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                       type="text"
                       value={dbSearchQuery}
                       onChange={(e) => setDbSearchQuery(e.target.value)}
-                      placeholder="Search database name, host, or engine..."
+                      placeholder={t('databases.searchPlaceholder')}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs pl-8 pr-3 py-1.5 focus:outline-none focus:border-indigo-500 text-slate-900"
                     />
                   </div>
@@ -651,14 +653,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                     >
                       <div className="flex items-center gap-2">
                         <Database className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>All Databases (Show all groups)</span>
+                        <span>{t('databases.allDatabases')}</span>
                       </div>
                       {selectedDbId === 'ALL' && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />}
                     </button>
 
                     {filteredDatabasesForDropdown.length === 0 ? (
                       <div className="py-4 text-center text-xs text-slate-400">
-                        No databases match filter
+                        {t('common.noDataFound')}
                       </div>
                     ) : (
                       filteredDatabasesForDropdown.map((db) => (
@@ -713,7 +715,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search group name..."
+                placeholder={t('groups.searchPlaceholder')}
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -737,7 +739,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 title="Reset all active filters"
               >
                 <X className="w-3.5 h-3.5" />
-                <span>Reset</span>
+                <span>{t('common.reset')}</span>
               </button>
             )}
           </div>
@@ -760,8 +762,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           }}
           emptyMessage={
             searchTerm
-              ? `No database groups found matching "${searchTerm}".`
-              : 'No database groups created.'
+              ? t('groups.noGroupsFound')
+              : t('common.noDataFound')
           }
         />
       </div>
@@ -770,19 +772,19 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       <Dialog
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        title={editingGroup ? `Edit Group: ${editingGroup.name}` : 'Create Database Group'}
-        description="Configure database mapping, applied monitoring templates, and notification rules."
+        title={editingGroup ? `${t('groups.editGroupTitle')}: ${editingGroup.name}` : t('groups.createGroupTitle')}
+        description={t('groups.dialogDesc')}
         maxWidth="2xl"
       >
         <form onSubmit={handleSubmit} className="space-y-5 text-xs">
           {/* General Metadata */}
           <div className="space-y-3">
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Group Name *</label>
+              <label className="block text-slate-700 font-semibold mb-1">{t('groups.groupNameLabel')}</label>
               <input
                 type="text"
                 required
-                placeholder="e.g. Production Core Tier"
+                placeholder={t('groups.groupNamePlaceholder')}
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
@@ -790,10 +792,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-700 font-semibold mb-1">Description</label>
+              <label className="block text-slate-700 font-semibold mb-1">{t('groups.description')}</label>
               <textarea
                 rows={2}
-                placeholder="Environment SLA tier, purpose, or operational notes..."
+                placeholder={t('groups.descriptionPlaceholder')}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full bg-white border border-slate-300 rounded-lg p-3 text-slate-900 focus:outline-none focus:border-indigo-500"
@@ -806,14 +808,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             <div className="flex items-center justify-between">
               <label className="text-slate-800 font-bold flex items-center gap-1.5">
                 <Server className="w-3.5 h-3.5 text-indigo-500" />
-                Managed Databases (Many-to-Many Mapping)
+                {t('groups.managedDatabases')}
               </label>
               <span className="text-[11px] text-slate-500 font-mono">
-                {formData.databaseIds.length} of {databases.length} selected
+                {formData.databaseIds.length} {t('groups.of')} {databases.length} {t('groups.selected')}
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              Select databases belonging to this group. A database instance can belong to multiple groups simultaneously.
+              {t('groups.managedDatabasesDesc')}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-white border border-slate-200 rounded-lg">
               {databases.map((db) => {
@@ -859,14 +861,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             <div className="flex items-center justify-between">
               <label className="text-slate-800 font-bold flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                Applied Monitoring Templates (Engine Compatibility Enforced)
+                {t('groups.appliedMonitoringTemplates')}
               </label>
               <span className="text-[11px] text-slate-500 font-mono">
-                {formData.templateIds.length} of {templates.length} selected
+                {formData.templateIds.length} {t('groups.of')} {templates.length} {t('groups.selected')}
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              Templates strictly apply only to compatible database types within the group (e.g. PostgreSQL templates only evaluate on PostgreSQL instances).
+              {t('groups.appliedMonitoringTemplatesDesc')}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-white border border-slate-200 rounded-lg">
               {templates.map((tpl) => {
@@ -898,9 +900,9 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                     <div className="truncate flex-1">
                       <div className="font-semibold truncate">{tpl.name}</div>
                       <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
-                        <span>Compatibility:</span>
+                        <span>{t('groups.compatibility')}:</span>
                         <span className="font-bold text-indigo-600 font-mono">
-                          {tpl.targetDbType || 'Universal'}
+                          {tpl.targetDbType || t('groups.universal')}
                         </span>
                       </div>
                     </div>
@@ -915,17 +917,17 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             <div className="flex items-center justify-between">
               <h4 className="text-slate-900 font-bold flex items-center gap-1.5 text-xs">
                 <BellRing className="w-3.5 h-3.5 text-indigo-600" />
-                Alert Notification Dispatchers
+                {t('groups.alertNotificationDispatchers')}
               </h4>
               <span className="text-[10px] text-slate-500">
-                Bound from System Settings
+                {t('groups.boundFromSystemSettings')}
               </span>
             </div>
 
             {/* Dynamic Dispatchers Selector */}
             <div className="space-y-1.5">
               <label className="block text-[11px] font-semibold text-slate-700">
-                Select Active Dispatch Channels:
+                {t('groups.selectActiveDispatchChannels')}
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {alertMethods.map((method) => {
@@ -982,7 +984,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
               </div>
               {alertMethods.length === 0 && (
                 <p className="text-xs text-slate-400 italic">
-                  No alert dispatchers configured in System Settings.
+                  {t('groups.noDispatchersConfigured')}
                 </p>
               )}
             </div>
@@ -990,12 +992,12 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             {/* Sender IDs Input Field - PER DISPATCHER */}
             <div className="space-y-3 pt-3 border-t border-slate-200">
               <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider">
-                Target Senders / Destinations per Channel:
+                {t('groups.targetSendersTitle')}
               </label>
               
               {formData.alertMethodIds.length === 0 ? (
                 <p className="text-xs text-slate-400 italic">
-                  Select at least one active dispatch channel above to configure target destinations.
+                  {t('groups.selectAtLeastOneChannel')}
                 </p>
               ) : (
                 <div className="space-y-3 shadow-2xs">
@@ -1062,13 +1064,13 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
               onClick={() => setIsDialogOpen(false)}
               className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors shadow-2xs cursor-pointer"
             >
-              {editingGroup ? 'Save Group Configuration' : 'Create Group'}
+              {editingGroup ? t('groups.saveGroupConfiguration') : t('groups.createGroup')}
             </button>
           </div>
         </form>

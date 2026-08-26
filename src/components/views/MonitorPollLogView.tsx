@@ -32,6 +32,7 @@ import {
 } from '../../types';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
+import { useTranslation } from '../../i18n';
 
 // Utility helper for classnames
 function cn(...classes: (string | boolean | undefined | null)[]) {
@@ -70,6 +71,7 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
   showInfoTips = true,
   onRefresh,
 }) => {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -451,10 +453,10 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
         <div>
           <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Activity className="w-5 h-5 text-indigo-600" />
-            Database Monitor Poll Queue & Execution Logs
+            {t('monitorPollLog.title')}
           </h2>
           <p className="text-xs text-slate-500">
-            Real-time status of scheduled database metric poll queues (<span className="font-mono text-slate-700 font-bold">database_poll_queue</span>) and historical poll execution telemetry (<span className="font-mono text-slate-700 font-bold">database_poll_log</span>).
+            {t('monitorPollLog.subtitle')}
           </p>
         </div>
 
@@ -462,7 +464,7 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
           {/* Auto Refresh Select Dropdown */}
           <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-semibold shadow-2xs">
             <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-            <span className="text-[11px] text-slate-500 font-medium">Auto Refresh:</span>
+            <span className="text-[11px] text-slate-500 font-medium">{t('monitorPollLog.autoRefresh')}</span>
             <select
               value={autoRefreshOption}
               onChange={(e) => setAutoRefreshOption(e.target.value as any)}

@@ -38,6 +38,7 @@ import { getDbEngineBadgeClass } from '../../config/dbEngines';
 import { cn } from '../../lib/utils';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
+import { useTranslation } from '../../i18n';
 
 interface AlertNotificationLogViewProps {
   queue?: AlertNotificationQueueEntity[];
@@ -58,6 +59,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
   showInfoTips = true,
   onRefresh,
 }) => {
+  const { t } = useTranslation();
   const { toast } = useToast();
 
   // If user is not ADMIN, show Access Denied
@@ -67,9 +69,9 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
         <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 mb-4 shadow-sm">
           <ShieldAlert className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-2">Access Restricted</h2>
+        <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-2">{t('alertNotifications.accessRestrictedTitle')}</h2>
         <p className="text-sm text-slate-600 max-w-md mb-6 leading-relaxed">
-          The <strong>Alert Notification Log</strong> is restricted to administrators only. Viewer roles do not have permission to view notification dispatch queues or audit logs.
+          {t('alertNotifications.accessRestrictedSub')}
         </p>
       </div>
     );
@@ -452,7 +454,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                  Alert Notification Queue & Audit Log
+                  {t('alertNotifications.title')}
                 </h2>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -460,7 +462,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Inspect real-time notification queue (<span className="font-mono text-slate-700 font-semibold">alert_notification_queue</span>) and 24-hour historical dispatch audit logs (<span className="font-mono text-slate-700 font-semibold">alert_notification_log</span>).
+                {t('alertNotifications.subtitle')}
               </p>
             </div>
           </div>

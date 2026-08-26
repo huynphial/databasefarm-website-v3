@@ -29,6 +29,7 @@ import { DbEngine, MetricEntity, TemplateEntity, UserRole, DatabaseEngineEntity 
 import { DataTable, Column } from '../tables/DataTable';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
+import { useTranslation } from '../../i18n';
 
 interface TemplatesViewProps {
   templates: TemplateEntity[];
@@ -51,6 +52,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
   onDeleteTemplate,
   onSaveMetric,
 }) => {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEngineFilter, setSelectedEngineFilter] = useState<string>('ALL');
@@ -532,7 +534,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
   const columns: Column<TemplateEntity>[] = [
     {
-      header: 'Template Name & Scope',
+      header: t('templates.templateName'),
       accessorKey: 'name',
       cell: (row) => (
         <div>
@@ -547,7 +549,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       ),
     },
     {
-      header: 'Database Engine',
+      header: t('templates.targetEngine'),
       accessorKey: 'targetDbType',
       width: '150px',
       cell: (row) => {
@@ -572,7 +574,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       },
     },
     {
-      header: 'Bundled Metrics Status',
+      header: t('templates.metricCount'),
       width: '240px',
       cell: (row) => {
         const templateMetrics = metrics.filter((m) => m.templateIds?.includes(row.id) || m.templateId === row.id);
@@ -594,7 +596,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       },
     },
     {
-      header: 'Actions',
+      header: t('templates.actions'),
       align: 'right',
       width: '190px',
       cell: (row) => (
@@ -605,7 +607,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
               className="px-2.5 py-1 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-colors cursor-pointer"
               title="Manage bundled metrics"
             >
-              Metrics
+              {t('templates.manageMetrics')}
             </button>
             <button
               onClick={() => handleExportTemplate(row)}
@@ -717,7 +719,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
         <div className="p-4 bg-white border border-slate-200 rounded-xl flex items-start gap-3 text-xs text-slate-600 shadow-2xs">
           <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
           <div>
-            <span className="font-bold text-slate-900">Granular Metric Management:</span> Add or remove specific SQL metrics inside each monitoring template. Use the On/Off toggle switch to activate or pause individual metrics within a template at any time.
+            <span className="font-bold text-slate-900">{t('templates.guidanceTitle')}</span> {t('templates.guidanceDesc')}
           </div>
         </div>
       )}
@@ -728,10 +730,10 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
           <div>
             <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <Layers className="w-5 h-5 text-indigo-600" />
-              <span>Monitoring Templates</span>
+              <span>{t('templates.title')}</span>
             </h2>
             <p className="text-xs text-slate-500">
-              Engine-compatible blueprints defining standard monitoring metrics: {templates.length} {activeFiltersCount > 0 && `(Filtered: ${filteredTemplates.length})`}
+              {t('templates.subtitle')} ({t('templates.totalActiveTemplates')}: {templates.length} {activeFiltersCount > 0 && `| Filtered: ${filteredTemplates.length}`})
             </p>
           </div>
 
@@ -743,7 +745,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
               title="Export all templates and metrics to JSON"
             >
               <Download className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Export JSON</span>
+              <span>{t('templates.exportAll')}</span>
             </button>
 
             {/* Import Template Button */}
@@ -759,7 +761,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
                 title="Import template and metrics from JSON file"
               >
                 <Upload className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Import JSON</span>
+                <span>{t('templates.importJson')}</span>
               </button>
             )}
 
@@ -769,7 +771,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-lg font-medium transition-colors shadow-2xs cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                New Template
+                {t('templates.newTemplate')}
               </button>
             ) : (
               <div className="text-xs text-slate-400 italic flex items-center gap-1.5 shrink-0">

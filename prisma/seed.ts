@@ -831,7 +831,7 @@ async function main() {
     const dd = String(today.getUTCDate()).padStart(2, '0');
     const firstPartitionName = `p${yyyy}${mm}${dd}`;
 
-    const nextDay = new Date(today.getTime() + 86400000);
+    const nextDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1));
     const nextYyyy = nextDay.getUTCFullYear();
     const nextMm = String(nextDay.getUTCMonth() + 1).padStart(2, '0');
     const nextDd = String(nextDay.getUTCDate()).padStart(2, '0');
@@ -871,17 +871,32 @@ async function main() {
     if (Array.isArray(existingPartitions) && existingPartitions.length > 0) {
       console.log(`ℹ️ metric_data_points is already partitioned. Existing partitions: ${existingPartitions.map((ep: any) => ep.PARTITION_NAME).join(', ')}`);
       const hasFirstPartition = existingPartitions.some((ep: any) => ep.PARTITION_NAME === firstPartitionName);
+      const hasFuturePartition = existingPartitions.some((ep: any) => ep.PARTITION_NAME === 'p_future');
+
       if (!hasFirstPartition) {
-        try {
-          await p.$executeRawUnsafe(`
-            ALTER TABLE \`metric_data_points\` 
-            REORGANIZE PARTITION \`p_future\` INTO (
-              PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}')),
-              PARTITION \`p_future\` VALUES LESS THAN MAXVALUE
-            );
-          `);
-          console.log(`✅ Reorganized and added partition ${firstPartitionName} (LESS THAN TO_DAYS('${nextDayStr}')).`);
-        } catch {
+        if (hasFuturePartition) {
+          try {
+            await p.$executeRawUnsafe(`
+              ALTER TABLE \`metric_data_points\` 
+              REORGANIZE PARTITION \`p_future\` INTO (
+                PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
+              );
+            `);
+            console.log(`✅ Reorganized partition p_future into initial partition ${firstPartitionName} (LESS THAN TO_DAYS('${nextDayStr}')).`);
+          } catch {
+            try {
+              await p.$executeRawUnsafe(`
+                ALTER TABLE \`metric_data_points\` 
+                ADD PARTITION (
+                  PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
+                );
+              `);
+              console.log(`✅ Added daily partition ${firstPartitionName}.`);
+            } catch {
+              // Already covered by range
+            }
+          }
+        } else {
           try {
             await p.$executeRawUnsafe(`
               ALTER TABLE \`metric_data_points\` 
@@ -896,12 +911,11 @@ async function main() {
         }
       }
     } else {
-      // 3. Alter table to partition by range of TO_DAYS(measured_at) with first partition pYYYYMMDD and p_future
+      // 3. Alter table to partition by range of TO_DAYS(measured_at) with first partition pYYYYMMDD (no p_future)
       await p.$executeRawUnsafe(`
         ALTER TABLE \`metric_data_points\` 
         PARTITION BY RANGE (TO_DAYS(\`measured_at\`)) (
-          PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}')),
-          PARTITION \`p_future\` VALUES LESS THAN MAXVALUE
+          PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
         );
       `);
       console.log(`✅ Successfully created first partition "${firstPartitionName}" on metric_data_points table (by measured_at day).`);

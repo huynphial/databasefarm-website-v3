@@ -5,6 +5,7 @@ import { DB_ENGINES } from '../../config/dbEngines';
 import { DataTable, Column } from '../tables/DataTable';
 import { formatTimeVN, cn } from '../../lib/utils';
 import { useToast } from '../ui/Toast';
+import { useTranslation } from '../../i18n';
 
 interface AlertHistoryViewProps {
   alertHistory: AlertHistoryEntity[];
@@ -19,6 +20,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
   onRefresh,
   showInfoTips = true,
 }) => {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -108,7 +110,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
 
   const columns: Column<AlertHistoryEntity>[] = [
     {
-      header: 'Status & Severity',
+      header: t('alertHistory.colStatusSeverity'),
       width: '130px',
       cell: (row) => {
         const state = row.resolutionStatus || 'CLOSED';
@@ -141,7 +143,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       },
     },
     {
-      header: 'Database Instance',
+      header: t('alertHistory.colDatabase'),
       accessorKey: 'dbName',
       width: '140px',
       cell: (row) => {
@@ -166,7 +168,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       },
     },
     {
-      header: 'Metric',
+      header: t('alertHistory.colMetric'),
       accessorKey: 'metricName',
       width: '180px',
       cell: (row) => (
@@ -188,7 +190,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       ),
     },
     {
-      header: 'Incident Message',
+      header: t('alertHistory.colMessage'),
       accessorKey: 'message',
       cell: (row) => (
         <span className="text-slate-600 text-xs leading-relaxed block w-full min-w-[280px]">
@@ -197,7 +199,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       ),
     },
     {
-      header: 'Raised At',
+      header: t('alertHistory.colRaisedAt'),
       accessorKey: 'createdAt',
       width: '150px',
       cell: (row) => (
@@ -205,7 +207,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       ),
     },
     {
-      header: 'Cleared At / Resolver',
+      header: t('alertHistory.colClearedResolver'),
       accessorKey: 'clearedAt',
       width: '180px',
       cell: (row) => {
@@ -249,10 +251,10 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
         <div>
           <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <History className="w-5 h-5 text-indigo-600" />
-            Historical Alert Audit Log
+            {t('alertHistory.title')}
           </h2>
           <p className="text-xs text-slate-500">
-            Archived and cleared incidents recorded in storage database ({filteredHistory.length} match filters)
+            {t('alertHistory.subtitle')} ({filteredHistory.length})
           </p>
         </div>
 
@@ -264,7 +266,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
           className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs px-3.5 py-1.5 rounded-lg border border-slate-300 font-medium transition-colors shadow-2xs cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          Refresh Log
+          {t('alertHistory.refreshLog')}
         </button>
       </div>
 
@@ -274,7 +276,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-indigo-600 shrink-0" />
             <span>
-              <strong>Query Performance Optimization:</strong> Date range filtering defaults to the last 30 days to reduce database query load and avoid full-table scans.
+              <strong>{t('alertHistory.queryOptTitle')}</strong> {t('alertHistory.queryOptDesc')}
             </span>
           </div>
           <div className="flex items-center gap-1 text-[11px] font-mono font-semibold bg-white px-2.5 py-0.5 rounded border border-indigo-200">
@@ -291,7 +293,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
           <div className="flex flex-wrap items-center gap-3">
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                From Date
+                {t('alertHistory.fromDate')}
               </label>
               <input
                 type="date"
@@ -305,7 +307,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
             </div>
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                To Date
+                {t('alertHistory.toDate')}
               </label>
               <input
                 type="date"
@@ -321,34 +323,34 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
 
           {/* Quick Presets */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-medium text-slate-400 mr-1">Presets:</span>
+            <span className="text-[11px] font-medium text-slate-400 mr-1">{t('alertHistory.presets')}</span>
             <button
               type="button"
               onClick={() => applyPreset(7)}
               className="px-2.5 py-1 text-xs rounded bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-medium cursor-pointer"
             >
-              7 Days
+              {t('alertHistory.last7Days')}
             </button>
             <button
               type="button"
               onClick={() => applyPreset(30)}
               className="px-2.5 py-1 text-xs rounded bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors font-semibold cursor-pointer"
             >
-              30 Days (Default)
+              {t('alertHistory.last30Days')}
             </button>
             <button
               type="button"
               onClick={() => applyPreset(90)}
               className="px-2.5 py-1 text-xs rounded bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-medium cursor-pointer"
             >
-              90 Days
+              {t('alertHistory.last90Days')}
             </button>
             <button
               type="button"
               onClick={() => applyPreset('ALL')}
               className="px-2.5 py-1 text-xs rounded bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-medium cursor-pointer"
             >
-              All Time
+              {t('alertHistory.allTime')}
             </button>
           </div>
         </div>
@@ -359,7 +361,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
           <div>
             <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
               <Database className="w-3.5 h-3.5 text-indigo-600" />
-              Database Type
+              {t('templates.targetEngine')}
             </label>
             <select
               value={selectedDbType}
@@ -370,7 +372,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
               }}
               className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
             >
-              <option value="ALL">All Database Types ({databases.length})</option>
+              <option value="ALL">{t('alertHistory.allEngines')} ({databases.length})</option>
               {DB_ENGINES.map((engine) => {
                 const count = databases.filter((db) => db.dbType.toUpperCase() === engine.code.toUpperCase()).length;
                 return (
@@ -385,7 +387,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
           <div>
             <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
               <Server className="w-3.5 h-3.5 text-indigo-600" />
-              Target Database
+              {t('alertHistory.colDatabase')}
             </label>
             <select
               value={selectedDbId}
@@ -395,7 +397,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
               }}
               className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
             >
-              <option value="ALL">All Databases ({filteredDatabasesForDropdown.length})</option>
+              <option value="ALL">{t('alertHistory.allDatabases')} ({filteredDatabasesForDropdown.length})</option>
               {filteredDatabasesForDropdown.map((db) => (
                 <option key={db.id} value={db.id}>
                   {db.name} ({db.dbType})
@@ -407,7 +409,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
           <div>
             <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
               <Filter className="w-3.5 h-3.5 text-indigo-600" />
-              Alert Severity
+              {t('alertHistory.colStatusSeverity')}
             </label>
             <select
               value={selectedLevel}
@@ -417,7 +419,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
               }}
               className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
             >
-              <option value="ALL">All Severities</option>
+              <option value="ALL">{t('alertHistory.allLevels')}</option>
               <option value="CRITICAL">Critical</option>
               <option value="HIGH">High</option>
               <option value="WARN">Warning</option>
@@ -428,12 +430,12 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
           <div>
             <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
               <Search className="w-3.5 h-3.5 text-indigo-600" />
-              Search Keywords
+              {t('analytics.search')}
             </label>
             <div className="relative">
               <input
                 type="text"
-                placeholder="Search message, DB, or user..."
+                placeholder={t('alertHistory.searchPlaceholder')}
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { DatabaseEntity, MetricEntity, ActiveAlertEntity } from '../../../types';
 import { getDbEngineBadgeClass } from '../../../config/dbEngines';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface AnalyticsSummaryCardsProps {
   selectedDb: DatabaseEntity | undefined;
@@ -24,6 +25,7 @@ export const AnalyticsSummaryCards: React.FC<AnalyticsSummaryCardsProps> = ({
   activeAlerts,
   telemetryPointsCount,
 }) => {
+  const { t } = useLanguage();
   if (!selectedDb) return null;
 
   const dbStatusUpper = (selectedDb.status || '').toUpperCase();
@@ -38,6 +40,7 @@ export const AnalyticsSummaryCards: React.FC<AnalyticsSummaryCardsProps> = ({
     : 'text-emerald-700 bg-emerald-50 border-emerald-200';
 
   const statusLabel = isPaused ? 'PAUSED' : dbStatusUpper || 'HEALTHY';
+  const criticalCount = activeAlerts.filter(a => a.alertLevel === 'CRITICAL' || a.alertLevel === 'DOWN').length;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -46,7 +49,7 @@ export const AnalyticsSummaryCards: React.FC<AnalyticsSummaryCardsProps> = ({
         <div className="flex items-center justify-between text-xs font-bold text-slate-500">
           <span className="flex items-center gap-1.5">
             <Server className="w-4 h-4 text-indigo-500" />
-            Target Instance
+            {t('analytics.targetInstance')}
           </span>
           <span className={`px-2 py-0.5 rounded border text-[10px] font-extrabold ${getDbEngineBadgeClass(selectedDb.dbType)}`}>
             {selectedDb.dbType}
@@ -57,7 +60,7 @@ export const AnalyticsSummaryCards: React.FC<AnalyticsSummaryCardsProps> = ({
           <p className="text-xs text-slate-500 font-mono truncate">{selectedDb.host}:{selectedDb.port}</p>
         </div>
         <div className="pt-1 flex items-center justify-between text-xs border-t border-slate-100">
-          <span className="text-slate-500 font-medium">Status</span>
+          <span className="text-slate-500 font-medium">{t('analytics.status')}</span>
           <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${statusColorClass}`}>
             {statusLabel}
           </span>
@@ -69,19 +72,19 @@ export const AnalyticsSummaryCards: React.FC<AnalyticsSummaryCardsProps> = ({
         <div className="flex items-center justify-between text-xs font-bold text-slate-500">
           <span className="flex items-center gap-1.5">
             <Activity className="w-4 h-4 text-emerald-500" />
-            Configured Probes
+            {t('analytics.configuredProbes')}
           </span>
           <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold">
-            {applicableMetricsCount} Active
+            {t('analytics.activeCount', { count: applicableMetricsCount })}
           </span>
         </div>
         <div>
           <div className="text-2xl font-extrabold text-slate-900">{applicableMetricsCount}</div>
-          <p className="text-xs text-slate-500">Assigned telemetry metrics</p>
+          <p className="text-xs text-slate-500">{t('analytics.assignedMetrics')}</p>
         </div>
         <div className="pt-1 flex items-center justify-between text-xs border-t border-slate-100">
-          <span className="text-slate-500 font-medium">Poll Cycle</span>
-          <span className="font-mono text-slate-700 font-bold">{selectedDb.pollIntervalMinutes || 5} min</span>
+          <span className="text-slate-500 font-medium">{t('analytics.pollCycle')}</span>
+          <span className="font-mono text-slate-700 font-bold">{t('databases.freqMins', { min: selectedDb.pollIntervalMinutes || 5 })}</span>
         </div>
       </div>
 
@@ -90,24 +93,24 @@ export const AnalyticsSummaryCards: React.FC<AnalyticsSummaryCardsProps> = ({
         <div className="flex items-center justify-between text-xs font-bold text-slate-500">
           <span className="flex items-center gap-1.5">
             <ShieldAlert className="w-4 h-4 text-rose-500" />
-            Active Alerts
+            {t('analytics.activeAlerts')}
           </span>
           <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${
             activeAlerts.length > 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
           }`}>
-            {activeAlerts.length} Fired
+            {t('analytics.firedCount', { count: activeAlerts.length })}
           </span>
         </div>
         <div>
           <div className={`text-2xl font-extrabold ${activeAlerts.length > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
             {activeAlerts.length}
           </div>
-          <p className="text-xs text-slate-500">Open threshold alerts</p>
+          <p className="text-xs text-slate-500">{t('analytics.openThresholdAlerts')}</p>
         </div>
         <div className="pt-1 flex items-center justify-between text-xs border-t border-slate-100">
-          <span className="text-slate-500 font-medium">Severity Status</span>
+          <span className="text-slate-500 font-medium">{t('analytics.severityStatus')}</span>
           <span className="font-bold text-slate-700">
-            {activeAlerts.length > 0 ? `${activeAlerts.filter(a => a.alertLevel === 'CRITICAL' || a.alertLevel === 'DOWN').length} Critical` : 'All Clear'}
+            {activeAlerts.length > 0 ? t('analytics.criticalCount', { count: criticalCount }) : t('analytics.allClear')}
           </span>
         </div>
       </div>
@@ -120,15 +123,15 @@ export const AnalyticsSummaryCards: React.FC<AnalyticsSummaryCardsProps> = ({
             metric_data_points
           </span>
           <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-extrabold">
-            DB Telemetry
+            {t('analytics.dbTelemetry')}
           </span>
         </div>
         <div>
           <div className="text-2xl font-extrabold text-slate-900">{telemetryPointsCount}</div>
-          <p className="text-xs text-slate-500">Recorded telemetry data points</p>
+          <p className="text-xs text-slate-500">{t('analytics.recordedTelemetryDataPoints')}</p>
         </div>
         <div className="pt-1 flex items-center justify-between text-xs border-t border-slate-100">
-          <span className="text-slate-500 font-medium">Source Table</span>
+          <span className="text-slate-500 font-medium">{t('analytics.sourceTable')}</span>
           <span className="font-mono text-indigo-700 font-bold text-[11px]">metric_data_points</span>
         </div>
       </div>

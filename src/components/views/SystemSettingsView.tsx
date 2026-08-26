@@ -42,6 +42,7 @@ import { useToast } from '../ui/Toast';
 import { api } from '../../lib/api';
 import { Dialog } from '../ui/Dialog';
 import { getDbEngineBadgeClass } from '../../config/dbEngines';
+import { useTranslation } from '../../i18n';
 
 interface SystemSettingsViewProps {
   settings: SystemSettingsEntity;
@@ -82,6 +83,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   onDeleteAlertMethod,
   onResetAllData,
 }) => {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const isAdmin = userRole === 'ADMIN';
 
@@ -680,8 +682,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           <div className="flex items-start gap-3 text-xs text-slate-600">
             <Info className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <div className="font-bold text-slate-900 text-sm">System Settings & Infrastructure Control</div>
-              <div>Central system settings, database engine registry, collector parameters, and alert dispatchers.</div>
+              <div className="font-bold text-slate-900 text-sm">{t('systemSettings.title')}</div>
+              <div>{t('systemSettings.subtitle')}</div>
             </div>
           </div>
           <div className="shrink-0 flex items-center gap-2">
@@ -696,12 +698,12 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-600 border border-amber-200">
             <ShieldCheck className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-slate-900">Administrator Access Required</h3>
+          <h3 className="text-base font-bold text-slate-900">{t('systemSettings.accessRestrictedTitle')}</h3>
           <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
-            System Settings, API Collector configuration, database engine registrations, and alert notification dispatchers are protected and restricted to System Administrators.
+            {t('systemSettings.accessRestrictedSub')}
           </p>
           <div className="pt-2 text-xs text-slate-600">
-            To update your account password, please visit the <span className="font-bold text-indigo-600">Account Settings</span> tab.
+            {t('systemSettings.visitAccountSettings')}
           </div>
         </div>
       </div>
@@ -715,9 +717,9 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         <div className="flex items-start gap-3 text-xs text-slate-600">
           <Info className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <div className="font-bold text-slate-900 text-sm">System Settings & Infrastructure Control</div>
+            <div className="font-bold text-slate-900 text-sm">{t('systemSettings.title')}</div>
             <div>
-              Configure collector endpoint health checks, dynamic database engine registries, protocol notification dispatchers, and application-wide preferences.
+              {t('systemSettings.subtitle')}
             </div>
             {settings.updatedAt && (
               <div className="text-[11px] text-slate-500 font-mono mt-1">
@@ -754,7 +756,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           }`}
         >
           <Activity className="w-3.5 h-3.5" />
-          <span>Collector API & Health</span>
+          <span>{t('systemSettings.tabCollector')}</span>
         </button>
 
         <button
@@ -766,7 +768,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           }`}
         >
           <Database className="w-3.5 h-3.5" />
-          <span>Database Engines Registry</span>
+          <span>{t('systemSettings.tabEngines')}</span>
           <span className="px-1.5 py-0.2 rounded text-[10px] bg-indigo-100 text-indigo-800 font-mono">
             {databaseEngines.length}
           </span>
@@ -781,7 +783,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           }`}
         >
           <Send className="w-3.5 h-3.5" />
-          <span>Alert Notification Dispatchers</span>
+          <span>{t('systemSettings.tabAlerts')}</span>
           <span className="px-1.5 py-0.2 rounded text-[10px] bg-indigo-100 text-indigo-800 font-mono">
             {alertMethods.length}
           </span>
@@ -796,7 +798,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
           }`}
         >
           <Sliders className="w-3.5 h-3.5" />
-          <span>System Settings Panel (Key-Value)</span>
+          <span>{t('systemSettings.tabKvSettings')}</span>
           <span className="px-1.5 py-0.2 rounded text-[10px] bg-indigo-100 text-indigo-800 font-mono">
             {settingItems.length}
           </span>

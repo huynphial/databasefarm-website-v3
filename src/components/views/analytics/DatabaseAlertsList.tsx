@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldAlert, CheckCheck, XCircle } from 'lucide-react';
 import { ActiveAlertEntity } from '../../../types';
 import { formatTimeVN } from '../../../lib/utils';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface DatabaseAlertsListProps {
   activeAlerts: ActiveAlertEntity[];
@@ -16,6 +17,7 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
   onClearAlert,
   onAcknowledgeAlert,
 }) => {
+  const { t } = useLanguage();
   if (activeAlerts.length === 0) return null;
 
   return (
@@ -26,9 +28,9 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
             <ShieldAlert className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-sm font-bold text-rose-950">Active Alerts for {selectedDbName}</h4>
+            <h4 className="text-sm font-bold text-rose-950">{t('analytics.activeAlertsForName', { name: selectedDbName })}</h4>
             <p className="text-xs text-rose-700 font-medium">
-              {activeAlerts.length} open threshold alerts requiring operator attention
+              {t('analytics.openIncidentsCount', { count: activeAlerts.length })}
             </p>
           </div>
         </div>
@@ -57,7 +59,7 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
                   </span>
                   {isAck && (
                     <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                      ACK
+                      {t('analytics.ack')}
                     </span>
                   )}
                   <span className="font-bold text-slate-900 truncate" title={alertTitle}>
@@ -65,7 +67,7 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
                   </span>
                 </div>
                 <p className="text-slate-600 truncate">{alert.message}</p>
-                <p className="text-[10px] text-slate-400 font-mono">Triggered: {formatTimeVN(alert.createdAt)}</p>
+                <p className="text-[10px] text-slate-400 font-mono">{t('analytics.triggered')} {formatTimeVN(alert.createdAt)}</p>
               </div>
 
               <div className="flex items-center gap-1.5 shrink-0">
@@ -76,7 +78,7 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
                     className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer flex items-center gap-1"
                   >
                     <CheckCheck className="w-3.5 h-3.5 text-indigo-600" />
-                    Ack
+                    {t('analytics.ackBtn')}
                   </button>
                 )}
                 {onClearAlert && (
@@ -86,7 +88,7 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
                     className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
                   >
                     <XCircle className="w-3.5 h-3.5" />
-                    Clear
+                    {t('analytics.clearBtn')}
                   </button>
                 )}
               </div>

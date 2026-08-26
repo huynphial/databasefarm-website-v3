@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { RawMeasurementEntity, DatabaseEntity, MetricEntity, DatabaseEngineEntity } from '../../types';
 import { getDbEngineBadgeClass, getDbEngineHexColor } from '../../config/dbEngines';
+import { useTranslation } from '../../i18n';
 
 interface RawMeasurementsViewProps {
   measurements: RawMeasurementEntity[];
@@ -35,6 +36,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   onSimulatePoll,
   showInfoTips = true,
 }) => {
+  const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
   const [engineFilter, setEngineFilter] = useState<string>('ALL');
   const [selectedDbFilter, setSelectedDbFilter] = useState<string>('ALL');
@@ -190,11 +192,11 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     if (!isoStr) return '-';
     try {
       const diffSec = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
-      if (diffSec < 45) return 'Just now';
-      if (diffSec < 90) return '1 min ago';
-      if (diffSec < 3600) return `${Math.floor(diffSec / 60)} mins ago`;
-      if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} hours ago`;
-      return `${Math.floor(diffSec / 86400)} days ago`;
+      if (diffSec < 45) return t('rawMeasurements.justNow');
+      if (diffSec < 90) return `1 ${t('rawMeasurements.minAgo')}`;
+      if (diffSec < 3600) return `${Math.floor(diffSec / 60)} ${t('rawMeasurements.minsAgo')}`;
+      if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} ${t('rawMeasurements.hoursAgo')}`;
+      return `${Math.floor(diffSec / 86400)} ${t('rawMeasurements.daysAgo')}`;
     } catch {
       return isoStr;
     }
@@ -207,10 +209,10 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         <div>
           <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Activity className="w-5 h-5 text-indigo-600" />
-            Raw Query History & Telemetry Stream
+            {t('rawMeasurements.title')}
           </h2>
           <p className="text-xs text-slate-500">
-            Real-time telemetry stream of multi-object query probes, granular attribute measurements, and raw collected values.
+            {t('rawMeasurements.subtitle')}
           </p>
         </div>
 
@@ -221,7 +223,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
+            <span>{t('rawMeasurements.exportCsv')}</span>
           </button>
           <button
             onClick={handlePollNow}
@@ -229,7 +231,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isPolling ? 'animate-spin' : ''}`} />
-            <span>{isPolling ? 'Executing Probes...' : 'Poll Telemetry Now'}</span>
+            <span>{isPolling ? t('rawMeasurements.polling') : t('rawMeasurements.pollNow')}</span>
           </button>
         </div>
       </div>
@@ -239,8 +241,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         <div className="p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl text-indigo-950 flex items-start gap-2.5 text-xs shadow-2xs">
           <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
           <div className="text-[11px] leading-relaxed">
-            <span className="font-bold">Multidimensional Telemetry Pipeline: </span>
-            Stream displays high-resolution raw metric data points collected across database targets with target engine types, measured entities, granular attributes, and measured values.
+            {t('rawMeasurements.pipelineInfo')}
           </div>
         </div>
       )}
@@ -252,7 +253,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Search database, metric, object (e.g. TS_DATA), attribute, or value..."
+            placeholder={t('rawMeasurements.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -279,10 +280,10 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           <div className="flex flex-wrap items-center gap-1.5">
             <div className="flex items-center gap-1 text-[11px] text-slate-600 font-semibold mr-1">
               <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Date Range:</span>
+              <span>{t('rawMeasurements.dateRange')}</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-slate-400 font-medium">From</span>
+              <span className="text-[10px] text-slate-400 font-medium">{t('rawMeasurements.from')}</span>
               <input
                 type="date"
                 value={fromDate}
@@ -294,7 +295,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
               />
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-slate-400 font-medium">To</span>
+              <span className="text-[10px] text-slate-400 font-medium">{t('rawMeasurements.to')}</span>
               <input
                 type="date"
                 value={toDate}
@@ -312,28 +313,28 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 onClick={() => handleSetQuickDate(1)}
                 className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
               >
-                24h
+                {t('rawMeasurements.last24h')}
               </button>
               <button
                 type="button"
                 onClick={() => handleSetQuickDate(3)}
                 className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 cursor-pointer"
               >
-                3 Days
+                {t('rawMeasurements.last3Days')}
               </button>
               <button
                 type="button"
                 onClick={() => handleSetQuickDate(7)}
                 className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
               >
-                7 Days
+                {t('rawMeasurements.last7Days')}
               </button>
               <button
                 type="button"
                 onClick={() => handleSetQuickDate('ALL')}
                 className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
               >
-                All
+                {t('rawMeasurements.all')}
               </button>
             </div>
           </div>
@@ -349,7 +350,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
               }}
               className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
             >
-              <option value="ALL">All Engines</option>
+              <option value="ALL">{t('rawMeasurements.allEngines')}</option>
               {databaseEngines.map((eng) => (
                 <option key={eng.id} value={eng.dbCode}>
                   {eng.dbName} ({eng.dbCode})
@@ -377,7 +378,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
               }}
               className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 max-w-[150px] font-semibold truncate"
             >
-              <option value="ALL">All Databases</option>
+              <option value="ALL">{t('rawMeasurements.allDatabases')}</option>
               {databases.map((db) => (
                 <option key={db.id} value={db.id}>
                   {db.name} ({db.dbType})
@@ -394,7 +395,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
               }}
               className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 max-w-[160px] font-semibold truncate"
             >
-              <option value="ALL">All Metrics</option>
+              <option value="ALL">{t('rawMeasurements.allMetrics')}</option>
               {metrics.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
@@ -407,9 +408,9 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         {/* Row 3: Telemetry Count & Timezone Indicator */}
         <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-100 font-mono">
           <span>
-            Showing <strong className="text-slate-800">{filteredMeasurements.length}</strong> matching entries (Total: {measurements.length})
+            {t('rawMeasurements.showing')} <strong className="text-slate-800">{filteredMeasurements.length}</strong> {t('rawMeasurements.matchingEntries')} ({t('rawMeasurements.total')}: {measurements.length})
           </span>
-          <span>Timezone: Asia/Ho_Chi_Minh (UTC+7)</span>
+          <span>{t('rawMeasurements.timezone')}</span>
         </div>
       </div>
 
@@ -419,12 +420,12 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-2.5 px-3.5 w-[160px] whitespace-nowrap">Timestamp</th>
-                <th className="py-2.5 px-3.5 w-[200px]">Database</th>
-                <th className="py-2.5 px-3.5 w-[200px]">Metric Name</th>
-                <th className="py-2.5 px-3.5 w-[180px]">Object / Attribute</th>
-                <th className="py-2.5 px-3.5 min-w-[280px]">Measured Value</th>
-                <th className="py-2.5 px-3.5 w-[90px] text-center whitespace-nowrap">Cycle</th>
+                <th className="py-2.5 px-3.5 w-[160px] whitespace-nowrap">{t('rawMeasurements.timestamp')}</th>
+                <th className="py-2.5 px-3.5 w-[200px]">{t('rawMeasurements.database')}</th>
+                <th className="py-2.5 px-3.5 w-[200px]">{t('rawMeasurements.metricName')}</th>
+                <th className="py-2.5 px-3.5 w-[180px]">{t('rawMeasurements.objectAttribute')}</th>
+                <th className="py-2.5 px-3.5 min-w-[280px]">{t('rawMeasurements.measuredValue')}</th>
+                <th className="py-2.5 px-3.5 w-[90px] text-center whitespace-nowrap">{t('rawMeasurements.cycle')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -432,9 +433,9 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-500">
                     <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="font-semibold text-slate-700">No telemetry measurements found.</p>
+                    <p className="font-semibold text-slate-700">{t('rawMeasurements.noMeasurementsFound')}</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Adjust your date range or filters, or click "Poll Telemetry Now" to execute live probes.
+                      {t('rawMeasurements.noMeasurementsFoundSub')}
                     </p>
                   </td>
                 </tr>
@@ -516,7 +517,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                       {/* 6. Cycle */}
                       <td className="py-2.5 px-3.5 text-center whitespace-nowrap font-mono text-[11px] text-slate-600 align-top">
                         <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-700 font-bold">
-                          Cycle {item.cycle ?? 1}
+                          {t('rawMeasurements.cycle')} {item.cycle ?? 1}
                         </span>
                       </td>
                     </tr>
@@ -530,7 +531,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         {/* Pagination Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-slate-200 text-xs rounded-b-xl">
           <div className="flex items-center gap-2 text-slate-600 font-medium">
-            <span>Rows per page:</span>
+            <span>{t('rawMeasurements.rowsPerPage')}</span>
             <select
               value={pageSize}
               onChange={(e) => {
@@ -547,8 +548,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
             <span className="text-slate-400">|</span>
             <span className="font-mono text-[11px]">
               {filteredMeasurements.length === 0
-                ? '0 of 0'
-                : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredMeasurements.length)} of ${filteredMeasurements.length}`}
+                ? `0 ${t('rawMeasurements.of')} 0`
+                : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredMeasurements.length)} ${t('rawMeasurements.of')} ${filteredMeasurements.length}`}
             </span>
           </div>
 
@@ -567,17 +568,17 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
               className="px-2.5 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 cursor-pointer"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
-              Prev
+              {t('rawMeasurements.prev')}
             </button>
             <span className="px-3 py-1 bg-white border border-indigo-300 text-indigo-700 font-bold rounded text-xs">
-              Page {currentPage} of {totalPages}
+              {t('rawMeasurements.page')} {currentPage} {t('rawMeasurements.of')} {totalPages}
             </span>
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
               className="px-2.5 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 cursor-pointer"
             >
-              Next
+              {t('rawMeasurements.next')}
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
             <button

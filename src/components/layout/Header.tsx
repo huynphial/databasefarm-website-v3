@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Clock, Shield, Eye, Timer, Database, Server, Globe, ChevronDown, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, Eye, Timer, Globe } from 'lucide-react';
 import { NavigationTab } from './Sidebar';
 import { UserRole } from '../../types';
-import { AUTH_CONFIG } from '../../config/authConfig';
 import { storage } from '../../lib/storage';
-import { useTranslation, AVAILABLE_LANGUAGES, LanguageCode } from '../../i18n';
+import { useTranslation } from '../../i18n';
 
 interface HeaderProps {
   activeTab: NavigationTab;
@@ -20,18 +19,6 @@ export const Header: React.FC<HeaderProps> = ({
   sessionTimeoutMinutes,
 }) => {
   const { t, language, setLanguage } = useTranslation();
-  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
-  const langDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (langDropdownRef.current && !langDropdownRef.current.contains(event.target as Node)) {
-        setLangDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const getTabTitleInfo = (tab: NavigationTab) => {
     switch (tab) {
@@ -146,8 +133,6 @@ export const Header: React.FC<HeaderProps> = ({
   const isTimerLow = secondsRemaining < 300; // Under 5 minutes
   const isTimerUrgent = secondsRemaining < 60; // Under 1 minute
 
-  const currentLangObj = AVAILABLE_LANGUAGES.find((l) => l.code === language) || AVAILABLE_LANGUAGES[0];
-
   return (
     <header className="h-16 border-b border-slate-200 flex items-center justify-between px-6 sm:px-8 bg-white shrink-0 select-none transition-colors">
       <div>
@@ -159,70 +144,41 @@ export const Header: React.FC<HeaderProps> = ({
         </p>
       </div>
 
-      {/* Stacked Info Columns Toolbar & Language Selector */}
+      {/* Stacked Info Columns Toolbar with Minimized EN/VI Language Selector */}
       <div className="flex items-center gap-3">
-        {/* Language Selector Dropdown */}
-        <div className="relative" ref={langDropdownRef}>
-          <button
-            type="button"
-            onClick={() => setLangDropdownOpen((prev) => !prev)}
-            title={t('header.switchLanguage')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 transition cursor-pointer shadow-2xs"
-          >
-            <Globe className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="text-sm leading-none">{currentLangObj.flag}</span>
-            <span className="font-semibold uppercase tracking-wider text-[11px]">{currentLangObj.code}</span>
-            <ChevronDown className="w-3 h-3 text-slate-400" />
-          </button>
-
-          {langDropdownOpen && (
-            <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-              <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                {t('header.language')}
-              </div>
-              {AVAILABLE_LANGUAGES.map((item) => {
-                const isSelected = item.code === language;
-                return (
-                  <button
-                    key={item.code}
-                    type="button"
-                    onClick={() => {
-                      setLanguage(item.code as LanguageCode);
-                      setLangDropdownOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium transition cursor-pointer ${
-                      isSelected
-                        ? 'bg-indigo-50/80 text-indigo-700 font-semibold'
-                        : 'text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">{item.flag}</span>
-                      <div className="text-left">
-                        <div>{item.nativeName}</div>
-                        <div className="text-[10px] text-slate-400 font-normal">{item.name}</div>
-                      </div>
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
         {/* Status Toolbar */}
         <div className="flex items-center bg-slate-50 border border-slate-200/80 rounded-lg p-1.5 shadow-2xs divide-x divide-slate-200 text-[10px] font-mono">
-          {/* Column 1: Storage Provider | Collector Status */}
+          {/* Column 1: Minimized Language Selector (EN/VI) | Collector Status */}
           <div className="px-2.5 flex flex-col justify-center gap-0.5">
             <div
-              title={`Active persistence provider: ${storageType.toUpperCase()}`}
+              title={t('header.switchLanguage')}
               className="flex items-center gap-1.5 font-semibold text-slate-700"
             >
-              <Database className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-              <span>
-                {storageType === 'prisma' ? t('header.storePrisma') : t('header.storeMemory')}
-              </span>
+              <Globe className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <div className="flex items-center bg-slate-200/80 p-0.5 rounded text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setLanguage('en')}
+                  className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
+                    language === 'en'
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage('vi')}
+                  className={`px-1.5 py-0.5 rounded font-bold transition cursor-pointer ${
+                    language === 'vi'
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  VI
+                </button>
+              </div>
             </div>
             <div className="flex items-center gap-1.5 font-semibold text-slate-600">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
@@ -230,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Column 2: Session Expiration Countdown | User Role (Static view of account role) */}
+          {/* Column 2: Session Expiration Countdown | User Role */}
           <div className="px-2.5 flex flex-col justify-center gap-0.5 pl-2.5">
             <div
               title="Dynamic session inactivity timeout countdown"

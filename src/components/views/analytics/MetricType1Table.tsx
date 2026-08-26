@@ -3,6 +3,7 @@ import { Gauge, Check, AlertTriangle, TrendingUp } from 'lucide-react';
 import { MetricEntity } from '../../../types';
 import { UnifiedMeasurement } from './analyticsUtils';
 import { formatTimeVN } from '../../../lib/utils';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface MetricType1TableProps {
   type1Metrics: MetricEntity[];
@@ -15,6 +16,8 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
   unifiedMeasurements,
   onQuickChart,
 }) => {
+  const { t } = useLanguage();
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -24,13 +27,13 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
           </div>
           <div>
             <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              Metric Type 1: Single Attribute of Single Object
+              {t('analytics.metricType1Title')}
               <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                {type1Metrics.length} Metrics
+                {t('analytics.metricsCount', { count: type1Metrics.length })}
               </span>
             </h3>
             <p className="text-xs text-slate-500">
-              Consolidated status table for instance-level scalar probes reading from database metric_data_points
+              {t('analytics.metricType1Desc')}
             </p>
           </div>
         </div>
@@ -38,21 +41,21 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
 
       {type1Metrics.length === 0 ? (
         <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-500 text-xs">
-          No Type 1 metrics configured for this database.
+          {t('analytics.noType1Metrics')}
         </div>
       ) : (
         <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-2xs">
           <table className="w-full text-left text-xs text-slate-700">
             <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
               <tr>
-                <th className="py-2.5 px-3.5">Metric Check Name</th>
-                <th className="py-2.5 px-3.5">Value Type</th>
-                <th className="py-2.5 px-3.5">Latest Measured Value</th>
-                <th className="py-2.5 px-3.5">Evaluation Status</th>
-                <th className="py-2.5 px-3.5">Threshold Rule</th>
-                <th className="py-2.5 px-3.5">Frequency</th>
-                <th className="py-2.5 px-3.5">Last Measured (UTC+7)</th>
-                <th className="py-2.5 px-3.5 text-right">Action</th>
+                <th className="py-2.5 px-3.5">{t('analytics.colMetricCheckName')}</th>
+                <th className="py-2.5 px-3.5">{t('analytics.colValueType')}</th>
+                <th className="py-2.5 px-3.5">{t('analytics.colLatestMeasuredValue')}</th>
+                <th className="py-2.5 px-3.5">{t('analytics.colEvaluationStatus')}</th>
+                <th className="py-2.5 px-3.5">{t('analytics.colThresholdRule')}</th>
+                <th className="py-2.5 px-3.5">{t('analytics.colFrequency')}</th>
+                <th className="py-2.5 px-3.5">{t('analytics.colLastMeasured')}</th>
+                <th className="py-2.5 px-3.5 text-right">{t('analytics.colAction')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -111,8 +114,13 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
 
                 const thresholdText =
                   metric.thresholdWarn || metric.thresholdHigh || metric.thresholdCritical
-                    ? `Warn: ${metric.thresholdWarn || '-'} / High: ${metric.thresholdHigh || '-'} / Crit: ${metric.thresholdCritical || '-'} (${metric.thresholdOperator || metric.relationalOperator || '>='})`
-                    : 'No threshold';
+                    ? t('analytics.thresholdRuleSummary', {
+                        warn: metric.thresholdWarn || '-',
+                        high: metric.thresholdHigh || '-',
+                        crit: metric.thresholdCritical || '-',
+                        op: metric.thresholdOperator || metric.relationalOperator || '>=',
+                      })
+                    : t('analytics.noThreshold');
 
                 const measuredTimestamp = latestMeasurement?.measuredAt || (latestMeasurement as any)?.createdAt;
 
@@ -122,7 +130,7 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
                       <div className="font-bold text-slate-900">{metric.name}</div>
                       {metric.templateName && (
                         <span className="text-[10px] text-slate-400 font-medium">
-                          Template: {metric.templateName}
+                          {t('analytics.templatePrefix')} {metric.templateName}
                         </span>
                       )}
                     </td>
@@ -146,13 +154,13 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
                       {thresholdText}
                     </td>
                     <td className="py-3 px-3.5 text-slate-500 font-medium">
-                      Cycle {metric.cycle ?? 1}
+                      {t('analytics.cycleCount', { cycle: metric.cycle ?? 1 })}
                     </td>
                     <td className="py-3 px-3.5 font-mono text-[11px] text-slate-600">
                       {measuredTimestamp ? (
                         <span className="text-slate-700 font-medium">{formatTimeVN(measuredTimestamp)}</span>
                       ) : (
-                        <span className="text-slate-400 italic">No data yet</span>
+                        <span className="text-slate-400 italic">{t('analytics.noDataYet')}</span>
                       )}
                     </td>
                     <td className="py-3 px-3.5 text-right">
@@ -162,7 +170,7 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
                         className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 transition-colors cursor-pointer inline-flex items-center gap-1.5"
                       >
                         <TrendingUp className="w-3 h-3" />
-                        View Chart
+                        {t('analytics.viewChart')}
                       </button>
                     </td>
                   </tr>
