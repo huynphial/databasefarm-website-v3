@@ -445,6 +445,7 @@
   },
   "analytics": {
     "title": "Phân tích cơ sở dữ liệu",
+    "search": "Tìm kiếm",
     "selectDatabase": "Chọn cơ sở dữ liệu mục tiêu...",
     "allEngineTypes": "Tất cả loại hệ quản trị",
     "searchPlaceholder": "Tìm kiếm tên CSDL, máy chủ, hoặc hệ quản trị...",
@@ -671,12 +672,17 @@
     "thresholdBoundaries": "Ranh giới ngưỡng kích hoạt ({type})",
     "alertsBypassed": "Đã bỏ qua cảnh báo (Chế độ viễn thông)",
     "relationalOperator": "Toán tử so sánh:",
+    "opGt": "> (Vi phạm khi giá trị > ngưỡng)",
     "opGte": ">= (Vi phạm khi giá trị >= ngưỡng)",
+    "opLt": "< (Vi phạm khi giá trị < ngưỡng)",
     "opLte": "<= (Vi phạm khi giá trị <= ngưỡng)",
+    "opEq": "= (Vi phạm khi giá trị = ngưỡng)",
+    "opNeq": "!= (Vi phạm khi giá trị != ngưỡng)",
     "opEqBool": "= (Bằng - Vi phạm khi giá trị bằng ngưỡng)",
     "opNeqBool": "!= (Khác - Vi phạm khi giá trị khác ngưỡng)",
     "opContains": "CONTAINS (Chứa chuỗi con)",
     "opDoesNotContain": "DOES_NOT_CONTAIN (Không chứa chuỗi con)",
+    "opDoesNotContains": "DOES_NOT_CONTAINS (Không chứa chuỗi con)",
     "opEqStr": "= (Khớp chính xác chuỗi)",
     "opNeqStr": "!= (Không bằng)",
     "warnValueEquals": "Cảnh báo nếu Giá trị = ({op})",
@@ -722,7 +728,8 @@
     "colMetric": "Chỉ số",
     "colMessage": "Nội dung cảnh báo",
     "colRaisedAt": "Thời điểm kích hoạt",
-    "colClearedResolver": "Thời điểm đóng / Người xử lý"
+    "colClearedResolver": "Người xử lý",
+    "colClearedState": "Thời điểm đóng"
   },
   "alertNotifications": {
     "title": "Nhật ký gửi thông báo cảnh báo",

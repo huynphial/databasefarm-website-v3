@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { History, Search, Calendar, Server, Filter, RefreshCw, CheckCircle2, Clock, Zap, Database } from 'lucide-react';
 import { AlertHistoryEntity, DatabaseEntity } from '../../types';
-import { DB_ENGINES } from '../../config/dbEngines';
+import { DB_ENGINES, getDbEngineBadgeClass } from '../../config/dbEngines';
 import { DataTable, Column } from '../tables/DataTable';
 import { formatTimeVN, cn } from '../../lib/utils';
 import { useToast } from '../ui/Toast';
@@ -111,11 +111,9 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
   const columns: Column<AlertHistoryEntity>[] = [
     {
       header: t('alertHistory.colStatusSeverity'),
-      width: '130px',
+      width: '600px',
       cell: (row) => {
-        const state = row.resolutionStatus || 'CLOSED';
-        const isUserCleared = !!row.clearedByName && row.clearedByName !== 'System Auto-Clear';
-        const isDispatched = row.dispatchStatus === 'DISPATCHED' || !row.dispatchStatus;
+        const isDispatched = row.dispatchStatus === 'DISPATCHED';
         const styles = {
           DOWN: 'bg-rose-50 text-rose-700 border-rose-200',
           CRITICAL: 'bg-rose-50 text-rose-700 border-rose-200',
@@ -129,13 +127,10 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
               <span className={cn('px-1.5 py-0.2 border rounded text-[9px] font-bold tracking-wider', styles)}>
                 {row.alertLevel}
               </span>
-              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
-                {isUserCleared ? 'CLEARED' : state}
-              </span>
             </div>
             <div>
               <span className={cn('inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded', isDispatched ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-slate-600 bg-slate-100 border border-slate-200')}>
-                {isDispatched ? 'DISPATCHED' : 'PENDING'}
+                {isDispatched ? 'DISPATCHED' : 'NO DISPATCH'}
               </span>
             </div>
           </div>
@@ -148,21 +143,21 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       width: '140px',
       cell: (row) => {
         const db = dbMap.get(row.dbId);
-        const ipPort = db ? `${db.host}:${db.port}` : '127.0.0.1:3306';
+        const ipPort = db ? `IP & Port: ${db.host}:${db.port}` : 'IP & Port: 127.0.0.1:3306';
+        const engineBadge = db ? getDbEngineBadgeClass(db.dbType) : 'text-slate-600 bg-slate-100 border-slate-200';
         return (
           <div>
             <div className="font-semibold text-slate-900 text-xs flex items-center gap-1.5">
-              <Server className="w-3 h-3 text-slate-400 shrink-0" />
+              {db && (
+                <span className={`px-1.5 py-0.2 text-[9px] font-bold border rounded mt-0.5 inline-block ${engineBadge}`}>
+                  {db.dbType}
+                </span>
+              )}
               {row.dbName}
             </div>
             <div className="text-[10px] text-slate-400 font-mono mt-0.5">
               {ipPort}
             </div>
-            {db && (
-              <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-slate-100 border border-slate-200 text-slate-600 mt-0.5 inline-block">
-                {db.dbType}
-              </span>
-            )}
           </div>
         );
       },
@@ -171,23 +166,19 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       header: t('alertHistory.colMetric'),
       accessorKey: 'metricName',
       width: '180px',
-      cell: (row) => (
-        <div className="space-y-0.5">
-          <span className="text-slate-900 text-xs font-bold block">{row.metricName}</span>
-          <div className="flex items-center gap-1 flex-wrap">
-            {row.objectName && (
-              <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200 font-semibold">
-                Obj: {row.objectName}
-              </span>
-            )}
-            {row.attributeName && (
-              <span className="text-[10px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
-                Attr: {row.attributeName}
-              </span>
-            )}
+      cell: (row) => {
+        const hasObj = Boolean(row.objectName && row.objectName.trim() !== '');
+        const hasAttr = Boolean(row.attributeName && row.attributeName.trim() !== ''&& row.attributeName.trim() !== 'value');
+        const metricTitleL1 = hasObj ? `${row.metricName} of ${row.objectName}` : row.metricName;
+        const metricTitle = hasAttr ? `${metricTitleL1}.${row.attributeName}` : metricTitleL1;
+        return (
+          <div className="space-y-0.5">
+            <span className="text-slate-900 text-xs font-bold block" title={metricTitle}>
+              {metricTitle}
+            </span>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       header: t('alertHistory.colMessage'),
@@ -201,26 +192,41 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
     {
       header: t('alertHistory.colRaisedAt'),
       accessorKey: 'createdAt',
-      width: '150px',
+      width: '120px',
       cell: (row) => (
         <span className="text-slate-500 text-xs font-mono">{formatTimeVN(row.createdAt)}</span>
       ),
     },
     {
-      header: t('alertHistory.colClearedResolver'),
+      header: t('alertHistory.colClearedState'),
       accessorKey: 'clearedAt',
-      width: '180px',
+      width: '120px',
+      cell: (row) => {
+        return (
+          <div>
+            <div className="text-slate-700 text-xs font-mono flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              {formatTimeVN(row.clearedAt)}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: t('alertHistory.colClearedResolver'),
+      accessorKey: 'resolutionStatus',
+      width: '600px',
       cell: (row) => {
         let resolverLabel = 'Clear normal';
         let resolverStyle = 'text-slate-700 font-medium';
 
         const status = row.resolutionStatus;
         if (status === 'RESOLVED_BY_LEVEL_CHANGE') {
-          resolverLabel = 'change alert level';
+          resolverLabel = 'Change Alert Level';
           resolverStyle = 'text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] inline-block';
         } else if (status === 'AUTO_RESOLVED') {
-          resolverLabel = 'Clear normal';
-          resolverStyle = 'text-slate-600 font-medium';
+          resolverLabel = 'System Auto Clear';
+          resolverStyle = 'text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] inline-block';
         } else if (row.clearedByName && row.clearedByName !== 'System Auto-Clear') {
           resolverLabel = row.clearedByName;
           resolverStyle = 'text-slate-700 font-medium';
@@ -231,12 +237,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
 
         return (
           <div>
-            <div className="text-emerald-700 text-xs font-mono flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              {formatTimeVN(row.clearedAt)}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-              <span>By:</span>
+            <div className="text-[16px] text-slate-500 mt-0.5 flex items-center gap-1">
               <span className={resolverStyle}>{resolverLabel}</span>
             </div>
           </div>
@@ -334,7 +335,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
             <button
               type="button"
               onClick={() => applyPreset(30)}
-              className="px-2.5 py-1 text-xs rounded bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors font-semibold cursor-pointer"
+              className="px-2.5 py-1 text-xs rounded bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-medium cursor-pointer"
             >
               {t('alertHistory.last30Days')}
             </button>

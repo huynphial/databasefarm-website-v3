@@ -970,31 +970,6 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
               </div>
             </div>
 
-            {/* Session Timeout Minutes Card */}
-            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-0.5">
-                <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-indigo-600" />
-                  <span>Session Inactivity Timeout (<code className="font-mono font-bold text-indigo-700">SESSION_TIMEOUT_MINUTES</code>)</span>
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  Maximum allowed inactivity window (in minutes) before the user session is automatically logged out.
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <input
-                  type="number"
-                  min={1}
-                  max={1440}
-                  disabled={!isAdmin}
-                  value={sessionTimeoutMinutes}
-                  onChange={(e) => setSessionTimeoutMinutes(Math.max(1, parseInt(e.target.value, 10) || 30))}
-                  className="w-24 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-indigo-500 disabled:opacity-60 shadow-2xs"
-                />
-                <span className="text-xs text-slate-500 font-medium">minutes</span>
-              </div>
-            </div>
           </div>
         </form>
 
@@ -1005,6 +980,71 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
             <div>
               <div className="font-bold text-red-900 text-base">Danger Zone</div>
               <p className="text-[11px] text-red-700">Data retention & maintenance cleanup actions</p>
+            </div>
+          </div>
+
+          
+
+          {/* Option 2: Clean Raw Query History */}
+          <div className="p-4 bg-white border border-red-200 rounded-xl shadow-2xs space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-amber-600" />
+                  <span>Clean Raw Query History</span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                  Deletes monitor data history older than the specified days to keep. Alert history and alert notification logs are retained intact. (Example: 0 deletes all monitor measurement history, 1 deletes older than today).
+                </p>
+              </div>
+
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setIsCleanRawConfirmOpen(true)}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer shadow-2xs"
+                >
+                  Clean Raw Query History
+                </button>
+              ) : (
+                <div className="text-xs text-slate-500 italic flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Admin Only</span>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Days to Keep Data (default = 0):
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={cleanRawDays}
+                  onChange={(e) => setCleanRawDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Target Database (default = ALL):
+                </label>
+                <select
+                  value={cleanRawDbId}
+                  onChange={(e) => setCleanRawDbId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-amber-500 cursor-pointer"
+                >
+                  <option value="ALL">ALL Databases (Default)</option>
+                  {databases.map((db) => (
+                    <option key={db.id} value={db.id}>
+                      {db.name} ({db.host}:{db.port})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1059,69 +1099,6 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                   value={cleanMonitorDbId}
                   onChange={(e) => setCleanMonitorDbId(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-red-500 cursor-pointer"
-                >
-                  <option value="ALL">ALL Databases (Default)</option>
-                  {databases.map((db) => (
-                    <option key={db.id} value={db.id}>
-                      {db.name} ({db.host}:{db.port})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Option 2: Clean Raw Query History */}
-          <div className="p-4 bg-white border border-red-200 rounded-xl shadow-2xs space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-amber-600" />
-                  <span>Clean Raw Query History</span>
-                </div>
-                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                  Deletes monitor data history older than the specified days to keep. Alert history and alert notification logs are retained intact. (Example: 0 deletes all monitor measurement history, 1 deletes older than today).
-                </p>
-              </div>
-
-              {isAdmin ? (
-                <button
-                  type="button"
-                  onClick={() => setIsCleanRawConfirmOpen(true)}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer shadow-2xs"
-                >
-                  Clean Raw Query History
-                </button>
-              ) : (
-                <div className="text-xs text-slate-500 italic flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Admin Only</span>
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Days to Keep Data (default = 0):
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={cleanRawDays}
-                  onChange={(e) => setCleanRawDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Target Database (default = ALL):
-                </label>
-                <select
-                  value={cleanRawDbId}
-                  onChange={(e) => setCleanRawDbId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-amber-500 cursor-pointer"
                 >
                   <option value="ALL">ALL Databases (Default)</option>
                   {databases.map((db) => (

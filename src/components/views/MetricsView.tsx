@@ -756,60 +756,6 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             </div>
           </div>
 
-          {/* Applied Templates Multi-Select */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-slate-800 font-bold flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                {t('metrics.associatedTemplates')}
-              </label>
-              <span className="text-[11px] text-slate-500 font-mono">
-                {t('metrics.associatedTemplatesSelected', { selected: formData.templateIds?.length || 0, total: templates.length })}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              {t('metrics.associatedTemplatesHelp')}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto p-2 bg-white border border-slate-200 rounded-lg">
-              {templates.map((tpl) => {
-                const isSelected = formData.templateIds?.includes(tpl.id) || false;
-                return (
-                  <label
-                    key={tpl.id}
-                    className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-semibold'
-                        : 'border-transparent hover:bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={(e) => {
-                        const currentIds = formData.templateIds || [];
-                        if (e.target.checked) {
-                          setFormData({ ...formData, templateIds: [...currentIds, tpl.id] });
-                        } else {
-                          setFormData({
-                            ...formData,
-                            templateIds: currentIds.filter((id) => id !== tpl.id),
-                          });
-                        }
-                      }}
-                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <div className="truncate flex-1">
-                      <div className="font-semibold truncate text-[11px]">{tpl.name}</div>
-                      <div className="text-[9px] text-slate-500 font-mono font-bold">
-                        {tpl.targetDbType || 'ALL'}
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Active State Toggle */}
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
             <div>
@@ -878,7 +824,6 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
               >
                 <option value="NUMBER">{t('metrics.valTypeNumeric')}</option>
-                <option value="BOOLEAN">{t('metrics.valTypeBoolean')}</option>
                 <option value="STRING">{t('metrics.valTypeText')}</option>
               </select>
             </div>
@@ -1010,7 +955,6 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                             className="w-full bg-white border border-indigo-300 rounded px-2 py-1 text-xs font-bold text-indigo-800 focus:outline-none focus:border-indigo-500"
                           >
                             <option value="NUMBER">{t('metrics.valTypeIntegerFloat')}</option>
-                            <option value="BOOLEAN">{t('metrics.valTypeTrueFalse')}</option>
                             <option value="STRING">{t('metrics.valTypeStringText')}</option>
                           </select>
                         </div>
@@ -1025,12 +969,23 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                             }}
                             className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-semibold text-slate-700 focus:outline-none focus:border-indigo-500"
                           >
-                            <option value=">=">&gt;= (Greater or Equal)</option>
-                            <option value="<=">&lt;= (Less or Equal)</option>
-                            <option value="=">= (Equal)</option>
-                            <option value="!=">!= (Not Equal)</option>
-                            <option value="CONTAINS">CONTAINS (Substring)</option>
-                            <option value="REGEX">REGEX (Pattern)</option>
+                            {attr.valueType === 'NUMBER' ? (
+                              <>
+                                <option value=">">&gt; (Greater Than)</option>
+                                <option value=">=">&gt;= (Greater or Equal)</option>
+                                <option value="<">&lt; (Less Than)</option>
+                                <option value="<=">&lt;= (Less or Equal)</option>
+                                <option value="=">= (Equal)</option>
+                                <option value="!=">!= (Not Equal)</option>
+                              </>
+                            ) : (
+                              <>
+                                <option value="=">= (Equal)</option>
+                                <option value="!=">!= (Not Equal)</option>
+                                <option value="CONTAINS">CONTAINS (Substring)</option>
+                                <option value="DOES_NOT_CONTAINS">DOES_NOT_CONTAINS (Substring Absence)</option>
+                              </>
+                            )}
                           </select>
                         </div>
                       </div>
@@ -1205,20 +1160,19 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                   >
                     {formData.valueType === 'NUMBER' ? (
                       <>
+                        <option value=">">{t('metrics.opGt')}</option>
                         <option value=">=">{t('metrics.opGte')}</option>
+                        <option value="<">{t('metrics.opLt')}</option>
                         <option value="<=">{t('metrics.opLte')}</option>
-                      </>
-                    ) : formData.valueType === 'BOOLEAN' ? (
-                      <>
-                        <option value="=">{t('metrics.opEqBool')}</option>
-                        <option value="!=">{t('metrics.opNeqBool')}</option>
+                        <option value="=">{t('metrics.opEq')}</option>
+                        <option value="!=">{t('metrics.opNeq')}</option>
                       </>
                     ) : (
                       <>
-                        <option value="CONTAINS">{t('metrics.opContains')}</option>
-                        <option value="DOES_NOT_CONTAIN">{t('metrics.opDoesNotContain')}</option>
                         <option value="=">{t('metrics.opEqStr')}</option>
                         <option value="!=">{t('metrics.opNeqStr')}</option>
+                        <option value="CONTAINS">{t('metrics.opContains')}</option>
+                        <option value="DOES_NOT_CONTAINS">{t('metrics.opDoesNotContains')}</option>
                       </>
                     )}
                   </select>

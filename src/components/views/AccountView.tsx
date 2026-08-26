@@ -583,7 +583,7 @@ export const AccountView: React.FC<AccountViewProps> = ({ currentUser, sessionTi
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: My Account Identity Profile */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-5">
+          <div className="bg-white border border-slate-200 rounded-xl pt-3 pb-6 px-6 shadow-2xs space-y-5">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-100 font-bold text-slate-900 text-sm">
               <UserIcon className="w-4 h-4 text-indigo-600" />
               <span>{t('account.userProfile')}</span>
@@ -628,37 +628,12 @@ export const AccountView: React.FC<AccountViewProps> = ({ currentUser, sessionTi
               {currentUser.createdAt && (
                 <div>
                   <label className="block text-slate-500 font-medium mb-1">{t('account.provisionDate')}</label>
-                  <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono text-slate-700 flex items-center gap-2">
+                  <div className="px-3 pt-2 pb-1 bg-slate-50 border border-slate-200 rounded-lg font-mono text-slate-700 flex items-center gap-2">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
                     <span>{new Date(currentUser.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Role Permissions Summary */}
-            <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-2">
-              <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-indigo-600" />
-                <span>{t('account.permissionsSummary')}</span>
-              </div>
-              <ul className="space-y-1 text-slate-600 text-[11px] list-disc list-inside">
-                {currentUser.role === 'ADMIN' ? (
-                  <>
-                    <li>Manage All User Accounts & Reset Passwords</li>
-                    <li>Configure Monitored Databases & Endpoints</li>
-                    <li>Dynamic Engines & Notification Dispatchers</li>
-                    <li>System Settings & Infrastructure Maintenance</li>
-                  </>
-                ) : (
-                  <>
-                    <li>Live Telemetry Dashboards & Query Observability</li>
-                    <li>Active Incidents & Alerts Overview</li>
-                    <li>Performance Analytics & Metric Charts</li>
-                    <li>Self Password Management</li>
-                  </>
-                )}
-              </ul>
             </div>
           </div>
         </div>

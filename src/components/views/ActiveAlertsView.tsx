@@ -279,29 +279,6 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
 
   const columns: Column<ActiveAlertEntity>[] = [
     {
-      header: t('activeAlerts.state'),
-      accessorKey: 'status',
-      sortable: true,
-      width: '90px',
-      cell: (row) => {
-        const status = row.status || 'OPEN';
-        return status === 'OPEN' ? (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded shadow-2xs">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-            {t('activeAlerts.open')}
-          </span>
-        ) : (
-          <span
-            className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded shadow-2xs"
-            title={`Acknowledged by ${row.acknowledgedByName || 'User'} at ${row.acknowledgedAt ? formatTimeVN(row.acknowledgedAt) : ''}`}
-          >
-            <CheckCircle className="w-3 h-3 text-amber-600" />
-            {t('activeAlerts.acknowledged')}
-          </span>
-        );
-      },
-    },
-    {
       header: t('activeAlerts.severity'),
       accessorKey: 'alertLevel',
       sortable: true,
@@ -328,22 +305,21 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       width: '180px',
       cell: (row) => {
         const dbObj = databases.find((d) => d.id === row.dbId);
-        const ipPort = dbObj ? `${dbObj.host}:${dbObj.port}` : '127.0.0.1:3306';
+        const ipPort = dbObj ? `IP & Port: ${dbObj.host}:${dbObj.port}` : 'IP & Port: 127.0.0.1:3306';
         const engineBadge = dbObj ? getDbEngineBadgeClass(dbObj.dbType) : 'text-slate-600 bg-slate-100 border-slate-200';
         return (
           <div>
             <span className="font-semibold text-slate-900 text-xs tracking-tight flex items-center gap-1.5">
-              <Server className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              {dbObj && (
+                <span className={`px-1.5 py-0.2 text-[9px] font-bold border rounded mt-0.5 inline-block ${engineBadge}`}>
+                  {dbObj.dbType}
+                </span>
+              )}
               {row.dbName}
             </span>
             <div className="text-[10px] text-slate-400 font-mono mt-0.5">
               {ipPort}
             </div>
-            {dbObj && (
-              <span className={`px-1.5 py-0.2 text-[9px] font-bold border rounded mt-0.5 inline-block ${engineBadge}`}>
-                {dbObj.dbType}
-              </span>
-            )}
           </div>
         );
       },
@@ -355,17 +331,14 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       width: '240px',
       cell: (row) => {
         const hasObj = Boolean(row.objectName && row.objectName.trim() !== '');
-        const metricTitle = hasObj ? `${row.metricName} of ${row.objectName}` : row.metricName;
+        const hasAttr = Boolean(row.attributeName && row.attributeName.trim() !== ''&& row.attributeName.trim() !== 'value');
+        const metricTitleL1 = hasObj ? `${row.metricName} of ${row.objectName}` : row.metricName;
+        const metricTitle = hasAttr ? `${metricTitleL1}.${row.attributeName}` : metricTitleL1;
         return (
           <div className="space-y-0.5">
             <span className="text-slate-900 text-xs font-bold block" title={metricTitle}>
               {metricTitle}
             </span>
-            {row.attributeName && (
-              <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200 inline-block">
-                Attr: {row.attributeName}
-              </span>
-            )}
           </div>
         );
       },

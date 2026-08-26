@@ -56,7 +56,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
     ref
   ) => {
     const { t } = useLanguage();
-    const [chartType, setChartType] = useState<'area' | 'line' | 'table'>('area');
+    const [chartType, setChartType] = useState<'area' | 'line' | 'table'>('table');
     const [historyPage, setHistoryPage] = useState<number>(1);
     const [historySearch, setHistorySearch] = useState<string>('');
     const [historySortOrder, setHistorySortOrder] = useState<'desc' | 'asc'>('desc');

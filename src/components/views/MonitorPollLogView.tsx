@@ -537,7 +537,7 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
           {/* Filter 1: DATABASE ENGINE */}
           <div className="md:col-span-3 space-y-1">
-            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 uppercase tracking-wider pb-2.5">
               <Zap className="w-3 h-3 text-amber-500" />
               <span>Database Engine</span>
             </label>
@@ -568,7 +568,7 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
 
           {/* Filter 2: Target Database (Searchable Custom Dropdown) */}
           <div className="md:col-span-4 space-y-1" ref={dbDropdownRef}>
-            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 uppercase tracking-wider pb-2.5">
               <Database className="w-3 h-3 text-emerald-500" />
               <span>Target Database</span>
             </label>

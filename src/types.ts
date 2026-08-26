@@ -110,7 +110,7 @@ export interface SystemSettingItem {
 }
 
 export type MetricValueType = 'NUMBER' | 'STRING' | 'BOOLEAN';
-export type RelationalOperator = '>=' | '<=' | '=' | '!=' | 'CONTAINS' | 'DOES_NOT_CONTAIN';
+export type RelationalOperator = '>' | '>=' | '<' | '<=' | '=' | '!=' | 'CONTAINS' | 'DOES_NOT_CONTAIN' | 'DOES_NOT_CONTAINS' | 'REGEX';
 
 export interface AttributeConfig {
   attributeName: string;

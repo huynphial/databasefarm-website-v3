@@ -318,7 +318,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleSetQuickDate(3)}
-                className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 cursor-pointer"
+                className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
               >
                 {t('rawMeasurements.last3Days')}
               </button>

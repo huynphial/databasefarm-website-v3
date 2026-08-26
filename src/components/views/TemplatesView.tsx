@@ -23,7 +23,8 @@ import {
   Filter,
   ChevronDown,
   AlertTriangle,
-  FileText
+  FileText,
+  Cog
 } from 'lucide-react';
 import { DbEngine, MetricEntity, TemplateEntity, UserRole, DatabaseEngineEntity } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
@@ -607,7 +608,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
               className="px-2.5 py-1 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-colors cursor-pointer"
               title="Manage bundled metrics"
             >
-              {t('templates.manageMetrics')}
+              <Cog className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => handleExportTemplate(row)}
