@@ -822,20 +822,11 @@ async function main() {
     },
   ];
 
-  // 10.95. Partition Table metric_data_points by measured_at Day (Format: pYYYYMMDD)
-  console.log('📦 Setting up daily partitioning on metric_data_points (by measured_at, format pYYYYMMDD)...');
+  // 10.95. Partition Table metric_data_points by measured_at Day (Single Partition p20260101)
+  console.log('📦 Setting up partitioning on metric_data_points (single partition p20260101)...');
   try {
-    const today = new Date();
-    const yyyy = today.getUTCFullYear();
-    const mm = String(today.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(today.getUTCDate()).padStart(2, '0');
-    const firstPartitionName = `p${yyyy}${mm}${dd}`;
-
-    const nextDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1));
-    const nextYyyy = nextDay.getUTCFullYear();
-    const nextMm = String(nextDay.getUTCMonth() + 1).padStart(2, '0');
-    const nextDd = String(nextDay.getUTCDate()).padStart(2, '0');
-    const nextDayStr = `${nextYyyy}-${nextMm}-${nextDd}`;
+    const firstPartitionName = 'p20260101';
+    const nextDayStr = '2026-01-02';
 
     // 1. Drop foreign keys if MySQL InnoDB constraints exist (MySQL disallows FKs on partitioned tables)
     try {
@@ -871,54 +862,29 @@ async function main() {
     if (Array.isArray(existingPartitions) && existingPartitions.length > 0) {
       console.log(`ℹ️ metric_data_points is already partitioned. Existing partitions: ${existingPartitions.map((ep: any) => ep.PARTITION_NAME).join(', ')}`);
       const hasFirstPartition = existingPartitions.some((ep: any) => ep.PARTITION_NAME === firstPartitionName);
-      const hasFuturePartition = existingPartitions.some((ep: any) => ep.PARTITION_NAME === 'p_future');
 
       if (!hasFirstPartition) {
-        if (hasFuturePartition) {
-          try {
-            await p.$executeRawUnsafe(`
-              ALTER TABLE \`metric_data_points\` 
-              REORGANIZE PARTITION \`p_future\` INTO (
-                PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
-              );
-            `);
-            console.log(`✅ Reorganized partition p_future into initial partition ${firstPartitionName} (LESS THAN TO_DAYS('${nextDayStr}')).`);
-          } catch {
-            try {
-              await p.$executeRawUnsafe(`
-                ALTER TABLE \`metric_data_points\` 
-                ADD PARTITION (
-                  PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
-                );
-              `);
-              console.log(`✅ Added daily partition ${firstPartitionName}.`);
-            } catch {
-              // Already covered by range
-            }
-          }
-        } else {
-          try {
-            await p.$executeRawUnsafe(`
-              ALTER TABLE \`metric_data_points\` 
-              ADD PARTITION (
-                PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
-              );
-            `);
-            console.log(`✅ Added daily partition ${firstPartitionName}.`);
-          } catch {
-            // Already covered by range
-          }
+        try {
+          await p.$executeRawUnsafe(`
+            ALTER TABLE \`metric_data_points\` 
+            ADD PARTITION (
+              PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
+            );
+          `);
+          console.log(`✅ Added partition ${firstPartitionName}.`);
+        } catch {
+          // Already covered by range
         }
       }
     } else {
-      // 3. Alter table to partition by range of TO_DAYS(measured_at) with first partition pYYYYMMDD (no p_future)
+      // 3. Alter table to partition by range of TO_DAYS(measured_at) with only partition p20260101
       await p.$executeRawUnsafe(`
         ALTER TABLE \`metric_data_points\` 
         PARTITION BY RANGE (TO_DAYS(\`measured_at\`)) (
           PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
         );
       `);
-      console.log(`✅ Successfully created first partition "${firstPartitionName}" on metric_data_points table (by measured_at day).`);
+      console.log(`✅ Successfully created single partition "${firstPartitionName}" on metric_data_points table.`);
     }
   } catch (partErr: any) {
     console.warn('⚠️ Partition configuration note (will proceed with data insertion):', partErr.message);
