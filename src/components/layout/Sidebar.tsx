@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { UserRole } from '../../types';
+import { useTranslation } from '../../i18n';
 
 export type NavigationTab =
   | 'dashboard'
@@ -57,24 +58,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
   onLogout,
 }) => {
+  const { t } = useTranslation();
+
   const monitoringItems = [
-    { id: 'dashboard' as NavigationTab, label: 'Dashboard Overview', icon: LayoutDashboard },
-    { id: 'active-alerts' as NavigationTab, label: 'Active Alerts', icon: ShieldAlert },
-    { id: 'databases' as NavigationTab, label: 'Monitored Databases', icon: Database },
-    { id: 'groups' as NavigationTab, label: 'Database Groups', icon: FolderKanban },
-    { id: 'analytics-database' as NavigationTab, label: 'Analytics Database', icon: BarChart3 },
-    { id: 'raw-measurements' as NavigationTab, label: 'Raw Query History', icon: Activity },
+    { id: 'dashboard' as NavigationTab, label: t('nav.dashboard'), icon: LayoutDashboard },
+    { id: 'active-alerts' as NavigationTab, label: t('nav.activeAlerts'), icon: ShieldAlert },
+    { id: 'databases' as NavigationTab, label: t('nav.databases'), icon: Database },
+    { id: 'groups' as NavigationTab, label: t('nav.groups'), icon: FolderKanban },
+    { id: 'analytics-database' as NavigationTab, label: t('nav.analyticsDatabase'), icon: BarChart3 },
+    { id: 'raw-measurements' as NavigationTab, label: t('nav.rawMeasurements'), icon: Activity },
   ];
 
   const configurationItems = [
-    { id: 'templates' as NavigationTab, label: 'Monitoring Templates', icon: Layers },
-    { id: 'metrics' as NavigationTab, label: 'Metrics Management', icon: Gauge },
-    { id: 'alert-history' as NavigationTab, label: 'Alert History Log', icon: History },
-    { id: 'alert-notification-logs' as NavigationTab, label: 'Alert Notification Log', icon: BellRing, adminOnly: true },
-    { id: 'monitor-poll-logs' as NavigationTab, label: 'Monitor Poll Log', icon: Activity, adminOnly: true },
-    { id: 'audit-logs' as NavigationTab, label: 'Audit Trail Log', icon: FileText, adminOnly: true },
-    { id: 'account' as NavigationTab, label: 'Account Settings', icon: KeyRound },
-    { id: 'system-settings' as NavigationTab, label: 'System Settings', icon: Sliders, adminOnly: true },
+    { id: 'templates' as NavigationTab, label: t('nav.templates'), icon: Layers },
+    { id: 'metrics' as NavigationTab, label: t('nav.metrics'), icon: Gauge },
+    { id: 'alert-history' as NavigationTab, label: t('nav.alertHistory'), icon: History },
+    { id: 'alert-notification-logs' as NavigationTab, label: t('nav.alertNotificationLogs'), icon: BellRing, adminOnly: true },
+    { id: 'monitor-poll-logs' as NavigationTab, label: t('nav.monitorPollLogs'), icon: Activity, adminOnly: true },
+    { id: 'audit-logs' as NavigationTab, label: t('nav.auditLogs'), icon: FileText, adminOnly: true },
+    { id: 'account' as NavigationTab, label: t('nav.account'), icon: KeyRound },
+    { id: 'system-settings' as NavigationTab, label: t('nav.systemSettings'), icon: Sliders, adminOnly: true },
   ];
 
   return (
@@ -86,8 +89,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Server className="w-5 h-5" />
           </div>
           <div className="min-w-0">
-            <span className="font-bold text-base tracking-tight text-slate-900 block truncate">DatabaseFarm</span>
-            <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wider block">Powered by Google AI</span>
+            <span className="font-bold text-base tracking-tight text-slate-900 block truncate">{t('common.appTitle')}</span>
+            <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wider block">{t('common.appSubtitle')}</span>
           </div>
         </div>
       </div>
@@ -96,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
         <div>
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
-            Monitoring
+            {t('nav.sectionMonitoring')}
           </div>
           <div className="space-y-1">
             {monitoringItems.map((item) => {
@@ -128,7 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div>
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
-            Configuration & Logs
+            {t('nav.sectionConfiguration')}
           </div>
           <div className="space-y-1">
             {configurationItems
@@ -217,7 +220,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
           <button
             onClick={onLogout}
-            title="Sign out"
+            title={t('nav.logout')}
             className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
           >
             <LogOut className="w-4 h-4" />
@@ -227,3 +230,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
   );
 };
+

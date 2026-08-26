@@ -369,7 +369,7 @@ model AlertHistory {
 
 /// MetricDataPoint Model: Redesigned multidimensional time-series store for monitored tuples.
 model MetricDataPoint {
-  id            String   @id @default(uuid())
+  id            String   @default(uuid())
   dbId          String   @map("database_id")
   metricId      String   @map("metric_id")
   objectName    String?  @default("GLOBAL") @map("object_name")
@@ -380,6 +380,7 @@ model MetricDataPoint {
   database Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
   metric   Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
 
+  @@id([id, measuredAt])
   @@index([dbId, metricId, measuredAt(sort: Desc)])
   @@map("metric_data_points")
 }

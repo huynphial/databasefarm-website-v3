@@ -18,6 +18,7 @@ import { AccountView } from './components/views/AccountView';
 import { LoginView } from './components/views/LoginView';
 import { ToastProvider, useToast } from './components/ui/Toast';
 import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './i18n';
 import { storage } from './lib/storage';
 import { api } from './lib/api';
 import { autoSyncDatabaseTemplateMetrics } from './lib/utils';
@@ -992,10 +993,12 @@ function MainAppContent() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <MainAppContent />
-      </ToastProvider>
-    </ThemeProvider>
+    <LanguageProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <MainAppContent />
+        </ToastProvider>
+      </ThemeProvider>
+    </LanguageProvider>
   );
 }

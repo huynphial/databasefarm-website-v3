@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { Server, Lock, User, Sparkles, ExternalLink, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Server, Lock, User, Sparkles, ExternalLink, ArrowRight, Eye, EyeOff, Globe } from 'lucide-react';
 import { UserRole } from '../../types';
 import { useToast } from '../ui/Toast';
 import { api } from '../../lib/api';
+import { useTranslation, AVAILABLE_LANGUAGES, LanguageCode } from '../../i18n';
 
 interface LoginViewProps {
   onLogin: (username: string, role: UserRole) => void;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
+  const { t, language, setLanguage } = useTranslation();
   const { toast } = useToast();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -21,11 +23,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
     const cleanPass = password.trim();
 
     if (!cleanUser) {
-      toast({ title: 'Validation Error', description: 'Username is required.', type: 'error' });
+      toast({ title: t('common.error'), description: 'Username is required.', type: 'error' });
       return;
     }
     if (!cleanPass) {
-      toast({ title: 'Validation Error', description: 'Password is required.', type: 'error' });
+      toast({ title: t('common.error'), description: 'Password is required.', type: 'error' });
       return;
     }
 
@@ -53,7 +55,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
       toast({
         title: 'Authentication Failed',
-        description: result.message || 'Invalid username or password. Please check your credentials.',
+        description: result.message || t('auth.invalidCredentials'),
         type: 'error',
       });
     } catch (err: any) {
@@ -68,7 +70,28 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-indigo-50/25 to-slate-100 flex items-center justify-center p-4 sm:p-6 text-slate-900 font-sans">
+    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-indigo-50/25 to-slate-100 flex items-center justify-center p-4 sm:p-6 text-slate-900 font-sans relative">
+      {/* Top Right Language Switcher */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-1.5 bg-white/80 backdrop-blur-xs border border-slate-200 rounded-xl p-1 shadow-xs">
+        <Globe className="w-3.5 h-3.5 text-slate-400 ml-1.5" />
+        {AVAILABLE_LANGUAGES.map((lang) => {
+          const isActive = lang.code === language;
+          return (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => setLanguage(lang.code as LanguageCode)}
+              className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                isActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <span>{lang.flag}</span>
+              <span className="uppercase">{lang.code}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="w-full max-w-md bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-xl shadow-slate-200/50 relative overflow-hidden">
         {/* Subtle Ambient Light Gradient Accent */}
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-80 h-40 bg-indigo-500/10 blur-3xl pointer-events-none rounded-full" />
@@ -78,17 +101,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           <div className="w-13 h-13 bg-indigo-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-indigo-600/25 text-white mb-3 transition-transform hover:scale-105">
             <Server className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">DatabaseFarm</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{t('common.appTitle')}</h1>
           <p className="text-xs font-semibold text-indigo-600 mt-1 flex items-center justify-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Database Monitoring Platform</span>
+            <span>{t('auth.signInSubtitle')}</span>
           </p>
         </div>
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
-            <label className="block text-slate-700 font-semibold mb-1.5">Username</label>
+            <label className="block text-slate-700 font-semibold mb-1.5">{t('account.username')}</label>
             <div className="relative">
               <User className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
               <input
@@ -97,7 +120,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username"
+                placeholder={t('auth.usernamePlaceholder')}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all text-xs"
               />
             </div>
@@ -105,7 +128,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-slate-700 font-semibold">Password</label>
+              <label className="block text-slate-700 font-semibold">{t('databases.password')}</label>
             </div>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
@@ -115,7 +138,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
+                placeholder={t('auth.passwordPlaceholder')}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-10 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all text-xs"
               />
               <button
@@ -136,7 +159,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             disabled={isLoading}
             className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-semibold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/20 mt-5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed text-xs"
           >
-            <span>{isLoading ? 'Signing in...' : 'Sign In'}</span>
+            <span>{isLoading ? t('common.loading') : t('auth.signInButton')}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>

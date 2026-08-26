@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Clock, Shield, Eye, Timer, Database, Server } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Clock, Shield, Eye, Timer, Database, Server, Globe, ChevronDown, Check } from 'lucide-react';
 import { NavigationTab } from './Sidebar';
 import { UserRole } from '../../types';
 import { AUTH_CONFIG } from '../../config/authConfig';
 import { storage } from '../../lib/storage';
+import { useTranslation, AVAILABLE_LANGUAGES, LanguageCode } from '../../i18n';
 
 interface HeaderProps {
   activeTab: NavigationTab;
@@ -12,75 +13,107 @@ interface HeaderProps {
   sessionTimeoutMinutes?: number;
 }
 
-const titles: Record<NavigationTab, { title: string; subtitle: string }> = {
-  dashboard: {
-    title: 'Dashboard Overview',
-    subtitle: 'System health summary and real-time active alerts',
-  },
-  databases: {
-    title: 'Monitored Databases',
-    subtitle: 'Manage monitored instance endpoints, credentials, and connection configuration',
-  },
-  groups: {
-    title: 'Database Groups',
-    subtitle: 'Group mapping, template bindings, and Telegram / Email notification routing',
-  },
-  templates: {
-    title: 'Monitoring Templates',
-    subtitle: 'Engine-compatible metric blueprints strictly tailored per database engine',
-  },
-  'analytics-database': {
-    title: 'Analytics Database',
-    subtitle: 'Single-instance deep performance dashboard, multi-type metric breakdowns, and interactive telemetry charts',
-  },
-  metrics: {
-    title: 'Metrics Management',
-    subtitle: 'SQL health queries, evaluation thresholds, and active monitoring state',
-  },
-  'alert-history': {
-    title: 'Alert History Log',
-    subtitle: 'Audited log of cleared and historical alert events (30-day default query optimization)',
-  },
-  'alert-notification-logs': {
-    title: 'Alert Notification Queue & Audit Log',
-    subtitle: 'Real-time alert notification queue and audit trail of dispatched alert notifications',
-  },
-  'monitor-poll-logs': {
-    title: 'Monitor Poll Queue & Execution Logs',
-    subtitle: 'Real-time database poll scheduling queue (database_poll_queue) and historical execution logs (database_poll_log)',
-  },
-  'active-alerts': {
-    title: 'Active Alerts',
-    subtitle: 'Dedicated real-time incident monitoring with 1-Minute Auto-Refresh control',
-  },
-  'audit-logs': {
-    title: 'Audit Trail Log',
-    subtitle: 'Comprehensive audit trail logging all user actions, authentication attempts, and entity updates',
-  },
-  'system-settings': {
-    title: 'System Settings & API Collector',
-    subtitle: 'Central MySQL database configuration, external API Collector parameters, and global rules',
-  },
-  'raw-measurements': {
-    title: 'Raw Query History',
-    subtitle: 'Real-time telemetry stream of raw probe query executions, attribute measurements, and threshold evaluations',
-  },
-  account: {
-    title: 'Account Settings',
-    subtitle: 'User accounts management, directory access control, and credential settings',
-  },
-};
-
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   userRole,
   storageType = 'memory',
   sessionTimeoutMinutes,
 }) => {
-  const currentInfo = titles[activeTab] || {
-    title: 'Dashboard',
-    subtitle: 'Database Monitoring System',
+  const { t, language, setLanguage } = useTranslation();
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const langDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (langDropdownRef.current && !langDropdownRef.current.contains(event.target as Node)) {
+        setLangDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const getTabTitleInfo = (tab: NavigationTab) => {
+    switch (tab) {
+      case 'dashboard':
+        return {
+          title: t('header.dashboardTitle'),
+          subtitle: t('header.dashboardSubtitle'),
+        };
+      case 'databases':
+        return {
+          title: t('header.databasesTitle'),
+          subtitle: t('header.databasesSubtitle'),
+        };
+      case 'groups':
+        return {
+          title: t('header.groupsTitle'),
+          subtitle: t('header.groupsSubtitle'),
+        };
+      case 'templates':
+        return {
+          title: t('header.templatesTitle'),
+          subtitle: t('header.templatesSubtitle'),
+        };
+      case 'analytics-database':
+        return {
+          title: t('header.analyticsTitle'),
+          subtitle: t('header.analyticsSubtitle'),
+        };
+      case 'metrics':
+        return {
+          title: t('header.metricsTitle'),
+          subtitle: t('header.metricsSubtitle'),
+        };
+      case 'alert-history':
+        return {
+          title: t('header.alertHistoryTitle'),
+          subtitle: t('header.alertHistorySubtitle'),
+        };
+      case 'alert-notification-logs':
+        return {
+          title: t('header.alertNotificationLogsTitle'),
+          subtitle: t('header.alertNotificationLogsSubtitle'),
+        };
+      case 'monitor-poll-logs':
+        return {
+          title: t('header.monitorPollLogsTitle'),
+          subtitle: t('header.monitorPollLogsSubtitle'),
+        };
+      case 'active-alerts':
+        return {
+          title: t('header.activeAlertsTitle'),
+          subtitle: t('header.activeAlertsSubtitle'),
+        };
+      case 'audit-logs':
+        return {
+          title: t('header.auditLogsTitle'),
+          subtitle: t('header.auditLogsSubtitle'),
+        };
+      case 'system-settings':
+        return {
+          title: t('header.systemSettingsTitle'),
+          subtitle: t('header.systemSettingsSubtitle'),
+        };
+      case 'raw-measurements':
+        return {
+          title: t('header.rawMeasurementsTitle'),
+          subtitle: t('header.rawMeasurementsSubtitle'),
+        };
+      case 'account':
+        return {
+          title: t('header.accountTitle'),
+          subtitle: t('header.accountSubtitle'),
+        };
+      default:
+        return {
+          title: t('common.appTitle'),
+          subtitle: t('common.appSubtitle'),
+        };
+    }
   };
+
+  const currentInfo = getTabTitleInfo(activeTab);
 
   // Real-time Expiration Countdown from systemSettings & user activity
   const timeoutMins = sessionTimeoutMinutes && sessionTimeoutMinutes > 0 ? sessionTimeoutMinutes : 30;
@@ -113,6 +146,8 @@ export const Header: React.FC<HeaderProps> = ({
   const isTimerLow = secondsRemaining < 300; // Under 5 minutes
   const isTimerUrgent = secondsRemaining < 60; // Under 1 minute
 
+  const currentLangObj = AVAILABLE_LANGUAGES.find((l) => l.code === language) || AVAILABLE_LANGUAGES[0];
+
   return (
     <header className="h-16 border-b border-slate-200 flex items-center justify-between px-6 sm:px-8 bg-white shrink-0 select-none transition-colors">
       <div>
@@ -124,8 +159,59 @@ export const Header: React.FC<HeaderProps> = ({
         </p>
       </div>
 
-      {/* Stacked Info Columns Toolbar */}
-      <div className="flex items-center gap-2">
+      {/* Stacked Info Columns Toolbar & Language Selector */}
+      <div className="flex items-center gap-3">
+        {/* Language Selector Dropdown */}
+        <div className="relative" ref={langDropdownRef}>
+          <button
+            type="button"
+            onClick={() => setLangDropdownOpen((prev) => !prev)}
+            title={t('header.switchLanguage')}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 transition cursor-pointer shadow-2xs"
+          >
+            <Globe className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="text-sm leading-none">{currentLangObj.flag}</span>
+            <span className="font-semibold uppercase tracking-wider text-[11px]">{currentLangObj.code}</span>
+            <ChevronDown className="w-3 h-3 text-slate-400" />
+          </button>
+
+          {langDropdownOpen && (
+            <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+              <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                {t('header.language')}
+              </div>
+              {AVAILABLE_LANGUAGES.map((item) => {
+                const isSelected = item.code === language;
+                return (
+                  <button
+                    key={item.code}
+                    type="button"
+                    onClick={() => {
+                      setLanguage(item.code as LanguageCode);
+                      setLangDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium transition cursor-pointer ${
+                      isSelected
+                        ? 'bg-indigo-50/80 text-indigo-700 font-semibold'
+                        : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{item.flag}</span>
+                      <div className="text-left">
+                        <div>{item.nativeName}</div>
+                        <div className="text-[10px] text-slate-400 font-normal">{item.name}</div>
+                      </div>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Status Toolbar */}
         <div className="flex items-center bg-slate-50 border border-slate-200/80 rounded-lg p-1.5 shadow-2xs divide-x divide-slate-200 text-[10px] font-mono">
           {/* Column 1: Storage Provider | Collector Status */}
           <div className="px-2.5 flex flex-col justify-center gap-0.5">
@@ -135,12 +221,12 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Database className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
               <span>
-                STORE: {storageType === 'prisma' ? 'PRISMA (MYSQL)' : 'IN-MEMORY'}
+                {storageType === 'prisma' ? t('header.storePrisma') : t('header.storeMemory')}
               </span>
             </div>
             <div className="flex items-center gap-1.5 font-semibold text-slate-600">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span>COLLECTOR: ACTIVE</span>
+              <span>{t('header.collectorActive')}</span>
             </div>
           </div>
 
@@ -153,7 +239,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <Timer className={`w-3.5 h-3.5 shrink-0 ${isTimerUrgent ? 'text-rose-500' : 'text-indigo-500'}`} />
-              <span>EXPIRY: {formatCountdown(secondsRemaining)}</span>
+              <span>{t('common.sessionExpiry')}: {formatCountdown(secondsRemaining)}</span>
             </div>
             <div
               title={`Authenticated account security role: ${userRole}`}
@@ -162,12 +248,12 @@ export const Header: React.FC<HeaderProps> = ({
               {userRole === 'ADMIN' ? (
                 <>
                   <Shield className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                  <span className="text-indigo-600 font-bold">ROLE: ADMIN</span>
+                  <span className="text-indigo-600 font-bold">{t('common.roleAdmin')}</span>
                 </>
               ) : (
                 <>
                   <Eye className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span className="text-emerald-600 font-bold">ROLE: VIEWER</span>
+                  <span className="text-emerald-600 font-bold">{t('common.roleViewer')}</span>
                 </>
               )}
             </div>
@@ -177,3 +263,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

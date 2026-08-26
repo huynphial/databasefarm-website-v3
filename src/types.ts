@@ -58,6 +58,7 @@ export interface DatabaseEntity {
   authMethod?: AuthMethod; // 'PASSWORD' | 'AUTH_KEY' | 'TRUST'
   username?: string;
   password?: string;
+  passwordEncrypted?: string; // AES-256 encrypted database password ciphertext
   authKey?: string;
   databaseName?: string;
   environment?: 'PRODUCTION' | 'STAGING' | 'DEVELOPMENT';

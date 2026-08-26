@@ -1,26 +1,22 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { DatabaseEntity } from '../types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function autoSyncDatabaseTemplateMetrics<
-  TD extends { id: string; dbType?: string; groupIds?: string[]; metricIds?: string[]; updatedAt?: string },
-  TG extends { id: string; templateIds?: string[] },
-  TT extends { id: string; targetDbType?: string },
-  TM extends { id: string; isEnabled?: boolean; templateId?: string | null; templateIds?: string[] }
->(
+export function autoSyncDatabaseTemplateMetrics<TD extends DatabaseEntity = DatabaseEntity>(
   dbs: TD[],
-  grps: TG[],
-  tpls: TT[],
-  mets: TM[]
+  grps: { id: string; templateIds?: string[] }[],
+  tpls: { id: string; targetDbType?: any }[],
+  mets: { id: string; isEnabled?: boolean; templateId?: string | null; templateIds?: string[] }[]
 ): { syncedDatabases: TD[]; updatedDbIds: string[] } {
   const groupMap = new Map(grps.map((g) => [g.id, g]));
   const templateMap = new Map(tpls.map((t) => [t.id, t]));
   const updatedDbIds: string[] = [];
 
-  const syncedDatabases = dbs.map((db) => {
+  const syncedDatabases: TD[] = dbs.map((db) => {
     const attachedGroupIds = db.groupIds || [];
     const attachedTemplateIds = new Set<string>();
 

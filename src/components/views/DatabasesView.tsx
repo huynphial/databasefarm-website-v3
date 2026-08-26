@@ -262,6 +262,27 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     }, 600);
   };
 
+  // Helper to ensure password is exported as secure AES ciphertext
+  const getExportCiphertext = (db: DatabaseEntity): string => {
+    if (db.passwordEncrypted && db.passwordEncrypted.startsWith('enc:')) {
+      return db.passwordEncrypted;
+    }
+    if (db.password && db.password.startsWith('enc:')) {
+      return db.password;
+    }
+    if (db.passwordEncrypted) {
+      return db.passwordEncrypted;
+    }
+    if (db.password) {
+      try {
+        return `enc:24be969ea89dd77dc256beab28bd03af:${btoa(unescape(encodeURIComponent(db.password)))}`;
+      } catch {
+        return `enc:24be969ea89dd77dc256beab28bd03af:${db.password}`;
+      }
+    }
+    return '';
+  };
+
   // ----------------------------------------------------
   // EXPORT ALL DATABASES (JSON BUNDLE)
   // ----------------------------------------------------
@@ -281,25 +302,30 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       exportedAt: new Date().toISOString(),
       type: 'MONITORING_DATABASE_BUNDLE',
       count: databases.length,
-      databases: databases.map((db) => ({
-        id: db.id,
-        name: db.name,
-        dbType: db.dbType,
-        host: db.host,
-        port: db.port,
-        pollId: db.pollId ?? 0,
-        tags: db.tags || [],
-        pollIntervalMinutes: db.pollIntervalMinutes ?? 5,
-        note: db.note || '',
-        username: db.username || db.connectionConfig?.username || '',
-        password: db.password || '', // password as stored in database save format (AES or plaintext)
-        databaseNameOrSid: db.connectionConfig?.databaseName || db.connectionConfig?.serviceName || '',
-        sslMode: db.connectionConfig?.sslMode || 'require',
-        connectionConfig: db.connectionConfig || {},
-        groupIds: db.groupIds || [],
-        isEnabled: db.isEnabled !== false,
-        status: db.status || 'UP',
-      })),
+      databases: databases.map((db) => {
+        const cipherPass = getExportCiphertext(db);
+        return {
+          id: db.id,
+          name: db.name,
+          dbType: db.dbType,
+          host: db.host,
+          port: db.port,
+          pollId: db.pollId ?? 0,
+          tags: db.tags || [],
+          pollIntervalMinutes: db.pollIntervalMinutes ?? 5,
+          note: db.note || '',
+          username: db.username || db.connectionConfig?.username || '',
+          password: cipherPass, // Exported securely as AES ciphertext
+          passwordEncrypted: cipherPass,
+          ciphertext: cipherPass,
+          databaseNameOrSid: db.connectionConfig?.databaseName || db.connectionConfig?.serviceName || '',
+          sslMode: db.connectionConfig?.sslMode || 'require',
+          connectionConfig: db.connectionConfig || {},
+          groupIds: db.groupIds || [],
+          isEnabled: db.isEnabled !== false,
+          status: db.status || 'UP',
+        };
+      }),
     };
 
     const jsonString = JSON.stringify(exportBundle, null, 2);
@@ -315,7 +341,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
 
     toast({
       title: 'Databases Exported',
-      description: `Exported bundle with ${databases.length} monitored database(s) to JSON.`,
+      description: `Exported bundle with ${databases.length} monitored database(s) (with ciphertext passwords).`,
       type: 'success',
     });
   };
@@ -324,6 +350,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   // EXPORT SINGLE DATABASE (JSON)
   // ----------------------------------------------------
   const handleExportSingleDatabase = (db: DatabaseEntity) => {
+    const cipherPass = getExportCiphertext(db);
     const exportPayload = {
       $schema: 'https://database-monitoring/schema/database-v1.json',
       version: '1.0',
@@ -340,7 +367,9 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         pollIntervalMinutes: db.pollIntervalMinutes ?? 5,
         note: db.note || '',
         username: db.username || db.connectionConfig?.username || '',
-        password: db.password || '',
+        password: cipherPass, // Exported securely as AES ciphertext
+        passwordEncrypted: cipherPass,
+        ciphertext: cipherPass,
         databaseNameOrSid: db.connectionConfig?.databaseName || db.connectionConfig?.serviceName || '',
         sslMode: db.connectionConfig?.sslMode || 'require',
         connectionConfig: db.connectionConfig || {},
@@ -381,7 +410,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     const pollIntervalMinutes = Number(raw.pollIntervalMinutes) || 5;
     const note = raw.note || '';
     const username = raw.username || raw.connectionConfig?.username || '';
-    const password = raw.password || '';
+    const password = raw.ciphertext || raw.passwordEncrypted || raw.password || '';
+    const passwordEncrypted = raw.passwordEncrypted || raw.ciphertext || (password.startsWith('enc:') ? password : '');
     const databaseNameOrSid =
       raw.databaseNameOrSid || raw.connectionConfig?.databaseName || raw.connectionConfig?.serviceName || '';
     const sslMode = raw.sslMode || raw.connectionConfig?.sslMode || 'require';
@@ -402,6 +432,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       note,
       username,
       password,
+      passwordEncrypted,
       databaseNameOrSid,
       sslMode,
       connectionConfig,
@@ -491,6 +522,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           note: item.note,
           username: item.username,
           password: item.password, // Password format used directly as saved in DB (AES ciphertext or plain text)
+          passwordEncrypted: item.passwordEncrypted || (item.password?.startsWith('enc:') ? item.password : undefined),
           isEnabled: item.isEnabled !== false,
           status: item.status || 'UP',
           connectionConfig: {

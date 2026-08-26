@@ -822,6 +822,94 @@ async function main() {
     },
   ];
 
+  // 10.95. Partition Table metric_data_points by measured_at Day (Format: pYYYYMMDD)
+  console.log('📦 Setting up daily partitioning on metric_data_points (by measured_at, format pYYYYMMDD)...');
+  try {
+    const today = new Date();
+    const yyyy = today.getUTCFullYear();
+    const mm = String(today.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(today.getUTCDate()).padStart(2, '0');
+    const firstPartitionName = `p${yyyy}${mm}${dd}`;
+
+    const nextDay = new Date(today.getTime() + 86400000);
+    const nextYyyy = nextDay.getUTCFullYear();
+    const nextMm = String(nextDay.getUTCMonth() + 1).padStart(2, '0');
+    const nextDd = String(nextDay.getUTCDate()).padStart(2, '0');
+    const nextDayStr = `${nextYyyy}-${nextMm}-${nextDd}`;
+
+    // 1. Drop foreign keys if MySQL InnoDB constraints exist (MySQL disallows FKs on partitioned tables)
+    try {
+      const fks: any = await p.$queryRawUnsafe(`
+        SELECT CONSTRAINT_NAME 
+        FROM information_schema.KEY_COLUMN_USAGE 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'metric_data_points' 
+          AND REFERENCED_TABLE_NAME IS NOT NULL;
+      `);
+      if (Array.isArray(fks)) {
+        for (const fk of fks) {
+          if (fk.CONSTRAINT_NAME) {
+            await p.$executeRawUnsafe(
+              `ALTER TABLE \`metric_data_points\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\`;`
+            );
+          }
+        }
+      }
+    } catch (fkErr: any) {
+      // Ignored if not MySQL or no FKs present
+    }
+
+    // 2. Check if table is already partitioned
+    const existingPartitions: any = await p.$queryRawUnsafe(`
+      SELECT PARTITION_NAME 
+      FROM information_schema.PARTITIONS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'metric_data_points' 
+        AND PARTITION_NAME IS NOT NULL;
+    `);
+
+    if (Array.isArray(existingPartitions) && existingPartitions.length > 0) {
+      console.log(`ℹ️ metric_data_points is already partitioned. Existing partitions: ${existingPartitions.map((ep: any) => ep.PARTITION_NAME).join(', ')}`);
+      const hasFirstPartition = existingPartitions.some((ep: any) => ep.PARTITION_NAME === firstPartitionName);
+      if (!hasFirstPartition) {
+        try {
+          await p.$executeRawUnsafe(`
+            ALTER TABLE \`metric_data_points\` 
+            REORGANIZE PARTITION \`p_future\` INTO (
+              PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}')),
+              PARTITION \`p_future\` VALUES LESS THAN MAXVALUE
+            );
+          `);
+          console.log(`✅ Reorganized and added partition ${firstPartitionName} (LESS THAN TO_DAYS('${nextDayStr}')).`);
+        } catch {
+          try {
+            await p.$executeRawUnsafe(`
+              ALTER TABLE \`metric_data_points\` 
+              ADD PARTITION (
+                PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
+              );
+            `);
+            console.log(`✅ Added daily partition ${firstPartitionName}.`);
+          } catch {
+            // Already covered by range
+          }
+        }
+      }
+    } else {
+      // 3. Alter table to partition by range of TO_DAYS(measured_at) with first partition pYYYYMMDD and p_future
+      await p.$executeRawUnsafe(`
+        ALTER TABLE \`metric_data_points\` 
+        PARTITION BY RANGE (TO_DAYS(\`measured_at\`)) (
+          PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}')),
+          PARTITION \`p_future\` VALUES LESS THAN MAXVALUE
+        );
+      `);
+      console.log(`✅ Successfully created first partition "${firstPartitionName}" on metric_data_points table (by measured_at day).`);
+    }
+  } catch (partErr: any) {
+    console.warn('⚠️ Partition configuration note (will proceed with data insertion):', partErr.message);
+  }
+
   // 11. Execute High-Performance Batched Inserters (Atomic Transaction)
   console.log('⚡ Executing optimized batch insertions...');
   await p.$transaction([

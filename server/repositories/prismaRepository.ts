@@ -200,6 +200,7 @@ export class PrismaRepository implements IStorageRepository {
       note: (d as any).note || '',
       username: d.username || '',
       password: decryptPassword(d.passwordEncrypted) || '',
+      passwordEncrypted: d.passwordEncrypted || '',
       connectionConfig: (d.connectionConfig as any) || {},
       status: (d.status as any) || 'UP',
       lastCheckAt: d.lastCheckAt ? d.lastCheckAt.toISOString() : undefined,
@@ -229,6 +230,7 @@ export class PrismaRepository implements IStorageRepository {
       note: (d as any).note || '',
       username: d.username || '',
       password: decryptPassword(d.passwordEncrypted) || '',
+      passwordEncrypted: d.passwordEncrypted || '',
       connectionConfig: (d.connectionConfig as any) || {},
       status: (d.status as any) || 'UP',
       lastCheckAt: d.lastCheckAt ? d.lastCheckAt.toISOString() : undefined,
@@ -244,7 +246,7 @@ export class PrismaRepository implements IStorageRepository {
     const id = dbData.id;
     const dbType = (dbData.dbType || 'POSTGRES') as DbType;
 
-    const encryptedPassword = encryptPassword(dbData.password);
+    const encryptedPassword = encryptPassword(dbData.passwordEncrypted || dbData.password);
     const tagsJson = Array.isArray(dbData.tags) ? dbData.tags : [];
     const pollInterval = dbData.pollIntervalMinutes ? Math.max(1, Number(dbData.pollIntervalMinutes)) : 5;
     const noteText = dbData.note !== undefined ? dbData.note : null;
