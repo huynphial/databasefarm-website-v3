@@ -305,11 +305,11 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       width: '180px',
       cell: (row) => {
         const dbObj = databases.find((d) => d.id === row.dbId);
-        const ipPort = dbObj ? `IP & Port: ${dbObj.host}:${dbObj.port}` : 'IP & Port: 127.0.0.1:3306';
+        const ipPort = dbObj ? `${dbObj.host}:${dbObj.port}` : '127.0.0.1:3306';
         const engineBadge = dbObj ? getDbEngineBadgeClass(dbObj.dbType) : 'text-slate-600 bg-slate-100 border-slate-200';
         return (
           <div>
-            <span className="font-semibold text-slate-900 text-xs tracking-tight flex items-center gap-1.5">
+            <span className="font-bold text-slate-900 text-xs tracking-tight flex items-center gap-1.5">
               {dbObj && (
                 <span className={`px-1.5 py-0.2 text-[9px] font-bold border rounded mt-0.5 inline-block ${engineBadge}`}>
                   {dbObj.dbType}
@@ -330,13 +330,13 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       sortable: true,
       width: '240px',
       cell: (row) => {
-        const hasObj = Boolean(row.objectName && row.objectName.trim() !== '');
-        const hasAttr = Boolean(row.attributeName && row.attributeName.trim() !== ''&& row.attributeName.trim() !== 'value');
+        const hasObj = Boolean(row.objectName && row.objectName.trim() !== 'DATABASEFARM_METRIC');
+        const hasAttr = Boolean(row.attributeName && row.attributeName.trim() !== '' && row.attributeName.trim() !== 'value');
         const metricTitleL1 = hasObj ? `${row.metricName} of ${row.objectName}` : row.metricName;
         const metricTitle = hasAttr ? `${metricTitleL1}.${row.attributeName}` : metricTitleL1;
         return (
           <div className="space-y-0.5">
-            <span className="text-slate-900 text-xs font-bold block" title={metricTitle}>
+            <span className="text-slate-900 text-xs font-semibold block" title={metricTitle}>
               {metricTitle}
             </span>
           </div>

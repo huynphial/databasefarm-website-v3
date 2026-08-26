@@ -111,7 +111,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
   const columns: Column<AlertHistoryEntity>[] = [
     {
       header: t('alertHistory.colStatusSeverity'),
-      width: '600px',
+      width: '140px',
       cell: (row) => {
         const isDispatched = row.dispatchStatus === 'DISPATCHED';
         const styles = {
@@ -143,11 +143,11 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       width: '140px',
       cell: (row) => {
         const db = dbMap.get(row.dbId);
-        const ipPort = db ? `IP & Port: ${db.host}:${db.port}` : 'IP & Port: 127.0.0.1:3306';
+        const ipPort = db ? `${db.host}:${db.port}` : '127.0.0.1:3306';
         const engineBadge = db ? getDbEngineBadgeClass(db.dbType) : 'text-slate-600 bg-slate-100 border-slate-200';
         return (
           <div>
-            <div className="font-semibold text-slate-900 text-xs flex items-center gap-1.5">
+            <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
               {db && (
                 <span className={`px-1.5 py-0.2 text-[9px] font-bold border rounded mt-0.5 inline-block ${engineBadge}`}>
                   {db.dbType}
@@ -167,13 +167,13 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       accessorKey: 'metricName',
       width: '180px',
       cell: (row) => {
-        const hasObj = Boolean(row.objectName && row.objectName.trim() !== '');
+        const hasObj = Boolean(row.objectName && row.objectName.trim() !== 'DATABASEFARM_METRIC');
         const hasAttr = Boolean(row.attributeName && row.attributeName.trim() !== ''&& row.attributeName.trim() !== 'value');
         const metricTitleL1 = hasObj ? `${row.metricName} of ${row.objectName}` : row.metricName;
         const metricTitle = hasAttr ? `${metricTitleL1}.${row.attributeName}` : metricTitleL1;
         return (
           <div className="space-y-0.5">
-            <span className="text-slate-900 text-xs font-bold block" title={metricTitle}>
+            <span className="text-slate-900 text-xs font-semibold block" title={metricTitle}>
               {metricTitle}
             </span>
           </div>
@@ -215,7 +215,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
     {
       header: t('alertHistory.colClearedResolver'),
       accessorKey: 'resolutionStatus',
-      width: '600px',
+      width: '300px',
       cell: (row) => {
         let resolverLabel = 'Clear normal';
         let resolverStyle = 'text-slate-700 font-medium';
@@ -227,7 +227,12 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
         } else if (status === 'AUTO_RESOLVED') {
           resolverLabel = 'System Auto Clear';
           resolverStyle = 'text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] inline-block';
-        } else if (row.clearedByName && row.clearedByName !== 'System Auto-Clear') {
+        }
+        else if (status === 'CLEARED_BY_USER') {
+          resolverLabel = 'Clear by User';
+          resolverStyle = 'text-red-700 font-semibold bg-red-50 border border-red-200 px-1.5 py-0.5 rounded text-[10px] inline-block';
+        } 
+        else if (row.clearedByName && row.clearedByName !== 'System Auto-Clear') {
           resolverLabel = row.clearedByName;
           resolverStyle = 'text-slate-700 font-medium';
         } else {

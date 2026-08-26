@@ -66,8 +66,8 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
                     {alertTitle}
                   </span>
                 </div>
-                <p className="text-slate-600 truncate">{alert.message}</p>
-                <p className="text-[10px] text-slate-400 font-mono">{t('analytics.triggered')} {formatTimeVN(alert.createdAt)}</p>
+                <p className="text-slate-600 font-semibold truncate">{alert.message}</p>
+                <p className="text-[10px] text-slate-600 font-mono">{t('analytics.triggered')} {formatTimeVN(alert.createdAt)}</p>
               </div>
 
               <div className="flex items-center gap-1.5 shrink-0">

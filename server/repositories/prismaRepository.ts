@@ -310,15 +310,15 @@ export class PrismaRepository implements IStorageRepository {
     }
 
     // Sync group mappings if provided
-    if (dbData.groupIds !== undefined) {
-      await (this.prisma as any).databaseGroupMapping.deleteMany({ where: { databaseId: dbRecord.id } });
-      if (dbData.groupIds.length > 0) {
-        await (this.prisma as any).databaseGroupMapping.createMany({
-          data: dbData.groupIds.map((gid) => ({ databaseId: dbRecord.id, groupId: gid })),
-          skipDuplicates: true,
-        });
-      }
-    }
+    // if (dbData.groupIds !== undefined) {
+    //   await (this.prisma as any).databaseGroupMapping.deleteMany({ where: { databaseId: dbRecord.id } });
+    //   if (dbData.groupIds.length > 0) {
+    //     await (this.prisma as any).databaseGroupMapping.createMany({
+    //       data: dbData.groupIds.map((gid) => ({ databaseId: dbRecord.id, groupId: gid })),
+    //       skipDuplicates: true,
+    //     });
+    //   }
+    // }
 
     // Sync metric mappings if provided
     if (dbData.metricIds !== undefined) {
@@ -917,7 +917,8 @@ export class PrismaRepository implements IStorageRepository {
       dbName: h.database.name,
       metricId: h.metricId,
       metricName: h.metric.name,
-      objectName: h.objectName || 'INSTANCE',
+      objectName: h.objectName,
+      resolutionStatus: h.resolutionStatus,
       alertLevel: h.alertLevel as any,
       message: h.message,
       createdAt: h.createdAt.toISOString(),
