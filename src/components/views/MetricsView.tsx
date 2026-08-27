@@ -17,6 +17,9 @@ import {
   Info,
   FolderPlus,
   BellOff,
+  Filter,
+  RotateCcw,
+  X,
 } from 'lucide-react';
 import { MetricEntity, MetricValueType, RelationalOperator, TemplateEntity, UserRole, DatabaseEngineEntity } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
@@ -47,11 +50,52 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
   const { t } = useTranslation();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEngineFilter, setSelectedEngineFilter] = useState<string>('ALL');
+  const [selectedTemplateFilter, setSelectedTemplateFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMetric, setEditingMetric] = useState<MetricEntity | null>(null);
   const [sqlValidationError, setSqlValidationError] = useState<string | null>(null);
+
+  // Engine metric counts calculation
+  const { engineMetricCounts, universalMetricsCount } = useMemo(() => {
+    const counts: Record<string, number> = {};
+    let universalCount = 0;
+
+    metrics.forEach((m) => {
+      const eng = m.databaseEngine || (m.databaseEngineId ? databaseEngines.find((e) => e.id === m.databaseEngineId) : null);
+      if (eng) {
+        counts[eng.id] = (counts[eng.id] || 0) + 1;
+        if (eng.dbCode) {
+          counts[eng.dbCode.toUpperCase()] = (counts[eng.dbCode.toUpperCase()] || 0) + 1;
+        }
+      } else if (!m.databaseEngineId || m.databaseEngineId === 'ALL') {
+        universalCount++;
+      }
+    });
+
+    return { engineMetricCounts: counts, universalMetricsCount: universalCount };
+  }, [metrics, databaseEngines]);
+
+  // Template metric counts calculation
+  const { templateMetricCounts, unassignedTemplatesCount } = useMemo(() => {
+    const counts: Record<string, number> = {};
+    let unassignedCount = 0;
+
+    metrics.forEach((m) => {
+      const tIds = m.templateIds && m.templateIds.length > 0 ? m.templateIds : (m.templateId ? [m.templateId] : []);
+      if (tIds.length === 0) {
+        unassignedCount++;
+      } else {
+        tIds.forEach((id) => {
+          counts[id] = (counts[id] || 0) + 1;
+        });
+      }
+    });
+
+    return { templateMetricCounts: counts, unassignedTemplatesCount: unassignedCount };
+  }, [metrics]);
 
   // Quick Assign Template Modal State
   const [assignMetricModal, setAssignMetricModal] = useState<MetricEntity | null>(null);
@@ -588,17 +632,69 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     },
   ];
 
-  // Filter metrics by search term
+  // Filter metrics by engine, template, and search term
   const filteredMetrics = useMemo(() => {
-    if (!searchTerm.trim()) return metrics;
-    const term = searchTerm.toLowerCase().trim();
-    return metrics.filter(
-      (m) =>
-        m.name.toLowerCase().includes(term) ||
-        m.sqlQuery.toLowerCase().includes(term) ||
-        (m.templateId && templates.find((t) => t.id === m.templateId)?.name.toLowerCase().includes(term))
-    );
-  }, [metrics, searchTerm, templates]);
+    return metrics.filter((m) => {
+      // 1. Target Engine Filter
+      if (selectedEngineFilter !== 'ALL') {
+        if (selectedEngineFilter === 'UNIVERSAL') {
+          const isUniversal = !m.databaseEngineId || m.databaseEngineId === 'ALL' || m.databaseEngine?.dbCode === 'ALL';
+          if (!isUniversal) return false;
+        } else {
+          const eng = m.databaseEngine || (m.databaseEngineId ? databaseEngines.find((e) => e.id === m.databaseEngineId) : null);
+          const matchById = m.databaseEngineId === selectedEngineFilter || m.databaseEngine?.id === selectedEngineFilter;
+          const matchByCode = eng?.dbCode && eng.dbCode.toUpperCase() === selectedEngineFilter.toUpperCase();
+          if (!matchById && !matchByCode) return false;
+        }
+      }
+
+      // 2. Monitoring Template Filter
+      if (selectedTemplateFilter !== 'ALL') {
+        if (selectedTemplateFilter === 'UNASSIGNED') {
+          const hasTemplates = (m.templateIds && m.templateIds.length > 0) || Boolean(m.templateId);
+          if (hasTemplates) return false;
+        } else {
+          const hasTpl = m.templateIds?.includes(selectedTemplateFilter) || m.templateId === selectedTemplateFilter;
+          if (!hasTpl) return false;
+        }
+      }
+
+      // 3. Search Query Filter
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase().trim();
+        const eng = m.databaseEngine || (m.databaseEngineId ? databaseEngines.find((e) => e.id === m.databaseEngineId) : null);
+        const engineMatch = eng ? (eng.dbName?.toLowerCase().includes(term) || eng.dbCode?.toLowerCase().includes(term)) : false;
+        
+        const templateMatch = (m.templateIds && m.templateIds.length > 0)
+          ? m.templateIds.some((id) => templates.find((t) => t.id === id)?.name.toLowerCase().includes(term))
+          : (m.templateId ? templates.find((t) => t.id === m.templateId)?.name.toLowerCase().includes(term) : false);
+
+        const attributeMatch = m.thresholdsConfig?.perAttribute?.some(
+          (a) => a.attributeName?.toLowerCase().includes(term)
+        );
+
+        const matches =
+          m.name.toLowerCase().includes(term) ||
+          m.sqlQuery.toLowerCase().includes(term) ||
+          engineMatch ||
+          templateMatch ||
+          attributeMatch;
+
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [metrics, selectedEngineFilter, selectedTemplateFilter, searchTerm, databaseEngines, templates]);
+
+  const isFiltered = selectedEngineFilter !== 'ALL' || selectedTemplateFilter !== 'ALL' || searchTerm.trim().length > 0;
+
+  const handleResetFilters = () => {
+    setSelectedEngineFilter('ALL');
+    setSelectedTemplateFilter('ALL');
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
 
   const totalPages = Math.ceil(filteredMetrics.length / pageSize) || 1;
   const paginatedMetrics = filteredMetrics.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -620,29 +716,20 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
         </div>
       )}
 
+      {/* Header with Title & Action */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight">{t('metrics.title')}</h2>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Gauge className="w-5 h-5 text-indigo-600" />
+            <span>{t('metrics.title')}</span>
+          </h2>
           <p className="text-xs text-slate-500">
-            {t('metrics.subtitle')} ({metrics.length}) {searchTerm && `(${t('common.filter')}: ${filteredMetrics.length})`}
+            {t('metrics.subtitle')} ({metrics.length} {t('metrics.totalMetrics').toLowerCase()}
+            {isFiltered && ` | ${t('common.filter')}: ${filteredMetrics.length}`})
           </p>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          {/* Search by Metric Name */}
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder={t('metrics.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full bg-white border border-slate-300 text-xs pl-8 pr-3 py-2 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-2xs"
-            />
-          </div>
 
+        <div className="flex items-center gap-2.5">
           {userRole === 'ADMIN' ? (
             <button
               onClick={openCreateDialog}
@@ -656,6 +743,128 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               <Shield className="w-3.5 h-3.5 text-slate-400" />
               {t('metrics.viewOnlyMode')}
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Clean, Small & Optimized Filter Bar */}
+      <div className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2.5 text-xs">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="flex items-center gap-1 text-slate-800 font-bold shrink-0">
+            <Filter className="w-3.5 h-3.5 text-indigo-600" />
+            <span>{t('common.filter')}:</span>
+          </div>
+
+          {/* Target Engine Filter Dropdown */}
+          <div className="relative min-w-[150px] sm:min-w-[170px]">
+            <select
+              value={selectedEngineFilter}
+              onChange={(e) => {
+                setSelectedEngineFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-medium focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">
+                {t('metrics.allTargetEngines')} ({metrics.length})
+              </option>
+              {databaseEngines.map((engine) => {
+                const count = engineMetricCounts[engine.id] || engineMetricCounts[engine.dbCode?.toUpperCase()] || 0;
+                return (
+                  <option key={engine.id} value={engine.id}>
+                    {engine.dbName || engine.dbCode} ({count})
+                  </option>
+                );
+              })}
+              {universalMetricsCount > 0 && (
+                <option value="UNIVERSAL">
+                  {t('metrics.universalEngines')} ({universalMetricsCount})
+                </option>
+              )}
+            </select>
+          </div>
+
+          {/* Monitoring Template Filter Dropdown */}
+          <div className="relative min-w-[170px] sm:min-w-[200px]">
+            <select
+              value={selectedTemplateFilter}
+              onChange={(e) => {
+                setSelectedTemplateFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-medium focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">
+                {t('metrics.allMonitoringTemplates')} ({metrics.length})
+              </option>
+              {templates.map((tpl) => {
+                const count = templateMetricCounts[tpl.id] || 0;
+                return (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name} ({count})
+                  </option>
+                );
+              })}
+              {unassignedTemplatesCount > 0 && (
+                <option value="UNASSIGNED">
+                  {t('metrics.unassignedTemplate')} ({unassignedTemplatesCount})
+                </option>
+              )}
+            </select>
+          </div>
+
+          {/* Search Input with Clear Button */}
+          <div className="relative min-w-[180px] flex-1 sm:w-60">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
+            <input
+              type="text"
+              placeholder={t('metrics.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-300 text-xs pl-8 pr-7 py-1 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-2xs"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
+                className="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                title={t('common.clear')}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Reset Filters button */}
+          {isFiltered && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg font-semibold text-xs transition-colors cursor-pointer shrink-0"
+              title={t('metrics.resetFilters')}
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>{t('metrics.resetFilters')}</span>
+            </button>
+          )}
+        </div>
+
+        {/* Filter Count Summary Badge */}
+        <div className="flex items-center gap-2 justify-end shrink-0 text-slate-500 text-xs font-medium">
+          {isFiltered ? (
+            <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-md font-mono font-semibold">
+              {filteredMetrics.length} / {metrics.length}
+            </span>
+          ) : (
+            <span className="text-slate-400 font-mono">
+              {metrics.length} {t('metrics.totalMetrics').toLowerCase()}
+            </span>
           )}
         </div>
       </div>
@@ -675,9 +884,21 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             setCurrentPage(1);
           }}
           emptyMessage={
-            searchTerm
-              ? t('metrics.noMetricsFoundSearch', { term: searchTerm })
-              : t('metrics.noMetricsFound')
+            isFiltered ? (
+              <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
+                <p className="text-slate-500 text-xs">{t('metrics.noMetricsFoundFilter')}</p>
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-semibold bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1 rounded-lg transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  {t('metrics.clearFilters')}
+                </button>
+              </div>
+            ) : (
+              t('metrics.noMetricsFound')
+            )
           }
         />
       </div>

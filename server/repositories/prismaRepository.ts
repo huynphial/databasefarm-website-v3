@@ -1534,7 +1534,7 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   // --- Raw Measurements / Telemetry ---
-  async getRawMeasurements(limit = 100): Promise<RawMeasurementEntity[]> {
+  async getRawMeasurements(limit = 10000): Promise<RawMeasurementEntity[]> {
     try {
       const client = (this.prisma as any).metricDataPoint;
       if (client) {
@@ -1547,7 +1547,7 @@ export class PrismaRepository implements IStorageRepository {
           },
         });
 
-        if (dataPoints && dataPoints.length > 0) {
+        if (dataPoints) {
           return dataPoints.map((dp: any) => {
             let triggeredThreshold: string | null = null;
             let status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'DOWN' = 'NORMAL';
@@ -1559,19 +1559,25 @@ export class PrismaRepository implements IStorageRepository {
               try {
                 const config = typeof dp.metric.thresholdsConfig === 'string' ? JSON.parse(dp.metric.thresholdsConfig) : dp.metric.thresholdsConfig;
                 if (config?.type === 'GLOBAL' && config?.global) {
-                  warnNum = config.global.warn ? parseFloat(config.global.warn) : null;
-                  critNum = config.global.critical ? parseFloat(config.global.critical) : null;
+                  warnNum = config.global.warn !== undefined && config.global.warn !== '' ? parseFloat(config.global.warn) : null;
+                  critNum = config.global.critical !== undefined && config.global.critical !== '' ? parseFloat(config.global.critical) : null;
+                } else if (config?.type === 'PER_ATTRIBUTE' && Array.isArray(config.perAttribute)) {
+                  const match = config.perAttribute.find((a: any) => a.attributeName === dp.attributeName);
+                  if (match) {
+                    warnNum = match.warn !== undefined && match.warn !== '' ? parseFloat(match.warn) : null;
+                    critNum = match.critical !== undefined && match.critical !== '' ? parseFloat(match.critical) : null;
+                  }
                 }
               } catch (e) {
                 // ignore
               }
             }
 
-            if (!isNaN(valNum) && warnNum !== null) {
-              if (critNum !== null && valNum >= critNum) {
+            if (!isNaN(valNum)) {
+              if (critNum !== null && !isNaN(critNum) && valNum >= critNum) {
                 status = 'CRITICAL';
                 triggeredThreshold = `Crit: ${critNum} (>=)`;
-              } else if (valNum >= warnNum) {
+              } else if (warnNum !== null && !isNaN(warnNum) && valNum >= warnNum) {
                 status = 'WARNING';
                 triggeredThreshold = `Warn: ${warnNum} (>=)`;
               }
@@ -1580,10 +1586,10 @@ export class PrismaRepository implements IStorageRepository {
             return {
               id: dp.id,
               dbId: dp.dbId || dp.databaseId,
-              dbName: dp.database?.name || 'Unknown DB',
-              dbType: dp.database?.dbType || 'POSTGRES',
+              dbName: dp.database?.name || dp.dbId || 'Unknown DB',
+              dbType: dp.database?.dbType || 'ORACLE',
               metricId: dp.metricId,
-              metricName: dp.metric?.name || 'Metric Probe',
+              metricName: dp.metric?.name || dp.metricId || 'Metric Probe',
               objectName: dp.objectName || 'INSTANCE',
               attributeName: dp.attributeName || 'value',
               value: dp.value,
@@ -1592,86 +1598,16 @@ export class PrismaRepository implements IStorageRepository {
               triggeredThreshold,
               cycle: (dp.metric as any)?.cycle ?? 1,
               status,
-              measuredAt: dp.measuredAt.toISOString(),
+              measuredAt: dp.measuredAt ? new Date(dp.measuredAt).toISOString() : new Date().toISOString(),
             };
           });
         }
       }
     } catch (err) {
-      console.warn('Prisma getRawMeasurements fallback to default sample set:', err);
+      console.warn('Prisma getRawMeasurements query error:', err);
     }
 
-    // Default sample set
-    return [
-      {
-        id: 'raw-01',
-        dbId: 'db-01',
-        dbName: 'ERP_PROD_ORA',
-        dbType: 'ORACLE',
-        metricId: 'met-01',
-        metricName: 'Tablespace Usage %',
-        objectName: 'TS_DATA_PRD',
-        attributeName: 'used_space_pct',
-        value: '91.4%',
-        valueType: 'NUMBER',
-        thresholdOperator: '>=',
-        triggeredThreshold: 'Warn: 80 / High: 90 / Crit: 95 (>=)',
-        cycle: 1,
-        status: 'WARNING',
-        measuredAt: new Date(Date.now() - 2 * 60000).toISOString(),
-      },
-      {
-        id: 'raw-02',
-        dbId: 'db-01',
-        dbName: 'ERP_PROD_ORA',
-        dbType: 'ORACLE',
-        metricId: 'met-02',
-        metricName: 'Active Sessions Count',
-        objectName: 'SYSDBA',
-        attributeName: 'active_sessions',
-        value: '184',
-        valueType: 'NUMBER',
-        thresholdOperator: '>=',
-        triggeredThreshold: 'Warn: 150 / High: 300 / Crit: 500 (>=)',
-        cycle: 1,
-        status: 'WARNING',
-        measuredAt: new Date(Date.now() - 3 * 60000).toISOString(),
-      },
-      {
-        id: 'raw-03',
-        dbId: 'db-02',
-        dbName: 'PAYMENT_API_PG',
-        dbType: 'POSTGRES',
-        metricId: 'met-03',
-        metricName: 'Connection Saturation %',
-        objectName: 'payment_gateway',
-        attributeName: 'active_connections_pct',
-        value: '62.4%',
-        valueType: 'NUMBER',
-        thresholdOperator: '>=',
-        triggeredThreshold: null,
-        cycle: 1,
-        status: 'NORMAL',
-        measuredAt: new Date(Date.now() - 4 * 60000).toISOString(),
-      },
-      {
-        id: 'raw-04',
-        dbId: 'db-02',
-        dbName: 'PAYMENT_API_PG',
-        dbType: 'POSTGRES',
-        metricId: 'met-04',
-        metricName: 'Replication Lag (Seconds)',
-        objectName: 'replica_standby_01',
-        attributeName: 'lag_seconds',
-        value: '0s',
-        valueType: 'NUMBER',
-        thresholdOperator: '>=',
-        triggeredThreshold: null,
-        cycle: 1,
-        status: 'NORMAL',
-        measuredAt: new Date(Date.now() - 5 * 60000).toISOString(),
-      },
-    ];
+    return [];
   }
 
   async addRawMeasurement(data: Partial<RawMeasurementEntity>): Promise<RawMeasurementEntity> {

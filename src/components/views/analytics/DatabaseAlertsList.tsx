@@ -67,31 +67,10 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
                   </span>
                 </div>
                 <p className="text-slate-600 font-semibold truncate">{alert.message}</p>
-                <p className="text-[10px] text-slate-600 font-mono">{t('analytics.triggered')} {formatTimeVN(alert.createdAt)}</p>
+                <p className="text-[12px] text-slate-600 font-semibold pt-0.5">{t('analytics.triggered')} {formatTimeVN(alert.createdAt)}</p>
               </div>
 
-              <div className="flex items-center gap-1.5 shrink-0">
-                {onAcknowledgeAlert && !isAck && (
-                  <button
-                    type="button"
-                    onClick={() => onAcknowledgeAlert(alert.id)}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <CheckCheck className="w-3.5 h-3.5 text-indigo-600" />
-                    {t('analytics.ackBtn')}
-                  </button>
-                )}
-                {onClearAlert && (
-                  <button
-                    type="button"
-                    onClick={() => onClearAlert(alert.id)}
-                    className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    {t('analytics.clearBtn')}
-                  </button>
-                )}
-              </div>
+              
             </div>
           );
         })}
