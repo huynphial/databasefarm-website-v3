@@ -84,15 +84,21 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
     return activeAlerts.filter((a) => String(a.dbId) === String(selectedDb.id));
   }, [selectedDb, activeAlerts]);
 
+  // Helper for formatting Date into local ISO string (YYYY-MM-DDTHH:mm) for datetime-local input
+  const formatLocalDatetime = (d: Date): string => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   // 2. TIME RANGE STATE
   const [timePreset, setTimePreset] = useState<string>('24h');
   const [fromDateTime, setFromDateTime] = useState<string>(() => {
     const d = new Date();
     d.setHours(d.getHours() - 24);
-    return d.toISOString().slice(0, 16);
+    return formatLocalDatetime(d);
   });
   const [toDateTime, setToDateTime] = useState<string>(() => {
-    return new Date().toISOString().slice(0, 16);
+    return formatLocalDatetime(new Date());
   });
 
   const handleSelectTimePreset = (preset: string) => {
@@ -104,8 +110,8 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
     else if (preset === '24h') past.setHours(now.getHours() - 24);
     else if (preset === '7d') past.setDate(now.getDate() - 7);
 
-    setFromDateTime(past.toISOString().slice(0, 16));
-    setToDateTime(now.toISOString().slice(0, 16));
+    setFromDateTime(formatLocalDatetime(past));
+    setToDateTime(formatLocalDatetime(now));
   };
 
   // 3. DYNAMIC TELEMETRY QUERYING FROM DATABASE
@@ -118,8 +124,28 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
     if (!selectedDb?.id) return;
     setIsLoadingTelemetry(true);
     try {
-      const fromIso = fromDateTime ? new Date(fromDateTime).toISOString() : undefined;
-      const toIso = toDateTime ? new Date(toDateTime).toISOString() : undefined;
+      let fromIso: string | undefined;
+      let toIso: string | undefined;
+
+      const now = Date.now();
+      if (timePreset === '1h') {
+        fromIso = new Date(now - 1 * 3600 * 1000).toISOString();
+      } else if (timePreset === '6h') {
+        fromIso = new Date(now - 6 * 3600 * 1000).toISOString();
+      } else if (timePreset === '24h') {
+        fromIso = new Date(now - 24 * 3600 * 1000).toISOString();
+      } else if (timePreset === '7d') {
+        fromIso = new Date(now - 7 * 86400 * 1000).toISOString();
+      } else if (timePreset === 'custom') {
+        if (fromDateTime) {
+          const parsed = new Date(fromDateTime);
+          if (!isNaN(parsed.getTime())) fromIso = parsed.toISOString();
+        }
+        if (toDateTime) {
+          const parsed = new Date(toDateTime);
+          if (!isNaN(parsed.getTime())) toIso = parsed.toISOString();
+        }
+      }
 
       const [raws, history] = await Promise.all([
         api.getRawMeasurements({
@@ -139,7 +165,7 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
     } finally {
       setIsLoadingTelemetry(false);
     }
-  }, [selectedDb?.id, fromDateTime, toDateTime]);
+  }, [selectedDb?.id, timePreset, fromDateTime, toDateTime]);
 
   // Query database whenever selected DB or time window changes
   useEffect(() => {
@@ -162,16 +188,32 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
 
     const combined = combineTelemetryDataPoints(activeRaws, activeHistory, selectedDb.id, selectedDb.name);
 
-    // Apply strict time filter on combined points
-    const fromMs = fromDateTime ? new Date(fromDateTime).getTime() : 0;
-    const toMs = toDateTime ? new Date(toDateTime).getTime() : Infinity;
+    // Apply accurate time window filter based on selected preset
+    const now = Date.now();
+    let minMs = 0;
+    let maxMs = Infinity;
+
+    if (timePreset === '1h') minMs = now - 1 * 3600 * 1000;
+    else if (timePreset === '6h') minMs = now - 6 * 3600 * 1000;
+    else if (timePreset === '24h') minMs = now - 24 * 3600 * 1000;
+    else if (timePreset === '7d') minMs = now - 7 * 86400 * 1000;
+    else if (timePreset === 'custom') {
+      if (fromDateTime) {
+        const parsed = new Date(fromDateTime).getTime();
+        if (!isNaN(parsed)) minMs = parsed;
+      }
+      if (toDateTime) {
+        const parsed = new Date(toDateTime).getTime();
+        if (!isNaN(parsed)) maxMs = parsed;
+      }
+    }
 
     return combined.filter((p) => {
       const t = new Date(p.measuredAt).getTime();
       if (isNaN(t)) return true;
-      return (!fromMs || t >= fromMs) && (!toMs || t <= toMs);
+      return (!minMs || t >= minMs) && (!maxMs || t <= maxMs);
     });
-  }, [selectedDb, hasFetchedOnce, queriedRawMeasurements, queriedMetricHistory, rawMeasurements, metricHistory, fromDateTime, toDateTime]);
+  }, [selectedDb, hasFetchedOnce, queriedRawMeasurements, queriedMetricHistory, rawMeasurements, metricHistory, timePreset, fromDateTime, toDateTime]);
 
   // Filter metrics applicable to selected DB (matching dbType or inherited from metricIds)
   const applicableMetrics = useMemo(() => {

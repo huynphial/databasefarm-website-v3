@@ -72,20 +72,22 @@ export function autoSyncDatabaseTemplateMetrics<TD extends DatabaseEntity = Data
 
 export function formatTimeVN(dateString: string | Date | number | null | undefined): string {
   if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return 'N/A';
-  // Timezone formatting for UTC+7 (Asia/Ho_Chi_Minh)
+  if (typeof dateString === 'string') {
+    const trimmed = dateString.trim();
+    // If it's already a standard formatted date string without timezone indicator, preserve it
+    const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (match && !trimmed.endsWith('Z')) {
+      const [, y, m, d, hh, mm, ss] = match;
+      return `${d}/${m}/${y} ${hh}:${mm}:${ss || '00'}`;
+    }
+  }
+
+  const date = typeof dateString === 'string' || typeof dateString === 'number' ? new Date(dateString) : dateString;
+  if (isNaN(date.getTime())) return typeof dateString === 'string' ? dateString : 'N/A';
+
   try {
-    return new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Asia/Ho_Chi_Minh',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).format(date);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
   } catch (e) {
     return date.toLocaleString();
   }
