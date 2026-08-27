@@ -11,6 +11,7 @@ import {
   AlertHistoryEntity,
   MetricHistoryEntity,
   RawMeasurementEntity,
+  RawMeasurementFilter,
   SystemSettingsEntity,
   SystemSettingItem,
   AuditLogEntity,
@@ -1718,8 +1719,55 @@ FROM pg_tablespace`,
   }
 
   // --- Raw Measurements / Telemetry ---
-  async getRawMeasurements(limit = 100): Promise<RawMeasurementEntity[]> {
-    return this.rawMeasurements.slice(0, limit);
+  async getRawMeasurements(filterOrLimit?: number | RawMeasurementFilter): Promise<RawMeasurementEntity[]> {
+    let limit = 10000;
+    let filter: RawMeasurementFilter = {};
+
+    if (typeof filterOrLimit === 'number') {
+      limit = filterOrLimit;
+    } else if (filterOrLimit) {
+      filter = filterOrLimit;
+      if (filter.limit !== undefined) {
+        limit = filter.limit;
+      }
+    }
+
+    let list = [...this.rawMeasurements];
+
+    if (filter.dbId && filter.dbId !== 'ALL') {
+      list = list.filter((m) => m.dbId === filter.dbId);
+    }
+    if (filter.metricId && filter.metricId !== 'ALL') {
+      list = list.filter((m) => m.metricId === filter.metricId);
+    }
+    if (filter.dbType && filter.dbType !== 'ALL') {
+      list = list.filter((m) => (m.dbType || '').toUpperCase() === filter.dbType!.toUpperCase());
+    }
+    if (filter.fromDate) {
+      const fromTime = new Date(filter.fromDate).getTime();
+      list = list.filter((m) => new Date(m.measuredAt).getTime() >= fromTime);
+    }
+    if (filter.toDate) {
+      const toDateObj = filter.toDate.length === 10
+        ? new Date(`${filter.toDate}T23:59:59.999Z`).getTime()
+        : new Date(filter.toDate).getTime();
+      list = list.filter((m) => new Date(m.measuredAt).getTime() <= toDateObj);
+    }
+    if (filter.searchTerm && filter.searchTerm.trim()) {
+      const q = filter.searchTerm.toLowerCase().trim();
+      list = list.filter((m) =>
+        (m.dbName && m.dbName.toLowerCase().includes(q)) ||
+        (m.metricName && m.metricName.toLowerCase().includes(q)) ||
+        (m.objectName && m.objectName.toLowerCase().includes(q)) ||
+        (m.attributeName && m.attributeName.toLowerCase().includes(q)) ||
+        (m.value && m.value.toLowerCase().includes(q)) ||
+        (m.dbType && m.dbType.toLowerCase().includes(q))
+      );
+    }
+
+    list.sort((a, b) => new Date(b.measuredAt).getTime() - new Date(a.measuredAt).getTime());
+
+    return limit > 0 ? list.slice(0, limit) : list;
   }
 
   async addRawMeasurement(data: Partial<RawMeasurementEntity>): Promise<RawMeasurementEntity> {

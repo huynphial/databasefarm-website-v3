@@ -14,6 +14,7 @@ import {
   AlertHistoryEntity,
   MetricHistoryEntity,
   RawMeasurementEntity,
+  RawMeasurementFilter,
   SystemSettingsEntity,
   SystemSettingItem,
   AuditLogEntity,
@@ -1534,13 +1535,48 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   // --- Raw Measurements / Telemetry ---
-  async getRawMeasurements(limit = 10000): Promise<RawMeasurementEntity[]> {
+  async getRawMeasurements(filterOrLimit?: number | RawMeasurementFilter): Promise<RawMeasurementEntity[]> {
     try {
       const client = (this.prisma as any).metricDataPoint;
       if (client) {
+        let limit = 10000;
+        const where: any = {};
+
+        if (typeof filterOrLimit === 'number') {
+          limit = filterOrLimit;
+        } else if (filterOrLimit) {
+          if (filterOrLimit.limit !== undefined) {
+            limit = filterOrLimit.limit;
+          }
+          if (filterOrLimit.dbId && filterOrLimit.dbId !== 'ALL') {
+            where.dbId = filterOrLimit.dbId;
+          }
+          if (filterOrLimit.metricId && filterOrLimit.metricId !== 'ALL') {
+            where.metricId = filterOrLimit.metricId;
+          }
+          if (filterOrLimit.dbType && filterOrLimit.dbType !== 'ALL') {
+            where.database = {
+              dbType: filterOrLimit.dbType,
+            };
+          }
+          if (filterOrLimit.fromDate || filterOrLimit.toDate) {
+            where.measuredAt = {};
+            if (filterOrLimit.fromDate) {
+              where.measuredAt.gte = new Date(filterOrLimit.fromDate);
+            }
+            if (filterOrLimit.toDate) {
+              const toDateObj = filterOrLimit.toDate.length === 10
+                ? new Date(`${filterOrLimit.toDate}T23:59:59.999Z`)
+                : new Date(filterOrLimit.toDate);
+              where.measuredAt.lte = toDateObj;
+            }
+          }
+        }
+
         const dataPoints = await client.findMany({
+          where,
           orderBy: { measuredAt: 'desc' },
-          take: limit,
+          ...(limit > 0 ? { take: limit } : {}),
           include: {
             database: true,
             metric: true,
@@ -1548,7 +1584,7 @@ export class PrismaRepository implements IStorageRepository {
         });
 
         if (dataPoints) {
-          return dataPoints.map((dp: any) => {
+          let list: RawMeasurementEntity[] = dataPoints.map((dp: any) => {
             let triggeredThreshold: string | null = null;
             let status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'DOWN' = 'NORMAL';
             const valNum = parseFloat(dp.value);
@@ -1601,6 +1637,20 @@ export class PrismaRepository implements IStorageRepository {
               measuredAt: dp.measuredAt ? new Date(dp.measuredAt).toISOString() : new Date().toISOString(),
             };
           });
+
+          if (typeof filterOrLimit === 'object' && filterOrLimit?.searchTerm?.trim()) {
+            const q = filterOrLimit.searchTerm.toLowerCase().trim();
+            list = list.filter((m: RawMeasurementEntity) =>
+              (m.dbName && m.dbName.toLowerCase().includes(q)) ||
+              (m.metricName && m.metricName.toLowerCase().includes(q)) ||
+              (m.objectName && m.objectName.toLowerCase().includes(q)) ||
+              (m.attributeName && m.attributeName.toLowerCase().includes(q)) ||
+              (m.value && m.value.toLowerCase().includes(q)) ||
+              (m.dbType && m.dbType.toLowerCase().includes(q))
+            );
+          }
+
+          return list;
         }
       }
     } catch (err) {

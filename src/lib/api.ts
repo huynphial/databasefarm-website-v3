@@ -4,6 +4,7 @@ import {
   DatabaseEngineEntity,
   AlertNotificationMethodEntity,
   RawMeasurementEntity,
+  RawMeasurementFilter,
   MetricEntity,
   TemplateEntity,
   GroupEntity,
@@ -309,8 +310,22 @@ export const api = {
   },
 
   // Raw Query Measurements & Telemetry
-  async getRawMeasurements(limit = 100): Promise<RawMeasurementEntity[]> {
-    return fetchJson(`/api/raw-measurements?limit=${limit}`);
+  async getRawMeasurements(filterOrLimit?: number | RawMeasurementFilter): Promise<RawMeasurementEntity[]> {
+    if (typeof filterOrLimit === 'number') {
+      return fetchJson(`/api/raw-measurements?limit=${filterOrLimit}`);
+    }
+    if (filterOrLimit) {
+      const params = new URLSearchParams();
+      if (filterOrLimit.limit !== undefined) params.append('limit', String(filterOrLimit.limit));
+      if (filterOrLimit.dbId) params.append('dbId', filterOrLimit.dbId);
+      if (filterOrLimit.metricId) params.append('metricId', filterOrLimit.metricId);
+      if (filterOrLimit.dbType) params.append('dbType', filterOrLimit.dbType);
+      if (filterOrLimit.fromDate) params.append('fromDate', filterOrLimit.fromDate);
+      if (filterOrLimit.toDate) params.append('toDate', filterOrLimit.toDate);
+      if (filterOrLimit.searchTerm) params.append('searchTerm', filterOrLimit.searchTerm);
+      return fetchJson(`/api/raw-measurements?${params.toString()}`);
+    }
+    return fetchJson('/api/raw-measurements');
   },
   async addRawMeasurement(data: Partial<RawMeasurementEntity>): Promise<RawMeasurementEntity> {
     return fetchJson('/api/raw-measurements', {

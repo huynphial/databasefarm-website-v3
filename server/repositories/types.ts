@@ -10,6 +10,7 @@ import {
   AlertHistoryEntity,
   MetricHistoryEntity,
   RawMeasurementEntity,
+  RawMeasurementFilter,
   SystemSettingsEntity,
   SystemSettingItem,
   AuditLogEntity,
@@ -76,7 +77,7 @@ export interface IStorageRepository {
   // Metric History & Raw Telemetry Measurements
   getMetricHistory(dbId?: string, metricId?: string): Promise<MetricHistoryEntity[]>;
   addMetricHistory(historyData: Partial<MetricHistoryEntity>): Promise<MetricHistoryEntity>;
-  getRawMeasurements(limit?: number): Promise<RawMeasurementEntity[]>;
+  getRawMeasurements(filterOrLimit?: number | RawMeasurementFilter): Promise<RawMeasurementEntity[]>;
   addRawMeasurement(data: Partial<RawMeasurementEntity>): Promise<RawMeasurementEntity>;
   getAlertNotificationLogs(): Promise<AlertNotificationLogEntity[]>;
   getAlertNotificationQueue(): Promise<AlertNotificationQueueEntity[]>;

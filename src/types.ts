@@ -192,6 +192,16 @@ export interface RawMeasurementEntity {
   measuredAt: string;
 }
 
+export interface RawMeasurementFilter {
+  limit?: number;
+  dbId?: string;
+  metricId?: string;
+  dbType?: string;
+  fromDate?: string;
+  toDate?: string;
+  searchTerm?: string;
+}
+
 export interface TemplateEntity {
   id: string;
   name: string;
