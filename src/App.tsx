@@ -845,9 +845,12 @@ function MainAppContent() {
               logs={alertNotificationLogs}
               databases={databases}
               databaseEngines={databaseEngines}
+              alertMethods={alertMethods}
               userRole={currentUser.role}
               showInfoTips={systemSettings.showInfoTips !== false}
               onRefresh={loadData}
+              onSaveAlertMethod={handleSaveAlertMethod}
+              onDeleteAlertMethod={handleDeleteAlertMethod}
             />
           )}
 

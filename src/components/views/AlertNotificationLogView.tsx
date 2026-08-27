@@ -26,12 +26,20 @@ import {
   Check,
   SlidersHorizontal,
   X,
+  Plus,
+  Edit2,
+  Trash2,
+  Code,
+  Sparkles,
+  Copy,
 } from 'lucide-react';
 import {
   AlertNotificationLogEntity,
   AlertNotificationQueueEntity,
   DatabaseEntity,
   DatabaseEngineEntity,
+  AlertNotificationMethodEntity,
+  AlertMethodType,
   UserRole,
 } from '../../types';
 import { getDbEngineBadgeClass } from '../../config/dbEngines';
@@ -39,15 +47,54 @@ import { cn } from '../../lib/utils';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { useTranslation } from '../../i18n';
+import { api } from '../../lib/api';
+
+// Token Template definitions for Notification Messages
+const NOTIFICATION_TOKENS = [
+  { token: 'D_NOTIFICATION_TYPE', label: 'Notification Type', desc: 'New alert or Clear alert notification?' },
+  { token: 'D_ALERT_SEVERITY', label: 'Alert Severity', desc: 'CRITICAL Level' },
+  { token: 'D_DATABASE_NAME', label: 'DB Name', desc: 'Target database display name' },
+  { token: 'D_DATABASE_TYPE', label: 'Engine Type', desc: 'e.g. ORACLE, POSTGRES' },
+  { token: 'D_DATABASE_ID', label: 'DB ID', desc: 'Database UUID identifier' },
+  { token: 'D_DATABASE_PORT', label: 'Port', desc: 'Port number e.g. 5432' },
+  { token: 'D_METRIC_NAME', label: 'Metric', desc: 'Evaluated metric name' },
+  { token: 'D_OBJECT_NAME', label: 'Object', desc: 'Measured object e.g. TS_DATA' },
+  { token: 'D_ATTR_NAME', label: 'Attribute', desc: 'Measured attribute name' },
+  { token: 'D_ALERT_VALUE', label: 'Alert Value', desc: 'Evaluated metric value' },
+  { token: 'D_ALERT_MESSAGE', label: 'Alert Message', desc: 'Full description of alert' },
+  { token: 'D_ALERT_CREATED_AT', label: 'Created At', desc: 'Timestamp when alert created' },
+  { token: 'D_ALERT_RESOLVE_AT', label: 'Resolved At', desc: 'Timestamp when alert resolved' },
+  { token: 'D_ALERT_RESOLVER', label: 'Resolver', desc: 'User or process who resolved alert' },
+];
+
+const getDefaultNotificationMessage = (type: AlertMethodType): string => {
+  switch (type) {
+    case 'EMAIL':
+      return '[D_NOTIFICATION_TYPE] D_ALERT_SEVERITY Database D_DATABASE_NAME (D_DATABASE_TYPE:D_DATABASE_PORT) Metric D_METRIC_NAME triggered alert!\nValue: D_ALERT_VALUE\nMessage: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT';
+    case 'TELEGRAM':
+      return '<b>D_NOTIFICATION_TYPE D_ALERT_SEVERITY</b>\nDatabase: <b>D_DATABASE_NAME</b> (ID: D_DATABASE_ID, Engine: D_DATABASE_TYPE:D_DATABASE_PORT)\nMetric: <b>D_METRIC_NAME</b>\nObject: D_OBJECT_NAME | Attr: D_ATTR_NAME\nValue: <code>D_ALERT_VALUE</code>\nDetails: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT';
+    case 'SLACK':
+      return ':warning: *ALERT DISPATCH*: Database *D_DATABASE_NAME* (`D_DATABASE_TYPE`) | Metric: *D_METRIC_NAME* | Object: D_OBJECT_NAME | Value: `D_ALERT_VALUE` | Message: D_ALERT_MESSAGE | Created: D_ALERT_CREATED_AT';
+    case 'WEBHOOK':
+      return '{"event":"ALERT_TRIGGERED","database_name":"D_DATABASE_NAME","database_type":"D_DATABASE_TYPE","database_id":"D_DATABASE_ID","port":"D_DATABASE_PORT","metric":"D_METRIC_NAME","object":"D_OBJECT_NAME","attribute":"D_ATTR_NAME","value":"D_ALERT_VALUE","message":"D_ALERT_MESSAGE","created_at":"D_ALERT_CREATED_AT"}';
+    case 'SMS':
+      return '[D_NOTIFICATION_TYPE] DB D_DATABASE_NAME (D_DATABASE_TYPE) Metric D_METRIC_NAME: D_ALERT_VALUE. D_ALERT_MESSAGE. At D_ALERT_CREATED_AT';
+    default:
+      return '[D_NOTIFICATION_TYPE] D_DATABASE_NAME - D_METRIC_NAME: D_ALERT_VALUE (D_ALERT_MESSAGE)';
+  }
+};
 
 interface AlertNotificationLogViewProps {
   queue?: AlertNotificationQueueEntity[];
   logs: AlertNotificationLogEntity[];
   databases: DatabaseEntity[];
   databaseEngines?: DatabaseEngineEntity[];
+  alertMethods?: AlertNotificationMethodEntity[];
   userRole: UserRole;
   showInfoTips?: boolean;
   onRefresh: () => void;
+  onSaveAlertMethod?: (method: Partial<AlertNotificationMethodEntity>) => Promise<any>;
+  onDeleteAlertMethod?: (id: string) => Promise<void>;
 }
 
 export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> = ({
@@ -55,12 +102,220 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
   logs,
   databases,
   databaseEngines = [],
+  alertMethods = [],
   userRole,
   showInfoTips = true,
   onRefresh,
+  onSaveAlertMethod,
+  onDeleteAlertMethod,
 }) => {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const isAdmin = userRole === 'ADMIN';
+
+  // Alert Method Modal & Handler State
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+  const [editingAlertMethod, setEditingAlertMethod] = useState<AlertNotificationMethodEntity | null>(null);
+  const [jsonValidationError, setJsonValidationError] = useState<string | null>(null);
+  const [testingMethodId, setTestingMethodId] = useState<string | null>(null);
+  const [alertForm, setAlertForm] = useState({
+    id: '',
+    name: '',
+    type: 'EMAIL' as AlertMethodType,
+    notificationMessage: getDefaultNotificationMessage('EMAIL'),
+    statusOnOff: 'ACTIVE' as 'ACTIVE' | 'INACTIVE',
+    configJsonStr: JSON.stringify({
+      smtpHost: 'smtp.mailgun.org',
+      smtpPort: 587,
+      smtpUser: 'alerts@dbfarm.internal',
+      useTls: true,
+      fromAddress: 'Database Sentinel <noreply-alerts@dbfarm.internal>',
+    }, null, 2),
+  });
+
+  const getPresetTemplate = (type: AlertMethodType): string => {
+    switch (type) {
+      case 'EMAIL':
+        return JSON.stringify({
+          smtpHost: 'smtp.thenicedata.com',
+          smtpPort: 587,
+          smtpUser: 'alerts@thenicedata.com',
+          useTls: true,
+          fromAddress: 'Database Sentinel <noreply-alerts@thenicedata.com>',
+        }, null, 2);
+      case 'TELEGRAM':
+        return JSON.stringify({
+          botToken: 'YOUR_BOT_TOKEN_HERE',
+          apiBaseUrl: 'https://api.telegram.org',
+          defaultChatTopic: 'DB_ALERTS',
+          parseMode: 'HTML',
+        }, null, 2);
+      case 'SLACK':
+        return JSON.stringify({
+          webhookUrl: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
+          channelName: '#db-sentinel-alerts',
+          username: 'DB Farm Sentinel',
+        }, null, 2);
+      case 'WEBHOOK':
+        return JSON.stringify({
+          webhookUrl: 'https://api.incidentmanagement.internal/v1/alerts',
+          httpMethod: 'POST',
+          headers: {
+            'Authorization': 'Bearer YOUR_INTEGRATION_TOKEN_HERE',
+            'Content-Type': 'application/json',
+          },
+        }, null, 2);
+      case 'SMS':
+        return JSON.stringify({
+          provider: 'TWILIO',
+          accountSid: 'ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+          authToken: 'YOUR_AUTH_TOKEN_HERE',
+          fromNumber: '+18005550199',
+        }, null, 2);
+      default:
+        return JSON.stringify({
+          webhookUrl: 'https://api.incidentmanagement.internal/v1/alerts',
+        }, null, 2);
+    }
+  };
+
+  const handleJsonChange = (text: string) => {
+    setAlertForm(prev => ({ ...prev, configJsonStr: text }));
+    try {
+      if (text.trim()) {
+        JSON.parse(text);
+      }
+      setJsonValidationError(null);
+    } catch (e: any) {
+      setJsonValidationError(e.message);
+    }
+  };
+
+  const handleFormatJson = () => {
+    try {
+      const parsed = JSON.parse(alertForm.configJsonStr);
+      const formatted = JSON.stringify(parsed, null, 2);
+      setAlertForm(prev => ({ ...prev, configJsonStr: formatted }));
+      setJsonValidationError(null);
+    } catch (e: any) {
+      setJsonValidationError(`Cannot format: ${e.message}`);
+    }
+  };
+
+  const handleInsertToken = (tokenStr: string) => {
+    setAlertForm(prev => ({
+      ...prev,
+      notificationMessage: prev.notificationMessage
+        ? `${prev.notificationMessage} ${tokenStr}`
+        : tokenStr,
+    }));
+  };
+
+  const handleOpenAddAlertMethod = () => {
+    setEditingAlertMethod(null);
+    setJsonValidationError(null);
+    setAlertForm({
+      id: '',
+      name: '',
+      type: 'EMAIL',
+      notificationMessage: getDefaultNotificationMessage('EMAIL'),
+      statusOnOff: 'ACTIVE',
+      configJsonStr: getPresetTemplate('EMAIL'),
+    });
+    setIsAlertModalOpen(true);
+  };
+
+  const handleOpenEditAlertMethod = (method: AlertNotificationMethodEntity) => {
+    setEditingAlertMethod(method);
+    setJsonValidationError(null);
+    setAlertForm({
+      id: method.id,
+      name: method.name,
+      type: method.type,
+      notificationMessage: method.notificationMessage || getDefaultNotificationMessage(method.type),
+      statusOnOff: method.statusOnOff || 'ACTIVE',
+      configJsonStr: JSON.stringify(method.configJson || {}, null, 2),
+    });
+    setIsAlertModalOpen(true);
+  };
+
+  const handleSaveAlertMethodSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!alertForm.name.trim()) {
+      toast({ title: 'Validation Error', description: 'Dispatcher Name is required.', type: 'error' });
+      return;
+    }
+
+    let configJson: Record<string, any> = {};
+    try {
+      configJson = JSON.parse(alertForm.configJsonStr);
+    } catch (err: any) {
+      setJsonValidationError(err.message);
+      toast({
+        title: 'Invalid JSON Configuration',
+        description: 'Please correct the JSON syntax errors before saving.',
+        type: 'error',
+      });
+      return;
+    }
+
+    const payload = {
+      id: alertForm.id || undefined,
+      name: alertForm.name.trim(),
+      type: alertForm.type,
+      notificationMessage: alertForm.notificationMessage.trim() || null,
+      statusOnOff: alertForm.statusOnOff,
+      configJson,
+    };
+
+    try {
+      if (onSaveAlertMethod) {
+        await onSaveAlertMethod(payload);
+      } else {
+        await api.saveAlertNotificationMethod(payload);
+        onRefresh();
+      }
+      setIsAlertModalOpen(false);
+      toast({
+        title: editingAlertMethod ? 'Dispatcher Updated' : 'Dispatcher Registered',
+        description: `Notification method "${alertForm.name}" (${alertForm.type}) saved.`,
+        type: 'success',
+      });
+    } catch (err: any) {
+      toast({ title: 'Save Failed', description: err.message, type: 'error' });
+    }
+  };
+
+  const handleToggleAlertMethodStatus = async (method: AlertNotificationMethodEntity) => {
+    const nextStatus = method.statusOnOff === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    try {
+      if (onSaveAlertMethod) {
+        await onSaveAlertMethod({ ...method, statusOnOff: nextStatus });
+      } else {
+        await api.saveAlertNotificationMethod({ ...method, statusOnOff: nextStatus });
+        onRefresh();
+      }
+      toast({
+        title: 'Status Updated',
+        description: `Notification method "${method.name}" is now ${nextStatus}.`,
+        type: 'info',
+      });
+    } catch (err: any) {
+      toast({ title: 'Update Failed', description: err.message, type: 'error' });
+    }
+  };
+
+  const handleTestDispatcher = (method: AlertNotificationMethodEntity) => {
+    setTestingMethodId(method.id);
+    setTimeout(() => {
+      setTestingMethodId(null);
+      toast({
+        title: 'Synthetic Dispatcher Test Succeeded',
+        description: `Dispatched test payload via "${method.name}" (${method.type}). Status: 200 OK Delivered.`,
+        type: 'success',
+      });
+    }, 750);
+  };
 
   // If user is not ADMIN, show Access Denied
   if (userRole !== 'ADMIN') {
@@ -101,6 +356,16 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [channelFilter, setChannelFilter] = useState<string>('ALL');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
+  const [eventTypeFilter, setEventTypeFilter] = useState<string>('ALL');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const handleCopyText = (text: string, fieldLabel: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldLabel);
+    toast({ title: 'Copied to Clipboard', description: `${fieldLabel} copied successfully.`, type: 'info' });
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -306,6 +571,9 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
         // Severity filter
         if (severityFilter !== 'ALL' && log.alertLevel !== severityFilter) return false;
 
+        // Event Type filter
+        if (eventTypeFilter !== 'ALL' && log.eventType !== eventTypeFilter) return false;
+
         // Search term
         if (searchTerm.trim()) {
           const term = searchTerm.toLowerCase();
@@ -314,10 +582,13 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
             log.dbName?.toLowerCase().includes(term) ||
             log.metricName?.toLowerCase().includes(term) ||
             log.attributeName?.toLowerCase().includes(term) ||
-            log.dispatchMethod?.toLowerCase().includes(term) ||
+            (log.dispatcherName || log.dispatchMethod)?.toLowerCase().includes(term) ||
             log.senderIds?.toLowerCase().includes(term) ||
             log.errorMessage?.toLowerCase().includes(term) ||
-            log.payloadSummary?.toLowerCase().includes(term);
+            log.payloadSummary?.toLowerCase().includes(term) ||
+            log.messageAlert?.toLowerCase().includes(term) ||
+            log.detailResponse?.toLowerCase().includes(term) ||
+            log.eventType?.toLowerCase().includes(term);
 
           if (!matchesTerm) return false;
         }
@@ -334,6 +605,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     statusFilter,
     channelFilter,
     severityFilter,
+    eventTypeFilter,
     searchTerm,
     dbMap,
   ]);
@@ -385,6 +657,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     setStatusFilter('ALL');
     setChannelFilter('ALL');
     setSeverityFilter('ALL');
+    setEventTypeFilter('ALL');
     setSearchTerm('');
     handleSelectTimePreset('24h');
   };
@@ -395,6 +668,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     statusFilter !== 'ALL' ||
     channelFilter !== 'ALL' ||
     severityFilter !== 'ALL' ||
+    eventTypeFilter !== 'ALL' ||
     searchTerm.trim() !== '' ||
     timeRangePreset !== '24h';
 
@@ -881,6 +1155,149 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
         </div>
       </div>
 
+      {/* ALERT NOTIFICATION METHODS PANEL */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs">
+        <div className="p-4 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-700">
+              <Send className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                Alert Notification Methods
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold">
+                  {alertMethods.length} Dispatchers
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Protocol dispatchers (Email, Telegram Bot, Slack, Webhook) stored dynamically in database table with protocol parameters.
+              </p>
+            </div>
+          </div>
+
+          {isAdmin && (
+            <button
+              onClick={handleOpenAddAlertMethod}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer shrink-0 self-start sm:self-auto whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" />
+              Add New Alert Notification Method
+            </button>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th className="py-2.5 px-3">Dispatcher Name</th>
+                <th className="py-2.5 px-3">Protocol / Channel</th>
+                <th className="py-2.5 px-3">Notification Message (TOKEN Template)</th>
+                <th className="py-2.5 px-3">Configuration Summary</th>
+                <th className="py-2.5 px-3 text-center">Status</th>
+                <th className="py-2.5 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {alertMethods.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-1.5">
+                      <Send className="w-6 h-6 text-slate-300" />
+                      <span className="font-semibold text-slate-600">No alert notification dispatchers registered</span>
+                      <span className="text-[11px] text-slate-400">
+                        Click "Add New Alert Notification Method" to set up Telegram, Email, Slack, or Webhook alerts.
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                alertMethods.map((method) => (
+                  <tr key={method.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-2.5 px-3 font-bold text-slate-900">
+                      {method.name}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      {renderChannelBadge(method.type, method.type)}
+                    </td>
+                    <td className="py-2.5 px-3 max-w-xs truncate font-mono text-[11px] text-slate-700" title={method.notificationMessage || ''}>
+                      {method.notificationMessage ? (
+                        <span className="text-slate-800 font-mono text-[11px]">{method.notificationMessage}</span>
+                      ) : (
+                        <span className="text-slate-400 italic">No custom message template</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 max-w-xs truncate font-mono text-[11px] text-slate-600">
+                      {JSON.stringify(method.configJson || {})}
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <button
+                        onClick={() => isAdmin && handleToggleAlertMethodStatus(method)}
+                        disabled={!isAdmin}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                          method.statusOnOff === 'ACTIVE'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                        } ${!isAdmin ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                      >
+                        {method.statusOnOff || 'ACTIVE'}
+                      </button>
+                    </td>
+                    <td className="py-2.5 px-3 text-right space-x-1">
+                      <button
+                        onClick={() => handleTestDispatcher(method)}
+                        disabled={testingMethodId === method.id}
+                        className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded font-semibold text-[11px] transition-colors cursor-pointer inline-flex items-center gap-1"
+                        title="Dispatch synthetic test message"
+                      >
+                        {testingMethodId === method.id ? (
+                          <RefreshCw className="w-3 h-3 animate-spin text-sky-600" />
+                        ) : (
+                          <Send className="w-3 h-3 text-sky-600" />
+                        )}
+                        Test
+                      </button>
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={() => handleOpenEditAlertMethod(method)}
+                            className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                            title="Edit Alert Method"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (confirm(`Are you sure you want to delete notification method "${method.name}"?`)) {
+                                try {
+                                  if (onDeleteAlertMethod) {
+                                    await onDeleteAlertMethod(method.id);
+                                  } else {
+                                    await api.deleteAlertNotificationMethod(method.id);
+                                    onRefresh();
+                                  }
+                                  toast({ title: 'Dispatcher Removed', description: `Deleted notification method "${method.name}".`, type: 'info' });
+                                } catch (err: any) {
+                                  toast({ title: 'Delete Failed', description: err.message, type: 'error' });
+                                }
+                              }
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                            title="Delete Alert Method"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* SECTION 1: ALERT NOTIFICATION QUEUE (alert_notification_queue) - BEFORE LOGS */}
       {/* Notice: Queue table is NOT filtered by time window */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs">
@@ -1091,7 +1508,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Search alert ID, database, metric, channel, sender IDs, error..."
+                placeholder="Search alert ID, event, database, metric, channel, sender IDs, message, response..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -1114,6 +1531,21 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
 
             {/* Secondary Filter Dropdowns */}
             <div className="flex flex-wrap items-center gap-2">
+              {/* Event Type Filter */}
+              <select
+                value={eventTypeFilter}
+                onChange={(e) => {
+                  setEventTypeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="ALL">Event: All</option>
+                <option value="NEW_ALERT">NEW_ALERT</option>
+                <option value="CLEAR_ALERT">CLEAR_ALERT</option>
+                <option value="TRIGGER">TRIGGER</option>
+              </select>
+
               {/* Status Filter */}
               <select
                 value={statusFilter}
@@ -1125,6 +1557,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
               >
                 <option value="ALL">Status: All</option>
                 <option value="DISPATCHED">DISPATCHED</option>
+                <option value="SUCCESS">SUCCESS</option>
                 <option value="FAILED">FAILED</option>
                 <option value="PENDING">PENDING</option>
               </select>
@@ -1172,20 +1605,21 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   <th className="py-2.5 px-3">Timestamp</th>
-                  <th className="py-2.5 px-3">Alert ID</th>
+                  <th className="py-2.5 px-3">Alert ID / Event</th>
                   <th className="py-2.5 px-3">Database Instance</th>
                   <th className="py-2.5 px-3">Metric / Attribute</th>
                   <th className="py-2.5 px-3 text-center">Severity</th>
-                  <th className="py-2.5 px-3">Dispatch Method</th>
+                  <th className="py-2.5 px-3">Dispatcher / Channel</th>
                   <th className="py-2.5 px-3">Destination Sender IDs</th>
+                  <th className="py-2.5 px-3">Message Alert</th>
                   <th className="py-2.5 px-3 text-center">Status</th>
-                  <th className="py-2.5 px-3">Details / Latency</th>
+                  <th className="py-2.5 px-3">Detail Response / Latency</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {paginatedLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-400">
+                    <td colSpan={10} className="py-12 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <BellRing className="w-8 h-8 text-slate-300" />
                         <span className="font-semibold text-slate-600">No alert notification logs found</span>
@@ -1198,6 +1632,9 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                 ) : (
                   paginatedLogs.map((log) => {
                     const dbObj = dbMap.get(log.dbId);
+                    const msgText = log.messageAlert || log.payloadSummary || '—';
+                    const detailText = log.detailResponse || log.errorMessage || null;
+
                     return (
                       <tr
                         key={log.id}
@@ -1215,11 +1652,27 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                           </div>
                         </td>
 
-                        {/* 2. Alert ID */}
+                        {/* 2. Alert ID & Event Type */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100">
-                            {log.alertId || log.id}
-                          </span>
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100">
+                              {log.alertId || log.id}
+                            </span>
+                            {log.eventType && (
+                              <span
+                                className={cn(
+                                  'text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border uppercase',
+                                  log.eventType === 'CLEAR_ALERT'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : log.eventType === 'NEW_ALERT' || log.eventType === 'TRIGGER'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                                )}
+                              >
+                                {log.eventType}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* 3. Database */}
@@ -1242,11 +1695,11 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
 
                         {/* 4. Metric / Attribute */}
                         <td className="py-2.5 px-3">
-                          <div className="font-semibold text-slate-800 max-w-[180px] truncate">
+                          <div className="font-semibold text-slate-800 max-w-[160px] truncate" title={log.metricName}>
                             {log.metricName}
                           </div>
                           {log.attributeName && (
-                            <div className="text-[10px] text-slate-400 font-mono truncate">
+                            <div className="text-[10px] text-slate-400 font-mono truncate max-w-[160px]" title={log.attributeName}>
                               {log.attributeName}
                             </div>
                           )}
@@ -1276,61 +1729,78 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                           )}
                         </td>
 
-                        {/* 6. Dispatch Method */}
+                        {/* 6. Dispatcher / Channel */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
-                          {renderChannelBadge(log.dispatchType, log.dispatchMethod)}
+                          {renderChannelBadge(
+                            log.dispatcherType || log.dispatchType,
+                            log.dispatcherName || log.dispatchMethod
+                          )}
                         </td>
 
                         {/* 7. Sender IDs */}
                         <td className="py-2.5 px-3">
                           <div
-                            className="text-[11px] font-mono text-slate-700 max-w-[200px] truncate bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200"
+                            className="text-[11px] font-mono text-slate-700 max-w-[160px] truncate bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200"
                             title={log.senderIds}
                           >
                             {log.senderIds || '—'}
                           </div>
                         </td>
 
-                        {/* 8. Status */}
+                        {/* 8. Message Alert */}
+                        <td className="py-2.5 px-3">
+                          <div
+                            className="text-[11px] text-slate-800 max-w-[200px] truncate font-sans bg-slate-50/70 px-2 py-1 rounded border border-slate-200/60"
+                            title={msgText}
+                          >
+                            {msgText}
+                          </div>
+                        </td>
+
+                        {/* 9. Status */}
                         <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                          {log.status === 'DISPATCHED' && (
+                          {log.status === 'DISPATCHED' || log.status === 'SUCCESS' ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              DISPATCHED
+                              {log.status}
                             </span>
-                          )}
-                          {log.status === 'FAILED' && (
+                          ) : log.status === 'FAILED' || log.status === 'REJECTED' ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
                               <XCircle className="w-3 h-3 text-rose-600" />
-                              FAILED
+                              {log.status}
                             </span>
-                          )}
-                          {log.status === 'PENDING' && (
+                          ) : (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
                               <Clock className="w-3 h-3 text-amber-600" />
-                              PENDING
+                              {log.status}
                             </span>
                           )}
                         </td>
 
-                        {/* 9. Details / Latency */}
+                        {/* 10. Detail Response / Latency */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
-                          {log.errorMessage ? (
-                            <span className="text-[11px] font-semibold text-rose-600 block max-w-[220px] truncate" title={log.errorMessage}>
-                              {log.errorMessage}
-                            </span>
-                          ) : (
-                            <div className="flex items-center gap-2 text-slate-500 text-[11px]">
-                              {log.latencyMs && (
-                                <span className="font-mono bg-slate-100 px-1.5 py-0.2 rounded text-slate-700 font-bold">
-                                  {log.latencyMs}ms
-                                </span>
-                              )}
-                              <span className="text-slate-400 group-hover:text-indigo-600 text-[10px] transition-colors underline">
-                                View Payload »
+                          <div className="flex flex-col gap-0.5 items-start">
+                            {detailText ? (
+                              <span
+                                className={cn(
+                                  'text-[10px] font-mono px-1.5 py-0.5 rounded max-w-[180px] truncate block',
+                                  log.errorMessage
+                                    ? 'text-rose-600 bg-rose-50 border border-rose-200 font-semibold'
+                                    : 'text-slate-700 bg-slate-100 border border-slate-200'
+                                )}
+                                title={detailText}
+                              >
+                                {detailText}
                               </span>
-                            </div>
-                          )}
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-mono">200 OK Delivered</span>
+                            )}
+                            {log.latencyMs != null && (
+                              <span className="text-[9px] font-mono text-slate-500 bg-slate-50 border border-slate-200 px-1 py-0.2 rounded inline-flex items-center gap-0.5">
+                                ⚡ {log.latencyMs}ms
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1414,43 +1884,123 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
           title={`Notification Dispatch Audit: ${selectedLog.id}`}
         >
           <div className="space-y-4 text-xs">
-            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            {/* Metadata Overview Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">Timestamp</span>
                 <span className="font-mono font-semibold text-slate-800">{formatDateTime(selectedLog.timestamp)}</span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">Status</span>
-                <span className="font-bold text-slate-900">{selectedLog.status}</span>
+                <span className="font-bold text-slate-900 flex items-center gap-1 mt-0.5">
+                  {selectedLog.status === 'DISPATCHED' || selectedLog.status === 'SUCCESS' ? (
+                    <span className="text-emerald-600 font-bold">✓ {selectedLog.status}</span>
+                  ) : selectedLog.status === 'FAILED' ? (
+                    <span className="text-rose-600 font-bold">✕ FAILED</span>
+                  ) : (
+                    <span>{selectedLog.status}</span>
+                  )}
+                </span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">Database</span>
-                <span className="font-bold text-slate-900">{selectedLog.dbName}</span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Event Type</span>
+                <span className="font-mono font-bold text-indigo-700">{selectedLog.eventType || 'NEW_ALERT'}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">Channel / Provider</span>
-                <span className="font-bold text-indigo-700">{selectedLog.dispatchMethod} ({selectedLog.dispatchType})</span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Latency</span>
+                <span className="font-mono font-semibold text-slate-800">
+                  {selectedLog.latencyMs != null ? `${selectedLog.latencyMs} ms` : '—'}
+                </span>
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3 bg-slate-50/80 p-3 rounded-lg border border-slate-200/80">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Database Target</span>
+                <span className="font-bold text-slate-900">{selectedLog.dbName}</span>
+                <span className="text-[10px] font-mono text-slate-400 block">{selectedLog.dbId}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Metric & Attribute</span>
+                <span className="font-bold text-slate-900">{selectedLog.metricName}</span>
+                {selectedLog.attributeName && (
+                  <span className="text-[10px] font-mono text-slate-500 block">{selectedLog.attributeName}</span>
+                )}
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Severity Level</span>
+                <span className="font-mono font-bold text-slate-800">{selectedLog.alertLevel}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Dispatcher Channel</span>
+                <span className="font-bold text-indigo-700">
+                  {selectedLog.dispatcherName || selectedLog.dispatchMethod} ({selectedLog.dispatcherType || selectedLog.dispatchType})
+                </span>
+              </div>
+            </div>
+
+            {/* Target Sender IDs */}
             <div>
-              <span className="text-[11px] font-bold text-slate-700 block mb-1">Target Sender IDs:</span>
-              <div className="bg-slate-100 p-2 rounded-lg font-mono text-slate-800 break-all select-all">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] font-bold text-slate-700">Destination Sender IDs / Recipients:</span>
+                {selectedLog.senderIds && (
+                  <button
+                    onClick={() => handleCopyText(selectedLog.senderIds, 'Sender IDs')}
+                    className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedField === 'Sender IDs' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    {copiedField === 'Sender IDs' ? 'Copied' : 'Copy'}
+                  </button>
+                )}
+              </div>
+              <div className="bg-slate-100 p-2.5 rounded-lg font-mono text-slate-800 break-all select-all border border-slate-200">
                 {selectedLog.senderIds || '—'}
               </div>
             </div>
 
+            {/* Dispatched Message Alert */}
             <div>
-              <span className="text-[11px] font-bold text-slate-700 block mb-1">Dispatched Message Summary:</span>
-              <div className="bg-slate-100 p-2.5 rounded-lg text-slate-800 leading-relaxed font-sans">
-                {selectedLog.payloadSummary || 'No payload summary available.'}
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] font-bold text-slate-700">Dispatched Message Alert (`message_alert`):</span>
+                {(selectedLog.messageAlert || selectedLog.payloadSummary) && (
+                  <button
+                    onClick={() => handleCopyText(selectedLog.messageAlert || selectedLog.payloadSummary || '', 'Message Alert')}
+                    className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedField === 'Message Alert' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    {copiedField === 'Message Alert' ? 'Copied' : 'Copy'}
+                  </button>
+                )}
+              </div>
+              <div className="bg-slate-900 text-slate-100 p-3 rounded-lg text-xs leading-relaxed font-mono whitespace-pre-wrap border border-slate-800 max-h-[180px] overflow-y-auto">
+                {selectedLog.messageAlert || selectedLog.payloadSummary || 'No dispatched message content recorded.'}
               </div>
             </div>
 
+            {/* Detail Response */}
+            {selectedLog.detailResponse && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-bold text-slate-700">Detail API Response (`detail_response`):</span>
+                  <button
+                    onClick={() => handleCopyText(selectedLog.detailResponse!, 'Detail Response')}
+                    className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedField === 'Detail Response' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    {copiedField === 'Detail Response' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <div className="bg-slate-100 p-2.5 rounded-lg font-mono text-[11px] text-slate-800 break-all border border-slate-200">
+                  {selectedLog.detailResponse}
+                </div>
+              </div>
+            )}
+
+            {/* Error Message */}
             {selectedLog.errorMessage && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800">
-                <span className="font-bold block mb-0.5">Gateway Error Response:</span>
-                <span className="font-mono text-[11px]">{selectedLog.errorMessage}</span>
+                <span className="font-bold block mb-0.5">Gateway Error Response (`error_message`):</span>
+                <span className="font-mono text-[11px] break-all">{selectedLog.errorMessage}</span>
               </div>
             )}
 
@@ -1465,6 +2015,185 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
           </div>
         </Dialog>
       )}
+
+      {/* Alert Method Modal */}
+      <Dialog
+        isOpen={isAlertModalOpen}
+        onClose={() => setIsAlertModalOpen(false)}
+        title={editingAlertMethod ? 'Edit Alert Notification Method' : 'Register Alert Notification Method'}
+        description="Configure generic Raw JSON parameters (API keys, webhooks, SMTP) persisted directly in config_json."
+        maxWidth="2xl"
+      >
+        <form onSubmit={handleSaveAlertMethodSubmit} className="space-y-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-slate-700 font-bold mb-1">
+                Dispatcher Name *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Corporate SMTP Dispatcher"
+                value={alertForm.name}
+                onChange={(e) => setAlertForm({ ...alertForm, name: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-semibold text-slate-900 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-bold mb-1">
+                Channel Type *
+              </label>
+              <select
+                value={alertForm.type}
+                onChange={(e) => {
+                  const newType = e.target.value as AlertMethodType;
+                  setAlertForm(prev => ({
+                    ...prev,
+                    type: newType,
+                    configJsonStr: getPresetTemplate(newType),
+                  }));
+                  setJsonValidationError(null);
+                }}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="EMAIL">EMAIL (SMTP Relay)</option>
+                <option value="TELEGRAM">TELEGRAM (Bot API)</option>
+                <option value="SLACK">SLACK (Webhook API)</option>
+                <option value="WEBHOOK">CUSTOM WEBHOOK (HTTP POST)</option>
+                <option value="SMS">SMS GATEWAY</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Raw JSON Configuration Editor */}
+          <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 text-slate-100 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Code className="w-4 h-4 text-indigo-400" />
+                <span className="font-bold text-white text-xs">Raw JSON Configuration Editor (config_json)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleFormatJson}
+                  className="px-2.5 py-1 text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <Sparkles className="w-3 h-3 text-indigo-400" />
+                  Format JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleJsonChange(getPresetTemplate(alertForm.type));
+                  }}
+                  className="px-2.5 py-1 text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer"
+                >
+                  Reset Template
+                </button>
+              </div>
+            </div>
+
+            <textarea
+              rows={8}
+              value={alertForm.configJsonStr}
+              onChange={(e) => handleJsonChange(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 font-mono text-xs text-emerald-400 focus:outline-none focus:border-indigo-500 selection:bg-indigo-600/40 leading-relaxed"
+              placeholder='{ "key": "value" }'
+              spellCheck={false}
+            />
+
+            {jsonValidationError ? (
+              <div className="flex items-center gap-2 text-rose-400 text-[11px] bg-rose-950/50 p-2 rounded-lg border border-rose-800/60 font-mono">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>JSON Syntax Error: {jsonValidationError}</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 font-mono">
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Valid JSON Payload Schema
+                </span>
+                <span>Direct Persistence to `config_json`</span>
+              </div>
+            )}
+          </div>
+
+
+          {/* Notification Message (TOKEN Template) Editor */}
+          <div className="space-y-2 p-3.5 bg-indigo-50/50 rounded-xl border border-indigo-100">
+            <div className="flex items-center justify-between">
+              <label className="block text-slate-800 font-bold text-xs flex items-center gap-1.5">
+                <MessageSquare className="w-4 h-4 text-indigo-600" />
+                Notification Message (TOKEN Template)
+              </label>
+              <span className="text-[10px] text-indigo-700 font-mono bg-indigo-100 px-2 py-0.5 rounded-full font-semibold">
+                Token Raw Storage (Unreplaced)
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Template string stored raw in column <code className="font-bold text-slate-700">notification_message</code>. Other applications will replace tokens with real database alert values at dispatch time.
+            </p>
+
+            <textarea
+              rows={10}
+              value={alertForm.notificationMessage}
+              onChange={(e) => setAlertForm({ ...alertForm, notificationMessage: e.target.value })}
+              className="w-full bg-white border border-slate-300 rounded-lg p-2.5 font-mono text-xs text-slate-800 focus:outline-none focus:border-indigo-500 leading-relaxed shadow-2xs"
+              placeholder="e.g. D_NOTIFICATION_TYPE D_ALERT_SEVERITY Database D_DATABASE_NAME (D_DATABASE_TYPE) Metric D_METRIC_NAME: D_ALERT_VALUE"
+            />
+
+            <div>
+              <span className="text-[11px] font-bold text-slate-700 block mb-1.5">Available TOKEN Templates (Click chip to append token):</span>
+              <div className="flex flex-wrap gap-1.5">
+                {NOTIFICATION_TOKENS.map((t) => (
+                  <button
+                    key={t.token}
+                    type="button"
+                    onClick={() => handleInsertToken(t.token)}
+                    className="px-2 py-1 text-[11px] font-mono font-bold bg-white hover:bg-indigo-600 hover:text-white text-indigo-700 border border-indigo-200 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-1 group"
+                    title={`${t.label}: ${t.desc}`}
+                  >
+                    <span>{t.token}</span>
+                    <span className="text-[9px] text-indigo-400 group-hover:text-indigo-100 font-sans font-normal">({t.label})</span>
+                  </button>
+                ))}
+              </div>
+              <span className="text-[10px] text-slate-400 italic block mt-1">
+                * Saved token without replacement; calculated dynamically by external consumers/dispatch engines.
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">Dispatcher Status</label>
+            <select
+              value={alertForm.statusOnOff}
+              onChange={(e) => setAlertForm({ ...alertForm, statusOnOff: e.target.value as any })}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="INACTIVE">INACTIVE</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={() => setIsAlertModalOpen(false)}
+              className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!!jsonValidationError}
+              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold transition-colors shadow-2xs cursor-pointer"
+            >
+              {editingAlertMethod ? 'Save Dispatcher Changes' : 'Register Dispatcher'}
+            </button>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 };

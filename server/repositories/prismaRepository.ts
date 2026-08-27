@@ -746,6 +746,25 @@ export class PrismaRepository implements IStorageRepository {
       }
     }
 
+    const targetAlertMethodIds = groupData.alertMethodIds;
+    if (targetAlertMethodIds !== undefined) {
+      try {
+        await (this.prisma as any).groupNotificationMapping?.deleteMany({ where: { groupId: gRecord.id } });
+        if (targetAlertMethodIds.length > 0) {
+          await (this.prisma as any).groupNotificationMapping?.createMany({
+            data: targetAlertMethodIds.map((methodId) => ({
+              groupId: gRecord.id,
+              notificationMethodId: methodId,
+              senderIds: groupData.senderIds || '',
+            })),
+            skipDuplicates: true,
+          });
+        }
+      } catch (err) {
+        console.warn('Syncing groupNotificationMapping failed:', err);
+      }
+    }
+
     const reloaded = await this.getGroupById(gRecord.id);
     return reloaded!;
   }
@@ -1434,6 +1453,7 @@ export class PrismaRepository implements IStorageRepository {
           id: m.id,
           name: m.name,
           type: m.type as any,
+          notificationMessage: m.notificationMessage || null,
           configJson: m.configJson as any,
           statusOnOff: m.statusOnOff as any,
           createdAt: m.createdAt.toISOString(),
@@ -1448,6 +1468,7 @@ export class PrismaRepository implements IStorageRepository {
         id: 'meth-email-01',
         name: 'Corporate SMTP Dispatcher',
         type: 'EMAIL',
+        notificationMessage: '[ALERT] Database D_DATABASE_NAME (D_DATABASE_TYPE:D_DATABASE_PORT) Metric D_METRIC_NAME triggered alert! Value: D_ALERT_VALUE. Message: D_ALERT_MESSAGE. Created At: D_ALERT_CREATED_AT',
         configJson: {
           smtpHost: 'smtp.mailgun.org',
           smtpPort: 587,
@@ -1461,6 +1482,7 @@ export class PrismaRepository implements IStorageRepository {
         id: 'meth-tg-02',
         name: 'Telegram Incident Operations Bot',
         type: 'TELEGRAM',
+        notificationMessage: '🚨 <b>[INCIDENT ALERT]</b> 🚨\nDatabase: <b>D_DATABASE_NAME</b> (ID: D_DATABASE_ID, Engine: D_DATABASE_TYPE:D_DATABASE_PORT)\nMetric: <b>D_METRIC_NAME</b>\nObject: D_OBJECT_NAME | Attr: D_ATTR_NAME\nValue: <code>D_ALERT_VALUE</code>\nDetails: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT',
         configJson: {
           botToken: '6829103847:AAH9f_KzL2e-wZ5qM7Nx982Qp',
           apiBaseUrl: 'https://api.telegram.org',
@@ -1473,6 +1495,7 @@ export class PrismaRepository implements IStorageRepository {
         id: 'meth-slack-03',
         name: 'Slack NOC Incident Channel',
         type: 'SLACK',
+        notificationMessage: ':warning: *ALERT DISPATCH*: Database *D_DATABASE_NAME* (`D_DATABASE_TYPE`) | Metric: *D_METRIC_NAME* | Object: D_OBJECT_NAME | Value: `D_ALERT_VALUE` | Message: D_ALERT_MESSAGE | Created: D_ALERT_CREATED_AT',
         configJson: {
           webhookUrl: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
           channelName: '#db-sentinel-alerts',
@@ -1490,6 +1513,7 @@ export class PrismaRepository implements IStorageRepository {
           data: {
             name: methodData.name,
             type: methodData.type,
+            notificationMessage: methodData.notificationMessage !== undefined ? methodData.notificationMessage : undefined,
             configJson: methodData.configJson as any,
             statusOnOff: methodData.statusOnOff,
           },
@@ -1498,6 +1522,7 @@ export class PrismaRepository implements IStorageRepository {
           id: updated.id,
           name: updated.name,
           type: updated.type as any,
+          notificationMessage: updated.notificationMessage || null,
           configJson: updated.configJson as any,
           statusOnOff: updated.statusOnOff as any,
           createdAt: updated.createdAt.toISOString(),
@@ -1508,6 +1533,7 @@ export class PrismaRepository implements IStorageRepository {
         data: {
           name: methodData.name || 'New Alert Dispatcher',
           type: methodData.type || 'EMAIL',
+          notificationMessage: methodData.notificationMessage || null,
           configJson: (methodData.configJson as any) || {},
           statusOnOff: methodData.statusOnOff || 'ACTIVE',
         },
@@ -1516,6 +1542,7 @@ export class PrismaRepository implements IStorageRepository {
         id: created.id,
         name: created.name,
         type: created.type as any,
+        notificationMessage: created.notificationMessage || null,
         configJson: created.configJson as any,
         statusOnOff: created.statusOnOff as any,
         createdAt: created.createdAt.toISOString(),
@@ -1527,6 +1554,7 @@ export class PrismaRepository implements IStorageRepository {
         id: methodData.id || `meth-${Date.now()}`,
         name: methodData.name || 'New Alert Dispatcher',
         type: methodData.type || 'EMAIL',
+        notificationMessage: methodData.notificationMessage || null,
         configJson: methodData.configJson || {},
         statusOnOff: methodData.statusOnOff || 'ACTIVE',
         createdAt: new Date().toISOString(),
@@ -1767,12 +1795,18 @@ export class PrismaRepository implements IStorageRepository {
           metricName: r.metricName || '',
           attributeName: r.attributeName || null,
           alertLevel: r.alertLevel || 'WARN',
-          dispatchMethod: r.dispatchMethod || '',
-          dispatchType: r.dispatchType || 'TELEGRAM',
+          eventType: r.eventType || 'NEW_ALERT',
+          dispatcherId: r.dispatcherId || '',
+          dispatcherName: r.dispatcherName || r.dispatchMethod || '',
+          dispatcherType: r.dispatcherType || r.dispatchType || 'TELEGRAM',
+          dispatchMethod: r.dispatcherName || r.dispatchMethod || '',
+          dispatchType: r.dispatcherType || r.dispatchType || 'TELEGRAM',
           senderIds: r.senderIds || '',
           status: r.status || 'DISPATCHED',
           errorMessage: r.errorMessage || null,
           payloadSummary: r.payloadSummary || '',
+          messageAlert: r.messageAlert || r.payloadSummary || '',
+          detailResponse: r.detailResponse || r.errorMessage || null,
           latencyMs: r.latencyMs != null ? Number(r.latencyMs) : undefined,
         }));
       }
@@ -1790,11 +1824,17 @@ export class PrismaRepository implements IStorageRepository {
         metricName: 'Tablespace Usage %',
         attributeName: 'used_space_pct',
         alertLevel: 'CRITICAL',
-        dispatchMethod: 'Telegram Alert Bot',
+        eventType: 'NEW_ALERT',
+        dispatcherId: 'meth-tg-02',
+        dispatcherName: 'Telegram Incident Operations Bot',
+        dispatcherType: 'TELEGRAM',
+        dispatchMethod: 'Telegram Incident Operations Bot',
         dispatchType: 'TELEGRAM',
         senderIds: '-1001234567890, -1009876543210',
         status: 'DISPATCHED',
         payloadSummary: 'CRITICAL: ERP_PROD_ORA [TS_DATA] Tablespace Usage % reached 97.4%',
+        messageAlert: 'CRITICAL: ERP_PROD_ORA [TS_DATA] Tablespace Usage % reached 97.4%',
+        detailResponse: 'HTTP 200 OK: Telegram message delivered to chat -1001234567890',
         latencyMs: 142,
       },
       {
@@ -1806,11 +1846,17 @@ export class PrismaRepository implements IStorageRepository {
         metricName: 'Tablespace Usage %',
         attributeName: 'used_space_pct',
         alertLevel: 'CRITICAL',
-        dispatchMethod: 'Corporate SMTP Relay',
+        eventType: 'NEW_ALERT',
+        dispatcherId: 'meth-email-01',
+        dispatcherName: 'Corporate SMTP Dispatcher',
+        dispatcherType: 'EMAIL',
+        dispatchMethod: 'Corporate SMTP Dispatcher',
         dispatchType: 'EMAIL',
         senderIds: 'dba-team@company.internal, oncall-dba@company.internal',
         status: 'DISPATCHED',
         payloadSummary: '[INCIDENT-974] ERP_PROD_ORA Tablespace Alert',
+        messageAlert: '[INCIDENT-974] ERP_PROD_ORA Tablespace Alert',
+        detailResponse: '250 2.0.0 OK 1700000000 message queued for delivery',
         latencyMs: 380,
       },
       {
@@ -1822,11 +1868,17 @@ export class PrismaRepository implements IStorageRepository {
         metricName: 'Connection Saturation %',
         attributeName: 'active_connections',
         alertLevel: 'CRITICAL',
-        dispatchMethod: 'Telegram Alert Bot',
+        eventType: 'TRIGGER',
+        dispatcherId: 'meth-tg-02',
+        dispatcherName: 'Telegram Incident Operations Bot',
+        dispatcherType: 'TELEGRAM',
+        dispatchMethod: 'Telegram Incident Operations Bot',
         dispatchType: 'TELEGRAM',
         senderIds: '-1001234567890',
         status: 'DISPATCHED',
         payloadSummary: 'CRITICAL: PAYMENT_API_PG connection pool 96.8% full',
+        messageAlert: 'CRITICAL: PAYMENT_API_PG connection pool 96.8% full',
+        detailResponse: 'HTTP 200 OK: Telegram message sent successfully',
         latencyMs: 118,
       },
       {
@@ -1838,11 +1890,17 @@ export class PrismaRepository implements IStorageRepository {
         metricName: 'Threads Connected',
         attributeName: 'Threads_connected',
         alertLevel: 'HIGH',
-        dispatchMethod: 'Slack Webhook Gateway',
+        eventType: 'TRIGGER',
+        dispatcherId: 'meth-slack-03',
+        dispatcherName: 'Slack NOC Incident Channel',
+        dispatcherType: 'SLACK',
+        dispatchMethod: 'Slack NOC Incident Channel',
         dispatchType: 'SLACK',
         senderIds: '#dba-alerts-channel',
         status: 'DISPATCHED',
         payloadSummary: 'HIGH: AUTH_NODE_MYSQL Threads_connected spike (430)',
+        messageAlert: 'HIGH: AUTH_NODE_MYSQL Threads_connected spike (430)',
+        detailResponse: 'HTTP 200 ok (Slack Webhook API)',
         latencyMs: 210,
       },
       {
@@ -1854,11 +1912,17 @@ export class PrismaRepository implements IStorageRepository {
         metricName: 'Page Life Expectancy (PLE)',
         attributeName: 'ple_seconds',
         alertLevel: 'WARN',
-        dispatchMethod: 'Corporate SMTP Relay',
+        eventType: 'CLEAR_ALERT',
+        dispatcherId: 'meth-email-01',
+        dispatcherName: 'Corporate SMTP Dispatcher',
+        dispatcherType: 'EMAIL',
+        dispatchMethod: 'Corporate SMTP Dispatcher',
         dispatchType: 'EMAIL',
         senderIds: 'dba-team@company.internal',
         status: 'DISPATCHED',
         payloadSummary: 'WARN: HR_PORTAL_MSSQL Buffer Manager PLE dropped to 240s',
+        messageAlert: 'WARN: HR_PORTAL_MSSQL Buffer Manager PLE dropped to 240s',
+        detailResponse: '250 2.0.0 OK mail delivered',
         latencyMs: 290,
       },
       {
@@ -1870,12 +1934,18 @@ export class PrismaRepository implements IStorageRepository {
         metricName: 'Replication Lag (Seconds)',
         attributeName: 'active_connections',
         alertLevel: 'HIGH',
+        eventType: 'TRIGGER',
+        dispatcherId: 'meth-sms-04',
+        dispatcherName: 'SMS Gateway (Twilio)',
+        dispatcherType: 'SMS',
         dispatchMethod: 'SMS Gateway (Twilio)',
         dispatchType: 'SMS',
         senderIds: '+84901234567, +84907654321',
         status: 'FAILED',
         errorMessage: 'HTTP 429: SMS Rate limit exceeded on backup gateway provider',
         payloadSummary: 'HIGH: PAYMENT_API_PG connection saturation > 85%',
+        messageAlert: 'HIGH: PAYMENT_API_PG connection saturation > 85%',
+        detailResponse: 'HTTP 429 Too Many Requests: Rate limit exceeded on SMS provider',
         latencyMs: 850,
       }
     ];
@@ -2002,62 +2072,124 @@ export class PrismaRepository implements IStorageRepository {
     const cutoffDate = daysToKeep <= 0 ? new Date(Date.now() + 60000) : new Date(Date.now() - daysToKeep * 86400000);
     const dbFilter = dbId === 'ALL' ? {} : { dbId };
 
-    const [activeRes, histRes, metricsRes, logsRes] = await Promise.all([
-      this.prisma.activeAlert.deleteMany({
+    let activeCount = 0;
+    let histCount = 0;
+    let metricsCount = 0;
+    let logsCount = 0;
+
+    try {
+      const activeRes = await this.prisma.activeAlert.deleteMany({
         where: {
           ...dbFilter,
           createdAt: { lte: cutoffDate },
         },
-      }),
-      this.prisma.alertHistory.deleteMany({
+      });
+      activeCount = activeRes.count;
+    } catch (e) {
+      console.warn('activeAlert deleteMany failed:', e);
+    }
+
+    try {
+      const histRes = await this.prisma.alertHistory.deleteMany({
         where: {
           ...dbFilter,
           createdAt: { lte: cutoffDate },
         },
-      }),
-      (this.prisma as any).metricDataPoint?.deleteMany({
+      });
+      histCount = histRes.count;
+    } catch (e) {
+      console.warn('alertHistory deleteMany failed:', e);
+    }
+
+    try {
+      const metricsRes = await (this.prisma as any).metricDataPoint?.deleteMany({
         where: {
           ...(dbId === 'ALL' ? {} : { dbId }),
           measuredAt: { lte: cutoffDate },
         },
-      }).catch((e: any) => {
-        console.warn('Prisma metricDataPoint deleteMany failed:', e);
-        return { count: 0 };
-      }) || { count: 0 },
-      (this.prisma as any).alertNotificationLog?.deleteMany({
+      });
+      metricsCount = metricsRes?.count || 0;
+    } catch (e) {
+      console.warn('Prisma metricDataPoint deleteMany failed, falling back to raw SQL:', e);
+    }
+
+    if (metricsCount === 0) {
+      try {
+        const isoCutoff = cutoffDate.toISOString().slice(0, 19).replace('T', ' ');
+        const whereClause = dbId === 'ALL'
+          ? `WHERE measured_at <= '${isoCutoff}'`
+          : `WHERE database_id = '${dbId}' AND measured_at <= '${isoCutoff}'`;
+        const rawRes = await (this.prisma as any).$executeRawUnsafe(`DELETE FROM metric_data_points ${whereClause}`);
+        metricsCount = typeof rawRes === 'number' ? rawRes : 0;
+      } catch (rawErr) {
+        console.warn('Raw SQL metric_data_points deletion failed:', rawErr);
+      }
+    }
+
+    try {
+      const logsRes = await (this.prisma as any).alertNotificationLog?.deleteMany({
         where: {
           ...dbFilter,
           timestamp: { lte: cutoffDate },
         },
-      }).catch((e: any) => {
-        console.warn('Prisma alertNotificationLog deleteMany failed:', e);
-        return { count: 0 };
-      }) || { count: 0 },
-    ]);
+      });
+      logsCount = logsRes?.count || 0;
+    } catch (e) {
+      console.warn('Prisma alertNotificationLog deleteMany failed, falling back to raw SQL:', e);
+    }
+
+    if (logsCount === 0) {
+      try {
+        const isoCutoff = cutoffDate.toISOString().slice(0, 19).replace('T', ' ');
+        const whereClause = dbId === 'ALL'
+          ? `WHERE timestamp <= '${isoCutoff}'`
+          : `WHERE db_id = '${dbId}' AND timestamp <= '${isoCutoff}'`;
+        const rawRes = await (this.prisma as any).$executeRawUnsafe(`DELETE FROM alert_notification_logs ${whereClause}`);
+        logsCount = typeof rawRes === 'number' ? rawRes : 0;
+      } catch (rawErr) {
+        console.warn('Raw SQL alert_notification_logs deletion failed:', rawErr);
+      }
+    }
 
     return {
-      activeAlertsDeleted: activeRes.count,
-      alertHistoryDeleted: histRes.count,
-      metricDataPointsDeleted: metricsRes.count || 0,
-      notificationLogsDeleted: logsRes.count || 0,
+      activeAlertsDeleted: activeCount,
+      alertHistoryDeleted: histCount,
+      metricDataPointsDeleted: metricsCount,
+      notificationLogsDeleted: logsCount,
     };
   }
 
   async cleanRawQueryHistory(daysToKeep = 0, dbId = 'ALL') {
     const cutoffDate = daysToKeep <= 0 ? new Date(Date.now() + 60000) : new Date(Date.now() - daysToKeep * 86400000);
+    let metricsCount = 0;
 
-    const metricsRes = await ((this.prisma as any).metricDataPoint?.deleteMany({
-      where: {
-        ...(dbId === 'ALL' ? {} : { dbId }),
-        measuredAt: { lte: cutoffDate },
-      },
-    }).catch((e: any) => {
-      console.warn('Prisma metricDataPoint deleteMany failed:', e);
-      return { count: 0 };
-    }) || { count: 0 });
+    try {
+      const metricsRes = await (this.prisma as any).metricDataPoint?.deleteMany({
+        where: {
+          ...(dbId === 'ALL' ? {} : { dbId }),
+          measuredAt: { lte: cutoffDate },
+        },
+      });
+      metricsCount = metricsRes?.count || 0;
+    } catch (e) {
+      console.warn('Prisma metricDataPoint deleteMany failed, trying raw SQL:', e);
+    }
+
+    if (metricsCount === 0) {
+      try {
+        const isoCutoff = cutoffDate.toISOString().slice(0, 19).replace('T', ' ');
+        const whereClause = dbId === 'ALL'
+          ? `WHERE measured_at <= '${isoCutoff}'`
+          : `WHERE database_id = '${dbId}' AND measured_at <= '${isoCutoff}'`;
+        const rawRes = await (this.prisma as any).$executeRawUnsafe(`DELETE FROM metric_data_points ${whereClause}`);
+        metricsCount = typeof rawRes === 'number' ? rawRes : 0;
+      } catch (rawErr) {
+        console.warn('Raw SQL metric_data_points deletion failed:', rawErr);
+      }
+    }
 
     return {
-      metricDataPointsDeleted: metricsRes.count || 0,
+      metricDataPointsDeleted: metricsCount,
     };
   }
 

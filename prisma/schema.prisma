@@ -100,9 +100,10 @@ model DatabaseGroup {
   /// Timestamp of last group update.
   updatedAt DateTime @updatedAt
 
-  /// Relations: Many-to-Many mappings with Databases and Templates.
-  databases DatabaseGroupMapping[]
-  templates GroupTemplateMapping[]
+  /// Relations: Many-to-Many mappings with Databases, Templates, and Notification Methods.
+  databases            DatabaseGroupMapping[]
+  templates            GroupTemplateMapping[]
+  notificationMappings GroupNotificationMapping[]
 
   @@map("database_groups")
 }
@@ -449,16 +450,32 @@ model DatabaseEngine {
 
 /// AlertNotificationMethod Model: Protocol dispatcher parameters for alerting channels.
 model AlertNotificationMethod {
-  id                String                   @id @default(uuid())
-  name              String
-  type              String                   @default("EMAIL")
-  configJson        Json                     @map("config_json")
-  statusOnOff       String                   @default("ACTIVE") @map("status_on_off")
-  createdAt         DateTime                 @default(now()) @map("created_at")
-  updatedAt         DateTime                 @updatedAt @map("updated_at")
-  notificationQueue AlertNotificationQueue[]
+  id                  String                   @id @default(uuid())
+  name                String
+  type                String                   @default("EMAIL")
+  notificationMessage String?                  @map("notification_message") @db.Text
+  configJson          Json                     @map("config_json")
+  statusOnOff         String                   @default("ACTIVE") @map("status_on_off")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+  notificationQueue   AlertNotificationQueue[]
+  groupMappings       GroupNotificationMapping[]
 
   @@map("alert_notification_methods")
+}
+
+/// GroupNotificationMapping Model: Junction table mapping database groups to alert notification methods.
+model GroupNotificationMapping {
+  groupId              String                  @map("group_id")
+  notificationMethodId String                  @map("notification_method_id")
+  senderIds            String?                 @map("sender_ids") @db.Text
+  createdAt            DateTime                @default(now()) @map("created_at")
+
+  group              DatabaseGroup           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  notificationMethod AlertNotificationMethod @relation(fields: [notificationMethodId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, notificationMethodId])
+  @@map("group_notification_mappings")
 }
 
 /// AlertNotificationLog Model: Records historical notifications sent to users/external systems.
@@ -471,12 +488,18 @@ model AlertNotificationLog {
   metricName     String   @map("metric_name")
   attributeName  String?  @map("attribute_name")
   alertLevel     String   @map("alert_level")
-  dispatchMethod String   @map("dispatch_method")
-  dispatchType   String   @map("dispatch_type")
-  senderIds      String   @map("sender_ids") @db.Text
+  eventType      String   @default("NEW_ALERT") @map("event_type")
+  dispatcherId   String?  @map("dispatcher_id")
+  dispatcherName String?  @map("dispatcher_name")
+  dispatcherType String?  @map("dispatcher_type")
+  dispatchMethod String?  @map("dispatch_method")
+  dispatchType   String?  @map("dispatch_type")
+  senderIds      String?  @map("sender_ids") @db.Text
   status         String   @default("DISPATCHED")
   errorMessage   String?  @map("error_message") @db.Text
   payloadSummary String?  @map("payload_summary") @db.Text
+  messageAlert   String?  @map("message_alert") @db.Text
+  detailResponse String?  @map("detail_response") @db.Text
   latencyMs      Int?     @map("latency_ms")
 
   @@index([timestamp(sort: Desc)])

@@ -19,6 +19,7 @@ async function main() {
     p.alertHistory.deleteMany(),
     p.activeAlert.deleteMany(),
     p.databaseMetricMapping.deleteMany(),
+    p.groupNotificationMapping?.deleteMany().catch(() => ({ count: 0 })),
     p.metricTemplateMapping.deleteMany(),
     p.groupTemplateMapping.deleteMany(),
     p.databaseGroupMapping.deleteMany(),
@@ -106,6 +107,7 @@ async function main() {
       id: 'meth-email-01',
       name: 'Corporate SMTP Dispatcher',
       type: 'EMAIL',
+      notificationMessage: '[ALERT] Database D_DATABASE_NAME (D_DATABASE_TYPE:D_DATABASE_PORT) Metric D_METRIC_NAME triggered alert! Value: D_ALERT_VALUE. Message: D_ALERT_MESSAGE. Created At: D_ALERT_CREATED_AT',
       configJson: {
         smtpHost: 'smtp.thenicedata.com',
         smtpPort: 587,
@@ -119,10 +121,10 @@ async function main() {
       id: 'meth-tg-02',
       name: 'Telegram Incident Operations Bot',
       type: 'TELEGRAM',
+      notificationMessage: '🚨 <b>[INCIDENT ALERT]</b> 🚨\nDatabase: <b>D_DATABASE_NAME</b> (ID: D_DATABASE_ID, Engine: D_DATABASE_TYPE:D_DATABASE_PORT)\nMetric: <b>D_METRIC_NAME</b>\nObject: D_OBJECT_NAME | Attr: D_ATTR_NAME\nValue: <code>D_ALERT_VALUE</code>\nDetails: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT',
       configJson: {
         botToken: '6829103847:AAH9f_KzL2e-wZ5qM7Nx982Qp',
         apiBaseUrl: 'https://api.telegram.org',
-        defaultChatTopic: 'DATABASE_OPERATIONS',
         parseMode: 'HTML',
       },
       statusOnOff: 'ACTIVE',
@@ -131,6 +133,7 @@ async function main() {
       id: 'meth-slack-03',
       name: 'Slack NOC Incident Channel',
       type: 'SLACK',
+      notificationMessage: ':warning: *ALERT DISPATCH*: Database *D_DATABASE_NAME* (`D_DATABASE_TYPE`) | Metric: *D_METRIC_NAME* | Object: D_OBJECT_NAME | Value: `D_ALERT_VALUE` | Message: D_ALERT_MESSAGE | Created: D_ALERT_CREATED_AT',
       configJson: {
         webhookUrl: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
         channelName: '#db-sentinel-alerts',
@@ -498,6 +501,25 @@ async function main() {
     },
   ];
 
+  // Group to Notification Method mappings
+  const groupNotificationMappingsData = [
+    {
+      groupId: grpProdId,
+      notificationMethodId: 'meth-email-01',
+      senderIds: 'dba-team@company.com, leads@company.com',
+    },
+    {
+      groupId: grpProdId,
+      notificationMethodId: 'meth-tg-02',
+      senderIds: '-1001234567890',
+    },
+    {
+      groupId: grpFinanceId,
+      notificationMethodId: 'meth-email-01',
+      senderIds: 'finance-tech@company.com',
+    },
+  ];
+
   // New Dedicated Metric to Template mappings
   const metricTemplateMappings = [
     {
@@ -706,11 +728,17 @@ async function main() {
       metricName: 'Tablespace Usage %',
       attributeName: 'used_space_pct',
       alertLevel: 'CRITICAL',
-      dispatchMethod: 'Telegram Alert Bot',
+      eventType: 'NEW_ALERT',
+      dispatcherId: 'meth-tg-02',
+      dispatcherName: 'Telegram Incident Operations Bot',
+      dispatcherType: 'TELEGRAM',
+      dispatchMethod: 'Telegram Incident Operations Bot',
       dispatchType: 'TELEGRAM',
       senderIds: '-1001234567890, -1009876543210',
       status: 'DISPATCHED',
       payloadSummary: 'CRITICAL: ERP_PROD_ORA [TS_DATA] Tablespace Usage % reached 97.4%',
+      messageAlert: 'CRITICAL: ERP_PROD_ORA [TS_DATA] Tablespace Usage % reached 97.4%',
+      detailResponse: 'HTTP 200 OK: Telegram message delivered to chat -1001234567890',
       latencyMs: 142,
     },
     {
@@ -722,11 +750,17 @@ async function main() {
       metricName: 'Tablespace Usage %',
       attributeName: 'used_space_pct',
       alertLevel: 'CRITICAL',
-      dispatchMethod: 'Corporate SMTP Relay',
+      eventType: 'NEW_ALERT',
+      dispatcherId: 'meth-email-01',
+      dispatcherName: 'Corporate SMTP Dispatcher',
+      dispatcherType: 'EMAIL',
+      dispatchMethod: 'Corporate SMTP Dispatcher',
       dispatchType: 'EMAIL',
       senderIds: 'dba-team@company.internal, oncall-dba@company.internal',
       status: 'DISPATCHED',
       payloadSummary: '[INCIDENT-974] ERP_PROD_ORA Tablespace Alert',
+      messageAlert: '[INCIDENT-974] ERP_PROD_ORA Tablespace Alert',
+      detailResponse: '250 2.0.0 OK 1700000000 message queued for delivery',
       latencyMs: 380,
     },
     {
@@ -738,11 +772,17 @@ async function main() {
       metricName: 'Connection Saturation %',
       attributeName: 'active_connections',
       alertLevel: 'CRITICAL',
-      dispatchMethod: 'Telegram Alert Bot',
+      eventType: 'TRIGGER',
+      dispatcherId: 'meth-tg-02',
+      dispatcherName: 'Telegram Incident Operations Bot',
+      dispatcherType: 'TELEGRAM',
+      dispatchMethod: 'Telegram Incident Operations Bot',
       dispatchType: 'TELEGRAM',
       senderIds: '-1001234567890',
       status: 'DISPATCHED',
       payloadSummary: 'CRITICAL: PAYMENT_API_PG connection pool 96.8% full',
+      messageAlert: 'CRITICAL: PAYMENT_API_PG connection pool 96.8% full',
+      detailResponse: 'HTTP 200 OK: Telegram message sent successfully',
       latencyMs: 118,
     },
     {
@@ -754,11 +794,17 @@ async function main() {
       metricName: 'Threads Connected',
       attributeName: 'Threads_connected',
       alertLevel: 'HIGH',
-      dispatchMethod: 'Slack Webhook Gateway',
+      eventType: 'TRIGGER',
+      dispatcherId: 'meth-slack-03',
+      dispatcherName: 'Slack NOC Incident Channel',
+      dispatcherType: 'SLACK',
+      dispatchMethod: 'Slack NOC Incident Channel',
       dispatchType: 'SLACK',
       senderIds: '#dba-alerts-channel',
       status: 'DISPATCHED',
       payloadSummary: 'HIGH: AUTH_NODE_MYSQL Threads_connected spike (430)',
+      messageAlert: 'HIGH: AUTH_NODE_MYSQL Threads_connected spike (430)',
+      detailResponse: 'HTTP 200 ok (Slack Webhook API)',
       latencyMs: 210,
     },
     {
@@ -770,11 +816,17 @@ async function main() {
       metricName: 'Page Life Expectancy (PLE)',
       attributeName: 'ple_seconds',
       alertLevel: 'WARN',
-      dispatchMethod: 'Corporate SMTP Relay',
+      eventType: 'CLEAR_ALERT',
+      dispatcherId: 'meth-email-01',
+      dispatcherName: 'Corporate SMTP Dispatcher',
+      dispatcherType: 'EMAIL',
+      dispatchMethod: 'Corporate SMTP Dispatcher',
       dispatchType: 'EMAIL',
       senderIds: 'dba-team@company.internal',
       status: 'DISPATCHED',
       payloadSummary: 'WARN: HR_PORTAL_MSSQL Buffer Manager PLE dropped to 240s',
+      messageAlert: 'WARN: HR_PORTAL_MSSQL Buffer Manager PLE dropped to 240s',
+      detailResponse: '250 2.0.0 OK mail delivered',
       latencyMs: 290,
     },
     {
@@ -786,12 +838,18 @@ async function main() {
       metricName: 'Replication Lag (Seconds)',
       attributeName: 'lag_seconds',
       alertLevel: 'WARN',
+      eventType: 'TRIGGER',
+      dispatcherId: 'meth-sms-04',
+      dispatcherName: 'SMS Gateway (Twilio)',
+      dispatcherType: 'SMS',
       dispatchMethod: 'SMS Gateway (Twilio)',
       dispatchType: 'SMS',
       senderIds: '+84901234567, +84907654321',
       status: 'FAILED',
       errorMessage: 'HTTP 429: SMS Rate limit exceeded on backup gateway provider',
       payloadSummary: 'WARN: PAYMENT_API_PG replica lag > 35s',
+      messageAlert: 'WARN: PAYMENT_API_PG replica lag > 35s',
+      detailResponse: 'HTTP 429 Too Many Requests: Rate limit exceeded on SMS provider',
       latencyMs: 850,
     },
   ];
@@ -905,6 +963,7 @@ async function main() {
     p.databaseMetricMapping.createMany({ data: dbMetricMappings, skipDuplicates: true }),
     p.groupTemplateMapping.createMany({ data: groupTemplateMappings, skipDuplicates: true }),
     p.metricTemplateMapping.createMany({ data: metricTemplateMappings, skipDuplicates: true }),
+    ...(p.groupNotificationMapping ? [p.groupNotificationMapping.createMany({ data: groupNotificationMappingsData, skipDuplicates: true })] : []),
     p.activeAlert.createMany({ data: activeAlertsData, skipDuplicates: true }),
     p.alertHistory.createMany({ data: alertHistoryData, skipDuplicates: true }),
     p.metricDataPoint.createMany({ data: metricDataPointsData, skipDuplicates: true }),
@@ -1004,6 +1063,51 @@ async function main() {
       WHERE \`d\`.\`isEnabled\` = true 
         AND \`m\`.\`isEnabled\` = true
         AND (\`t\`.\`targetDbType\` IS NULL OR \`t\`.\`targetDbType\` = \`d\`.\`dbType\`);
+    `);
+    await p.$executeRawUnsafe(`
+      CREATE OR REPLACE VIEW \`view_active_database_group_notification\` AS
+      SELECT 
+        \`d\`.\`id\` AS \`database_id\`,
+        \`d\`.\`name\` AS \`database_name\`,
+        \`d\`.\`dbType\` AS \`database_db_type\`,
+        \`d\`.\`host\` AS \`database_host\`,
+        \`d\`.\`port\` AS \`database_port\`,
+        \`d\`.\`poll_id\` AS \`database_poll_id\`,
+        \`d\`.\`tags\` AS \`database_tags\`,
+        \`d\`.\`poll_interval_minutes\` AS \`database_poll_interval_minutes\`,
+        \`d\`.\`note\` AS \`database_note\`,
+        \`d\`.\`username\` AS \`database_username\`,
+        \`d\`.\`passwordEncrypted\` AS \`database_password_encrypted\`,
+        \`d\`.\`connectionConfig\` AS \`database_connection_config\`,
+        \`d\`.\`status\` AS \`database_status\`,
+        \`d\`.\`lastCheckAt\` AS \`database_last_check_at\`,
+        \`d\`.\`isEnabled\` AS \`database_is_enabled\`,
+        \`d\`.\`createdAt\` AS \`database_created_at\`,
+        \`d\`.\`updatedAt\` AS \`database_updated_at\`,
+        \`dg\`.\`id\` AS \`group_id\`,
+        \`dg\`.\`name\` AS \`group_name\`,
+        \`dg\`.\`description\` AS \`group_description\`,
+        \`dg\`.\`alert_method_ids\` AS \`group_alert_method_ids\`,
+        \`dg\`.\`sender_ids\` AS \`group_sender_ids\`,
+        \`dg\`.\`createdAt\` AS \`group_created_at\`,
+        \`dg\`.\`updatedAt\` AS \`group_updated_at\`,
+        \`gnm\`.\`sender_ids\` AS \`mapping_sender_ids\`,
+        \`gnm\`.\`created_at\` AS \`mapping_created_at\`,
+        \`anm\`.\`id\` AS \`notification_method_id\`,
+        \`anm\`.\`name\` AS \`notification_method_name\`,
+        \`anm\`.\`type\` AS \`notification_method_type\`,
+        \`anm\`.\`notification_message\` AS \`notification_method_message\`,
+        \`anm\`.\`config_json\` AS \`notification_method_config_json\`,
+        \`anm\`.\`status_on_off\` AS \`notification_method_status\`,
+        \`anm\`.\`created_at\` AS \`notification_method_created_at\`,
+        \`anm\`.\`updated_at\` AS \`notification_method_updated_at\`
+      FROM \`databases\` \`d\`
+      JOIN \`database_group_mappings\` \`dgm\` ON \`d\`.\`id\` = \`dgm\`.\`databaseId\`
+      JOIN \`database_groups\` \`dg\` ON \`dgm\`.\`groupId\` = \`dg\`.\`id\`
+      JOIN \`group_notification_mappings\` \`gnm\` ON \`dg\`.\`id\` = \`gnm\`.\`group_id\`
+      JOIN \`alert_notification_methods\` \`anm\` ON \`gnm\`.\`notification_method_id\` = \`anm\`.\`id\`
+      WHERE \`d\`.\`isEnabled\` = true 
+        AND \`anm\`.\`status_on_off\` = 'ACTIVE';
     `);
     console.log('✅ Analytical views created successfully.');
   } catch (err: any) {

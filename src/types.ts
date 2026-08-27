@@ -37,6 +37,7 @@ export interface AlertNotificationMethodEntity {
   id: string;
   name: string;
   type: AlertMethodType;
+  notificationMessage?: string | null; // TOKEN template message (e.g. D_DATABASE_NAME, D_METRIC_NAME)
   configJson: Record<string, any>; // Protocol-specific parameters e.g., SMTP servers, Bot Tokens
   statusOnOff: 'ACTIVE' | 'INACTIVE';
   createdAt?: string;
@@ -282,12 +283,18 @@ export interface AlertNotificationLogEntity {
   metricName: string;
   attributeName?: string | null;
   alertLevel: AlertSeverity;
-  dispatchMethod: string; // e.g. 'Telegram Bot', 'Corporate SMTP', 'Slack Alert'
-  dispatchType: AlertMethodType;
+  eventType?: string; // 'NEW_ALERT' | 'CLEAR_ALERT' | 'TRIGGER'
+  dispatcherId?: string;
+  dispatcherName?: string;
+  dispatcherType?: AlertMethodType;
+  dispatchMethod?: string; // e.g. 'Telegram Bot', 'Corporate SMTP', 'Slack Alert'
+  dispatchType?: AlertMethodType;
   senderIds: string; // Target recipients e.g. '-1001234567890', 'dba-team@company.internal'
-  status: NotificationDeliveryStatus; // 'DISPATCHED' | 'FAILED' | 'PENDING'
+  status: string; // 'DISPATCHED' | 'SUCCESS' | 'FAILED' | 'PENDING'
   errorMessage?: string | null;
   payloadSummary?: string;
+  messageAlert?: string;
+  detailResponse?: string | null;
   latencyMs?: number;
 }
 
