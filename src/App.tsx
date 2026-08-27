@@ -431,8 +431,8 @@ function MainAppContent() {
       setAlertHistory(nextHistory);
       storage.setActiveAlerts(nextActive);
       storage.setAlertHistory(nextHistory);
-      toast({ title: 'Alert Cleared', description: 'Alert archived to historical log.', type: 'success' });
     } catch (e) {
+      console.error('Failed to clear active alert on backend:', e);
       const targetAlert = activeAlerts.find((a) => a.id === alertId);
       if (!targetAlert) return;
       const nextActive = activeAlerts.filter((a) => a.id !== alertId);
@@ -445,6 +445,9 @@ function MainAppContent() {
         dbName: targetAlert.dbName,
         metricId: targetAlert.metricId,
         metricName: targetAlert.metricName,
+        objectName: targetAlert.objectName,
+        attributeName: targetAlert.attributeName,
+        resolutionStatus: 'CLEARED_BY_USER',
         alertLevel: targetAlert.alertLevel,
         message: targetAlert.message,
         createdAt: targetAlert.createdAt,

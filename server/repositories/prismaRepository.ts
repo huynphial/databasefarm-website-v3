@@ -874,14 +874,31 @@ export class PrismaRepository implements IStorageRepository {
     if (isNaN(numId)) return false;
 
     return await (this.prisma as any).$transaction(async (tx: any) => {
-      const target = await tx.activeAlert.findUnique({
+      let target = await tx.activeAlert.findUnique({
         where: { id: numId },
         include: { database: true, metric: true },
       });
 
-      if (!target) return false;
+      if (!target) {
+        target = await tx.activeAlert.findFirst({
+          where: { id: numId },
+          include: { database: true, metric: true },
+        });
+      }
+
+      if (!target) return true;
 
       await tx.activeAlert.delete({ where: { id: numId } });
+
+      let validUserId: string | null = null;
+      if (clearedById) {
+        const u = await tx.user.findUnique({ where: { id: clearedById } }).catch(() => null);
+        if (u) validUserId = u.id;
+      }
+      if (!validUserId && clearedByName) {
+        const u = await tx.user.findUnique({ where: { username: clearedByName } }).catch(() => null);
+        if (u) validUserId = u.id;
+      }
 
       await tx.alertHistory.create({
         data: {
@@ -891,12 +908,13 @@ export class PrismaRepository implements IStorageRepository {
           attributeName: target.attributeName || 'value',
           alertLevel: target.alertLevel,
           resolutionStatus: 'CLEARED_BY_USER',
+          dispatchStatus: target.dispatchStatus || null,
           message: target.message,
           value: target.value,
           threshold: target.threshold,
           createdAt: target.createdAt,
           clearedAt: new Date(),
-          clearedById: clearedById || null,
+          clearedById: validUserId,
         },
       });
 
@@ -914,33 +932,48 @@ export class PrismaRepository implements IStorageRepository {
     return history.map((h) => ({
       id: String(h.id),
       dbId: h.dbId,
-      dbName: h.database.name,
+      dbName: h.database?.name || h.dbId,
       metricId: h.metricId,
-      metricName: h.metric.name,
+      metricName: h.metric?.name || h.metricId,
       objectName: h.objectName,
+      attributeName: h.attributeName || undefined,
       resolutionStatus: h.resolutionStatus,
+      dispatchStatus: (h.dispatchStatus as any) || undefined,
       alertLevel: h.alertLevel as any,
       message: h.message,
       createdAt: h.createdAt.toISOString(),
       clearedAt: h.clearedAt.toISOString(),
       clearedById: h.clearedById || null,
-      clearedByName: h.clearedBy?.username || 'admin',
+      clearedByName: h.clearedBy?.username || (h.resolutionStatus === 'CLEARED_BY_USER' ? 'User' : 'System Auto-Clear'),
     }));
   }
 
   async addAlertHistory(historyData: Partial<AlertHistoryEntity>): Promise<AlertHistoryEntity> {
     const alertLevel = (historyData.alertLevel || 'WARN') as AlertLevel;
 
+    let validUserId: string | null = null;
+    if (historyData.clearedById) {
+      const u = await this.prisma.user.findUnique({ where: { id: historyData.clearedById } }).catch(() => null);
+      if (u) validUserId = u.id;
+    }
+    if (!validUserId && historyData.clearedByName) {
+      const u = await this.prisma.user.findUnique({ where: { username: historyData.clearedByName } }).catch(() => null);
+      if (u) validUserId = u.id;
+    }
+
     const h = await this.prisma.alertHistory.create({
       data: {
         dbId: historyData.dbId!,
         metricId: historyData.metricId!,
-        objectName: historyData.objectName || 'INSTANCE',
+        objectName: historyData.objectName,
+        attributeName: historyData.attributeName || 'value',
         alertLevel,
+        resolutionStatus: historyData.resolutionStatus || 'CLEARED_BY_USER',
+        dispatchStatus: (historyData.dispatchStatus as any) || null,
         message: historyData.message || '',
         createdAt: historyData.createdAt ? new Date(historyData.createdAt) : new Date(),
         clearedAt: historyData.clearedAt ? new Date(historyData.clearedAt) : new Date(),
-        clearedById: historyData.clearedById || null,
+        clearedById: validUserId,
       },
       include: { database: true, metric: true, clearedBy: true },
     });
@@ -948,16 +981,19 @@ export class PrismaRepository implements IStorageRepository {
     return {
       id: String(h.id),
       dbId: h.dbId,
-      dbName: h.database.name,
+      dbName: h.database?.name || h.dbId,
       metricId: h.metricId,
-      metricName: h.metric.name,
-      objectName: h.objectName || 'INSTANCE',
+      metricName: h.metric?.name || h.metricId,
+      objectName: h.objectName,
+      attributeName: h.attributeName || undefined,
+      resolutionStatus: h.resolutionStatus,
+      dispatchStatus: (h.dispatchStatus as any) || undefined,
       alertLevel: h.alertLevel as any,
       message: h.message,
       createdAt: h.createdAt.toISOString(),
       clearedAt: h.clearedAt.toISOString(),
       clearedById: h.clearedById || null,
-      clearedByName: h.clearedBy?.username || 'admin',
+      clearedByName: h.clearedBy?.username || (h.resolutionStatus === 'CLEARED_BY_USER' ? 'User' : 'System Auto-Clear'),
     };
   }
 
