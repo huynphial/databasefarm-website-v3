@@ -129,7 +129,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       connectionConfig?: Record<string, any>;
       groupIds?: string[];
       isEnabled?: boolean;
-      status?: 'UP' | 'DOWN' | 'WARNING';
+      status?: 'UP' | 'DOWN';
     }>;
   } | null>(null);
   const [importAssignGroupIds, setImportAssignGroupIds] = useState<string[]>([]);
@@ -137,7 +137,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const RECOMMENDED_TAGS = ['PRODUCTION', 'STAGING', 'LAB', 'DEV', 'CRITICAL', 'ANALYTICS', 'PRIMARY', 'REPLICA', 'FINANCE'];
+  const RECOMMENDED_TAGS = ['PRODUCTION', 'STAGING', 'LAB', 'DEV', 'CRITICAL', 'ANALYTICS', 'PRIMARY', 'STANDBY', 'REPLICA', 'FINANCE'];
 
   const [customTagInput, setCustomTagInput] = useState('');
 
@@ -159,16 +159,16 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     status?: 'UP' | 'DOWN' | 'WARNING';
   }>({
     name: '',
-    dbType: DB_ENGINES[0]?.code || 'POSTGRES',
+    dbType: DB_ENGINES[0]?.code || 'ORACLE',
     host: '',
-    port: 5432,
+    port: 1521,
     tags: ['PRODUCTION'],
-    pollIntervalMinutes: 5,
+    pollIntervalMinutes: 10,
     note: '',
     username: '',
     password: '',
     databaseNameOrSid: '',
-    sslMode: 'require',
+    sslMode: 'no',
     groupIds: [],
     isEnabled: true,
   });
@@ -573,15 +573,15 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     setFormData({
       name: '',
       dbType: defaultEng?.code || 'POSTGRES',
-      host: '10.0.14.90',
+      host: '',
       port: defaultEng?.defaultPort || 5432,
       tags: ['PRODUCTION'],
-      pollIntervalMinutes: 5,
+      pollIntervalMinutes: 10,
       note: '',
-      username: 'dbmon_reader',
-      password: 'SecureClusterPassword#2026',
-      databaseNameOrSid: 'app_production',
-      sslMode: 'require',
+      username: 'dbadm',
+      password: '',
+      databaseNameOrSid: 'app',
+      sslMode: 'no',
       groupIds: groups.length > 0 ? [groups[0].id] : [],
       isEnabled: true,
       status: 'UP' as 'UP' | 'DOWN' | 'WARNING',
