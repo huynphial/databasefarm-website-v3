@@ -31,7 +31,7 @@ export interface DatabaseEngineEntity {
   updatedAt?: string;
 }
 
-export type AlertMethodType = 'EMAIL' | 'TELEGRAM' | 'SLACK' | 'WEBHOOK' | 'SMS';
+export type AlertMethodType = 'EMAIL' | 'TELEGRAM' | 'WEBHOOK';
 
 export interface AlertNotificationMethodEntity {
   id: string;
@@ -226,7 +226,7 @@ export interface GroupEntity {
   
   // Dynamic Alert Method Binding
   alertMethodIds?: string[];
-  senderIds?: string; // Comma-separated list of target sender/recipient IDs (Telegram chat IDs, emails, SMS numbers)
+  senderIds?: string; // Comma-separated list of target sender/recipient IDs (Telegram chat IDs, emails)
 
   createdAt: string;
   updatedAt: string;

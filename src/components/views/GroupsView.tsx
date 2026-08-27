@@ -1013,10 +1013,6 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                       placeholder = "e.g. -1001234567890 (Telegram Chat ID)";
                     } else if (method.type === 'EMAIL') {
                       placeholder = "e.g. dba-team@company.internal, oncall@company.com";
-                    } else if (method.type === 'SLACK') {
-                      placeholder = "e.g. #alerts-channel";
-                    } else if (method.type === 'SMS') {
-                      placeholder = "e.g. +1234567890";
                     } else if (method.type === 'WEBHOOK') {
                       placeholder = "e.g. https://api.company.internal/alerts";
                     }

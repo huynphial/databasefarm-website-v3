@@ -73,12 +73,8 @@ const getDefaultNotificationMessage = (type: AlertMethodType): string => {
       return '[D_NOTIFICATION_TYPE] D_ALERT_SEVERITY Database D_DATABASE_NAME (D_DATABASE_TYPE:D_DATABASE_PORT) Metric D_METRIC_NAME triggered alert!\nValue: D_ALERT_VALUE\nMessage: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT';
     case 'TELEGRAM':
       return '<b>D_NOTIFICATION_TYPE D_ALERT_SEVERITY</b>\nDatabase: <b>D_DATABASE_NAME</b> (ID: D_DATABASE_ID, Engine: D_DATABASE_TYPE:D_DATABASE_PORT)\nMetric: <b>D_METRIC_NAME</b>\nObject: D_OBJECT_NAME | Attr: D_ATTR_NAME\nValue: <code>D_ALERT_VALUE</code>\nDetails: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT';
-    case 'SLACK':
-      return ':warning: *ALERT DISPATCH*: Database *D_DATABASE_NAME* (`D_DATABASE_TYPE`) | Metric: *D_METRIC_NAME* | Object: D_OBJECT_NAME | Value: `D_ALERT_VALUE` | Message: D_ALERT_MESSAGE | Created: D_ALERT_CREATED_AT';
     case 'WEBHOOK':
       return '{"event":"ALERT_TRIGGERED","database_name":"D_DATABASE_NAME","database_type":"D_DATABASE_TYPE","database_id":"D_DATABASE_ID","port":"D_DATABASE_PORT","metric":"D_METRIC_NAME","object":"D_OBJECT_NAME","attribute":"D_ATTR_NAME","value":"D_ALERT_VALUE","message":"D_ALERT_MESSAGE","created_at":"D_ALERT_CREATED_AT"}';
-    case 'SMS':
-      return '[D_NOTIFICATION_TYPE] DB D_DATABASE_NAME (D_DATABASE_TYPE) Metric D_METRIC_NAME: D_ALERT_VALUE. D_ALERT_MESSAGE. At D_ALERT_CREATED_AT';
     default:
       return '[D_NOTIFICATION_TYPE] D_DATABASE_NAME - D_METRIC_NAME: D_ALERT_VALUE (D_ALERT_MESSAGE)';
   }
@@ -150,12 +146,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
           defaultChatTopic: 'DB_ALERTS',
           parseMode: 'HTML',
         }, null, 2);
-      case 'SLACK':
-        return JSON.stringify({
-          webhookUrl: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
-          channelName: '#db-sentinel-alerts',
-          username: 'DB Farm Sentinel',
-        }, null, 2);
       case 'WEBHOOK':
         return JSON.stringify({
           webhookUrl: 'https://api.incidentmanagement.internal/v1/alerts',
@@ -164,13 +154,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
             'Authorization': 'Bearer YOUR_INTEGRATION_TOKEN_HERE',
             'Content-Type': 'application/json',
           },
-        }, null, 2);
-      case 'SMS':
-        return JSON.stringify({
-          provider: 'TWILIO',
-          accountSid: 'ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-          authToken: 'YOUR_AUTH_TOKEN_HERE',
-          fromNumber: '+18005550199',
         }, null, 2);
       default:
         return JSON.stringify({
@@ -689,20 +672,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
             {method || 'Email'}
           </span>
         );
-      case 'SLACK':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded shadow-2xs">
-            <MessageSquare className="w-3 h-3 text-purple-500" />
-            {method || 'Slack'}
-          </span>
-        );
-      case 'SMS':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded shadow-2xs">
-            <Radio className="w-3 h-3 text-amber-500" />
-            {method || 'SMS'}
-          </span>
-        );
       default:
         return (
           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded shadow-2xs">
@@ -1108,7 +1077,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
           <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
           <div className="text-[11px] leading-relaxed">
             <span className="font-bold">Notification Gateway Queue & Audit Pipeline: </span>
-            When an alert rule triggers, an entry is enqueued into <span className="font-mono font-bold">alert_notification_queue</span>. Notification dispatcher worker processes pick pending items with worker locks (<span className="font-mono font-semibold">locked_by</span>), dispatch via configured alert channels (Telegram, Email, Slack, SMS, Webhook), and write final audit records into <span className="font-mono font-bold">alert_notification_log</span>.
+            When an alert rule triggers, an entry is enqueued into <span className="font-mono font-bold">alert_notification_queue</span>. Notification dispatcher worker processes pick pending items with worker locks (<span className="font-mono font-semibold">locked_by</span>), dispatch via configured alert channels (Telegram, Email, Webhook), and write final audit records into <span className="font-mono font-bold">alert_notification_log</span>.
           </div>
         </div>
       )}
@@ -1170,7 +1139,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                 </span>
               </h3>
               <p className="text-[11px] text-slate-500">
-                Protocol dispatchers (Email, Telegram Bot, Slack, Webhook) stored dynamically in database table with protocol parameters.
+                Protocol dispatchers (Email, Telegram Bot, Webhook) stored dynamically in database table with protocol parameters.
               </p>
             </div>
           </div>
@@ -1206,7 +1175,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                       <Send className="w-6 h-6 text-slate-300" />
                       <span className="font-semibold text-slate-600">No alert notification dispatchers registered</span>
                       <span className="text-[11px] text-slate-400">
-                        Click "Add New Alert Notification Method" to set up Telegram, Email, Slack, or Webhook alerts.
+                        Click "Add New Alert Notification Method" to set up Telegram, Email, or Webhook alerts.
                       </span>
                     </div>
                   </td>
@@ -1574,8 +1543,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                 <option value="ALL">Channel: All</option>
                 <option value="TELEGRAM">Telegram</option>
                 <option value="EMAIL">Email</option>
-                <option value="SLACK">Slack</option>
-                <option value="SMS">SMS</option>
                 <option value="WEBHOOK">Webhook</option>
               </select>
 
@@ -2059,9 +2026,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
               >
                 <option value="EMAIL">EMAIL (SMTP Relay)</option>
                 <option value="TELEGRAM">TELEGRAM (Bot API)</option>
-                <option value="SLACK">SLACK (Webhook API)</option>
                 <option value="WEBHOOK">CUSTOM WEBHOOK (HTTP POST)</option>
-                <option value="SMS">SMS GATEWAY</option>
               </select>
             </div>
           </div>
