@@ -19,7 +19,7 @@ async function main() {
     p.alertHistory.deleteMany(),
     p.activeAlert.deleteMany(),
     p.databaseMetricMapping.deleteMany(),
-    p.groupNotificationMapping?.deleteMany().catch(() => ({ count: 0 })),
+    p.groupNotificationMapping.deleteMany(),
     p.metricTemplateMapping.deleteMany(),
     p.groupTemplateMapping.deleteMany(),
     p.databaseGroupMapping.deleteMany(),
