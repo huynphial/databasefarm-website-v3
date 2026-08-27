@@ -29,7 +29,7 @@ import { useTranslation } from '../../i18n/LanguageContext';
 interface DashboardViewProps {
   databases: DatabaseEntity[];
   activeAlerts: ActiveAlertEntity[];
-  onClearAlert: (alertId: string) => void;
+  onClearAlert: (alertId: string) => Promise<any> | void;
   onRefresh: () => void;
   userRole: UserRole;
   onNavigateToDatabases: () => void;

@@ -23,8 +23,8 @@ import { useTranslation } from '../../i18n/LanguageContext';
 interface ActiveAlertsViewProps {
   databases: DatabaseEntity[];
   activeAlerts: ActiveAlertEntity[];
-  onClearAlert: (alertId: string) => void;
-  onAcknowledgeAlert?: (alertId: string) => void;
+  onClearAlert: (alertId: string) => Promise<any> | void;
+  onAcknowledgeAlert?: (alertId: string) => Promise<any> | void;
   onRefresh: () => void;
   userRole: UserRole;
   showInfoTips?: boolean;
@@ -258,7 +258,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     }
   };
 
-  const handleClear = (alert: ActiveAlertEntity) => {
+  const handleClear = async (alert: ActiveAlertEntity) => {
     if (userRole !== 'ADMIN') {
       toast({
         title: t('activeAlerts.permissionDenied'),
@@ -267,7 +267,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       });
       return;
     }
-    onClearAlert(alert.id);
+    await onClearAlert(alert.id);
     const hasObj = Boolean(alert.objectName && alert.objectName.trim() !== '');
     const metricTitle = hasObj ? `${alert.metricName} of ${alert.objectName}` : alert.metricName;
     toast({
