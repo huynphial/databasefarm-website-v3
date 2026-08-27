@@ -329,22 +329,16 @@ async function main() {
       id: grpProdId,
       name: 'Production Mission Critical',
       description: 'Primary databases powering core transactional services. Tier-1 priority alerting.',
-      alertMethodIds: 'meth-tg-01,meth-email-01',
-      senderIds: '-1001234567890, dba-team@company.com, leads@company.com',
     },
     {
       id: grpFinanceId,
       name: 'Financial & Ledger Systems',
       description: 'High security accounting and payment settlement databases.',
-      alertMethodIds: 'meth-email-01',
-      senderIds: 'finance-tech@company.com',
     },
     {
       id: grpAnalyticsId,
       name: 'Data Warehouse & BI Analytics',
       description: 'Analytical reporting databases and ETL destination pipelines.',
-      alertMethodIds: '',
-      senderIds: '',
     },
   ];
 
@@ -1102,8 +1096,6 @@ async function main() {
         \`dg\`.\`id\` AS \`group_id\`,
         \`dg\`.\`name\` AS \`group_name\`,
         \`dg\`.\`description\` AS \`group_description\`,
-        \`dg\`.\`alert_method_ids\` AS \`group_alert_method_ids\`,
-        \`dg\`.\`sender_ids\` AS \`group_sender_ids\`,
         \`dg\`.\`createdAt\` AS \`group_created_at\`,
         \`dg\`.\`updatedAt\` AS \`group_updated_at\`,
         \`gnm\`.\`sender_ids\` AS \`mapping_sender_ids\`,

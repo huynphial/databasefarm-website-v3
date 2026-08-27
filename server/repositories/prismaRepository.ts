@@ -647,36 +647,55 @@ export class PrismaRepository implements IStorageRepository {
       include: {
         databases: true,
         templates: true,
+        notificationMappings: true,
       },
     });
 
-    return groups.map((g) => ({
-      id: g.id,
-      name: g.name,
-      description: g.description || null,
-      databaseIds: g.databases.map((d) => d.databaseId),
-      templateIds: g.templates.map((t) => t.templateId),
-      alertMethodIds: g.alertMethodIds ? g.alertMethodIds.split(',').filter(Boolean) : [],
-      senderIds: g.senderIds || '',
-      createdAt: g.createdAt.toISOString(),
-      updatedAt: g.updatedAt.toISOString(),
-    }));
+    return groups.map((g: any) => {
+      const mappings = (g.notificationMappings || []).map((m: any) => ({
+        groupId: m.groupId,
+        notificationMethodId: m.notificationMethodId,
+        senderIds: m.senderIds || '',
+      }));
+      return {
+        id: g.id,
+        name: g.name,
+        description: g.description || null,
+        databaseIds: g.databases.map((d: any) => d.databaseId),
+        templateIds: g.templates.map((t: any) => t.templateId),
+        notificationMappings: mappings,
+        alertMethodIds: mappings.map((m: any) => m.notificationMethodId),
+        senderIds: mappings.map((m: any) => m.senderIds).filter(Boolean).join(', '),
+        createdAt: g.createdAt.toISOString(),
+        updatedAt: g.updatedAt.toISOString(),
+      };
+    });
   }
 
   async getGroupById(id: string): Promise<GroupEntity | null> {
-    const g = await this.prisma.databaseGroup.findUnique({
+    const g: any = await this.prisma.databaseGroup.findUnique({
       where: { id },
-      include: { databases: true, templates: true },
+      include: {
+        databases: true,
+        templates: true,
+        notificationMappings: true,
+      },
     });
     if (!g) return null;
+    const mappings = (g.notificationMappings || []).map((m: any) => ({
+      groupId: m.groupId,
+      notificationMethodId: m.notificationMethodId,
+      senderIds: m.senderIds || '',
+    }));
     return {
       id: g.id,
       name: g.name,
       description: g.description || null,
-      databaseIds: g.databases.map((d) => d.databaseId),
-      templateIds: g.templates.map((t) => t.templateId),
-      alertMethodIds: g.alertMethodIds ? g.alertMethodIds.split(',').filter(Boolean) : [],
-      senderIds: g.senderIds || '',
+      databaseIds: g.databases.map((d: any) => d.databaseId),
+      templateIds: g.templates.map((t: any) => t.templateId),
+      notificationMappings: mappings,
+      alertMethodIds: mappings.map((m: any) => m.notificationMethodId),
+      senderIds: mappings.map((m: any) => m.senderIds).filter(Boolean).join(', '),
       createdAt: g.createdAt.toISOString(),
       updatedAt: g.updatedAt.toISOString(),
     };
@@ -684,24 +703,19 @@ export class PrismaRepository implements IStorageRepository {
 
   async saveGroup(groupData: Partial<GroupEntity>, assignedDbIds?: string[]): Promise<GroupEntity> {
     const id = groupData.id;
-    const alertMethodIdsStr = groupData.alertMethodIds ? groupData.alertMethodIds.join(',') : null;
 
-    let gRecord;
+    let gRecord: any;
     if (id) {
       gRecord = await this.prisma.databaseGroup.upsert({
         where: { id },
         update: {
           name: groupData.name,
           description: groupData.description,
-          alertMethodIds: alertMethodIdsStr,
-          senderIds: groupData.senderIds,
         },
         create: {
           id,
           name: groupData.name || 'New Group',
           description: groupData.description || null,
-          alertMethodIds: alertMethodIdsStr,
-          senderIds: groupData.senderIds || '',
         },
       });
     } else {
@@ -709,8 +723,6 @@ export class PrismaRepository implements IStorageRepository {
         data: {
           name: groupData.name || 'New Group',
           description: groupData.description || null,
-          alertMethodIds: alertMethodIdsStr,
-          senderIds: groupData.senderIds || '',
         },
       });
     }
@@ -746,16 +758,23 @@ export class PrismaRepository implements IStorageRepository {
       }
     }
 
-    const targetAlertMethodIds = groupData.alertMethodIds;
-    if (targetAlertMethodIds !== undefined) {
+    let mappingsToSave = groupData.notificationMappings;
+    if (mappingsToSave === undefined && groupData.alertMethodIds !== undefined) {
+      mappingsToSave = groupData.alertMethodIds.map((methodId) => ({
+        notificationMethodId: methodId,
+        senderIds: groupData.senderIds || '',
+      }));
+    }
+
+    if (mappingsToSave !== undefined) {
       try {
         await (this.prisma as any).groupNotificationMapping?.deleteMany({ where: { groupId: gRecord.id } });
-        if (targetAlertMethodIds.length > 0) {
+        if (mappingsToSave.length > 0) {
           await (this.prisma as any).groupNotificationMapping?.createMany({
-            data: targetAlertMethodIds.map((methodId) => ({
+            data: mappingsToSave.map((item) => ({
               groupId: gRecord.id,
-              notificationMethodId: methodId,
-              senderIds: groupData.senderIds || '',
+              notificationMethodId: item.notificationMethodId,
+              senderIds: item.senderIds ? item.senderIds.trim() : '',
             })),
             skipDuplicates: true,
           });

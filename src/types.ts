@@ -217,6 +217,13 @@ export interface TemplateEntity {
   updatedAt: string;
 }
 
+export interface GroupNotificationMappingEntity {
+  groupId?: string;
+  notificationMethodId: string;
+  senderIds?: string | null;
+  createdAt?: string;
+}
+
 export interface GroupEntity {
   id: string;
   name: string;
@@ -224,9 +231,12 @@ export interface GroupEntity {
   databaseIds: string[]; // Many-to-Many: Databases assigned to this group
   templateIds: string[]; // Monitoring templates applied to this group
   
-  // Dynamic Alert Method Binding
+  // Notification Method Mappings (stored in group_notification_mappings table)
+  notificationMappings?: GroupNotificationMappingEntity[];
+
+  // Legacy fallback optional fields
   alertMethodIds?: string[];
-  senderIds?: string; // Comma-separated list of target sender/recipient IDs (Telegram chat IDs, emails)
+  senderIds?: string;
 
   createdAt: string;
   updatedAt: string;

@@ -70,6 +70,23 @@ export function serializeGroupSenderIds(mapping: { [key: string]: string }): str
   return JSON.stringify(list);
 }
 
+export function extractGroupMappings(group: GroupEntity): { notificationMethodId: string; senderIds: string }[] {
+  if (group.notificationMappings && group.notificationMappings.length > 0) {
+    return group.notificationMappings.map((m) => ({
+      notificationMethodId: m.notificationMethodId,
+      senderIds: m.senderIds || '',
+    }));
+  }
+  if (group.alertMethodIds && group.alertMethodIds.length > 0) {
+    const parsed = parseGroupSenderIds(group.senderIds || '', group.alertMethodIds);
+    return group.alertMethodIds.map((id) => ({
+      notificationMethodId: id,
+      senderIds: parsed[id] || '',
+    }));
+  }
+  return [];
+}
+
 interface GroupsViewProps {
   groups: GroupEntity[];
   databases: DatabaseEntity[];
@@ -164,15 +181,13 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     description: string;
     databaseIds: string[];
     templateIds: string[];
-    alertMethodIds: string[];
-    senderIds: string;
+    notificationMappings: { notificationMethodId: string; senderIds: string }[];
   }>({
     name: '',
     description: '',
     databaseIds: [],
     templateIds: [],
-    alertMethodIds: [],
-    senderIds: '',
+    notificationMappings: [],
   });
 
   const openCreateDialog = () => {
@@ -183,18 +198,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       description: '',
       databaseIds: [],
       templateIds: [],
-      alertMethodIds: defaultMethodIds,
-      senderIds: '',
+      notificationMappings: defaultMethodIds.map(id => ({ notificationMethodId: id, senderIds: '' })),
     });
     setIsDialogOpen(true);
   };
 
   const openEditDialog = (group: GroupEntity) => {
     setEditingGroup(group);
-    
-    // Resolve initial alertMethodIds
-    const initialMethods = group.alertMethodIds || [];
-    const initialSenderIds = group.senderIds || '';
+    const initialMappings = extractGroupMappings(group);
 
     setFormData({
       id: group.id,
@@ -202,8 +213,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       description: group.description || '',
       databaseIds: group.databaseIds || [],
       templateIds: group.templateIds || [],
-      alertMethodIds: initialMethods,
-      senderIds: initialSenderIds,
+      notificationMappings: initialMappings,
     });
     setIsDialogOpen(true);
   };
@@ -215,6 +225,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       return;
     }
 
+    const cleanMappings = formData.notificationMappings.map((m) => ({
+      notificationMethodId: m.notificationMethodId,
+      senderIds: m.senderIds.trim(),
+    }));
+
     onSaveGroup(
       {
         id: formData.id,
@@ -222,8 +237,9 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         description: formData.description.trim() || null,
         databaseIds: formData.databaseIds,
         templateIds: formData.templateIds,
-        alertMethodIds: formData.alertMethodIds,
-        senderIds: formData.senderIds.trim(),
+        notificationMappings: cleanMappings,
+        alertMethodIds: cleanMappings.map((m) => m.notificationMethodId),
+        senderIds: cleanMappings.map((m) => m.senderIds).filter(Boolean).join(', '),
       },
       formData.databaseIds
     );
@@ -231,7 +247,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     setIsDialogOpen(false);
     toast({
       title: formData.id ? 'Group Updated' : 'Group Created',
-      description: `Database group "${formData.name}" saved with updated mappings and alert dispatcher routing.`,
+      description: `Database group "${formData.name}" saved with updated notification channel mappings.`,
       type: 'success',
     });
   };
@@ -240,8 +256,9 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     setTestingNotification(group.id);
     setTimeout(() => {
       setTestingNotification(null);
-      const rowMethodIds = group.alertMethodIds || [];
-      const boundMethods = alertMethods.filter((m) => rowMethodIds.includes(m.id));
+      const mappings = extractGroupMappings(group);
+      const boundMethodIds = mappings.map((m) => m.notificationMethodId);
+      const boundMethods = alertMethods.filter((m) => boundMethodIds.includes(m.id));
       
       if (boundMethods.length === 0) {
         toast({
@@ -250,9 +267,9 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           type: 'info',
         });
       } else {
-        const mapping = parseGroupSenderIds(group.senderIds || '', rowMethodIds);
         const channelsWithTargets = boundMethods.map(m => {
-          const target = mapping[m.id] || 'None';
+          const mappingItem = mappings.find((item) => item.notificationMethodId === m.id);
+          const target = mappingItem?.senderIds || 'None';
           return `${m.name} (${m.type}) -> [${target}]`;
         });
 
@@ -428,7 +445,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       header: t('groups.notificationDispatchers'),
       width: '180px',
       cell: (row) => {
-        const count = (row.alertMethodIds || []).length;
+        const mappings = extractGroupMappings(row);
+        const count = mappings.length;
         const text = count === 0 ? t('groups.noDispatchers') : count === 1 ? '1 Dispatcher' : `${count} Dispatchers`;
         return (
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${
@@ -931,7 +949,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {alertMethods.map((method) => {
-                  const isChecked = formData.alertMethodIds.includes(method.id);
+                  const isChecked = formData.notificationMappings.some((m) => m.notificationMethodId === method.id);
                   return (
                     <label
                       key={method.id}
@@ -945,25 +963,22 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                         type="checkbox"
                         checked={isChecked}
                         onChange={(e) => {
-                          let nextMethods;
                           if (e.target.checked) {
-                            nextMethods = [...formData.alertMethodIds, method.id];
+                            setFormData({
+                              ...formData,
+                              notificationMappings: [
+                                ...formData.notificationMappings,
+                                { notificationMethodId: method.id, senderIds: '' },
+                              ],
+                            });
                           } else {
-                            nextMethods = formData.alertMethodIds.filter((id) => id !== method.id);
+                            setFormData({
+                              ...formData,
+                              notificationMappings: formData.notificationMappings.filter(
+                                (m) => m.notificationMethodId !== method.id
+                              ),
+                            });
                           }
-                          
-                          // Sync mapping
-                          const currentMapping = parseGroupSenderIds(formData.senderIds, formData.alertMethodIds);
-                          const cleanedMapping: { [key: string]: string } = {};
-                          nextMethods.forEach((id) => {
-                            cleanedMapping[id] = currentMapping[id] || '';
-                          });
-                          
-                          setFormData({
-                            ...formData,
-                            alertMethodIds: nextMethods,
-                            senderIds: serializeGroupSenderIds(cleanedMapping),
-                          });
                         }}
                         className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                       />
@@ -995,18 +1010,15 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 {t('groups.targetSendersTitle')}
               </label>
               
-              {formData.alertMethodIds.length === 0 ? (
+              {formData.notificationMappings.length === 0 ? (
                 <p className="text-xs text-slate-400 italic">
                   {t('groups.selectAtLeastOneChannel')}
                 </p>
               ) : (
                 <div className="space-y-3 shadow-2xs">
-                  {formData.alertMethodIds.map((methodId) => {
-                    const method = alertMethods.find((m) => m.id === methodId);
+                  {formData.notificationMappings.map((mapItem) => {
+                    const method = alertMethods.find((m) => m.id === mapItem.notificationMethodId);
                     if (!method) return null;
-                    
-                    const currentMapping = parseGroupSenderIds(formData.senderIds, formData.alertMethodIds);
-                    const value = currentMapping[methodId] || '';
                     
                     let placeholder = "e.g. dba-team@company.internal";
                     if (method.type === 'TELEGRAM') {
@@ -1018,29 +1030,29 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                     }
 
                     return (
-                      <div key={methodId} className="space-y-1 bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                      <div key={mapItem.notificationMethodId} className="space-y-1 bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
                             <Radio className="w-3 h-3 text-indigo-500" />
                             {method.name} ({method.type})
                           </span>
                           <span className="text-[10px] font-mono text-slate-400">
-                            {methodId}
+                            {mapItem.notificationMethodId}
                           </span>
                         </div>
                         <input
                           type="text"
                           placeholder={placeholder}
-                          value={value}
+                          value={mapItem.senderIds}
                           onChange={(e) => {
-                            const newMapping = { ...currentMapping, [methodId]: e.target.value };
-                            const cleanedMapping: { [key: string]: string } = {};
-                            formData.alertMethodIds.forEach((id) => {
-                              cleanedMapping[id] = newMapping[id] || '';
-                            });
+                            const nextVal = e.target.value;
                             setFormData({
                               ...formData,
-                              senderIds: serializeGroupSenderIds(cleanedMapping),
+                              notificationMappings: formData.notificationMappings.map((m) =>
+                                m.notificationMethodId === mapItem.notificationMethodId
+                                  ? { ...m, senderIds: nextVal }
+                                  : m
+                              ),
                             });
                           }}
                           className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-mono text-xs text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"

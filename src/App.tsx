@@ -716,8 +716,7 @@ function MainAppContent() {
           description: groupData.description || null,
           databaseIds: assignedDbIds || groupData.databaseIds || [],
           templateIds: groupData.templateIds || [],
-          alertMethodIds: groupData.alertMethodIds || [],
-          senderIds: groupData.senderIds || '',
+          notificationMappings: groupData.notificationMappings || [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };

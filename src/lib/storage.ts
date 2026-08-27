@@ -200,8 +200,10 @@ export const INITIAL_GROUPS: GroupEntity[] = [
     description: 'High-availability primary clusters handling core transactional workload.',
     databaseIds: ['db-01', 'db-02', 'db-03', 'db-05'], // Many-to-Many
     templateIds: ['tpl-ora-01', 'tpl-pg-01', 'tpl-my-01'],
-    alertMethodIds: ['meth-email-01', 'meth-tg-02'],
-    senderIds: '-1001928374650, -1009876543210, core-dba@dbfarm.internal, oncall-alerts@dbfarm.internal',
+    notificationMappings: [
+      { notificationMethodId: 'meth-email-01', senderIds: 'core-dba@dbfarm.internal, oncall-alerts@dbfarm.internal' },
+      { notificationMethodId: 'meth-tg-02', senderIds: '-1001928374650, -1009876543210' },
+    ],
     createdAt: new Date(Date.now() - 25 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 10 * 86400000).toISOString(),
   },
@@ -211,8 +213,10 @@ export const INITIAL_GROUPS: GroupEntity[] = [
     description: 'PCI-compliant database instances dedicated to payment gateways and financial transactions.',
     databaseIds: ['db-02', 'db-05'], // Belongs to both grp-01 and grp-02 (Many-to-Many)
     templateIds: ['tpl-pg-01'],
-    alertMethodIds: ['meth-email-01', 'meth-tg-02'],
-    senderIds: '-1002233445566, pci-audit@dbfarm.internal, billing-ops@dbfarm.internal',
+    notificationMappings: [
+      { notificationMethodId: 'meth-email-01', senderIds: 'pci-audit@dbfarm.internal, billing-ops@dbfarm.internal' },
+      { notificationMethodId: 'meth-tg-02', senderIds: '-1002233445566' },
+    ],
     createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
   },

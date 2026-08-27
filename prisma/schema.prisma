@@ -90,11 +90,6 @@ model DatabaseGroup {
   /// Detailed description of group scope and service level requirements.
   description String? @db.Text
 
-  /// Active Alert Notification Method IDs (comma-separated list of IDs)
-  alertMethodIds String? @map("alert_method_ids") @db.Text
-  /// Target Sender IDs / Destinations
-  senderIds      String? @map("sender_ids") @db.Text
-
   /// Timestamp of group creation.
   createdAt DateTime @default(now())
   /// Timestamp of last group update.
