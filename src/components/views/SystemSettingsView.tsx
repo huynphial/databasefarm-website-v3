@@ -56,6 +56,7 @@ interface SystemSettingsViewProps {
   onSaveAlertMethod: (method: Partial<AlertNotificationMethodEntity>) => Promise<any>;
   onDeleteAlertMethod: (id: string) => Promise<void>;
   onResetAllData: () => Promise<void>;
+  onRefreshData?: () => Promise<void>;
 }
 
 interface HealthCheckResult {
@@ -82,6 +83,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   onSaveAlertMethod,
   onDeleteAlertMethod,
   onResetAllData,
+  onRefreshData,
 }) => {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -112,6 +114,9 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         type: 'success',
       });
       setIsCleanMonitorConfirmOpen(false);
+      if (onRefreshData) {
+        await onRefreshData();
+      }
     } catch (err: any) {
       toast({
         title: 'Cleanup Failed',
@@ -136,6 +141,9 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         type: 'success',
       });
       setIsCleanRawConfirmOpen(false);
+      if (onRefreshData) {
+        await onRefreshData();
+      }
     } catch (err: any) {
       toast({
         title: 'Cleanup Failed',

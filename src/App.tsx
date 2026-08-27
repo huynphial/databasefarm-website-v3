@@ -972,6 +972,7 @@ function MainAppContent() {
               onSaveAlertMethod={handleSaveAlertMethod}
               onDeleteAlertMethod={handleDeleteAlertMethod}
               onResetAllData={handleResetAllData}
+              onRefreshData={loadData}
             />
           )}
 

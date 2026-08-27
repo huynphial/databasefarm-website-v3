@@ -187,6 +187,7 @@
   },
   "databases": {
     "title": "Monitored Databases",
+    "password": "Password",
     "allDatabases": "All Databases",
     "guidanceTitle": "Enterprise Database Endpoints & Monitoring Registry",
     "guidanceDesc": "Configure connection parameters, probe authentication, poll intervals, and group memberships for multi-engine database instances.",

@@ -187,6 +187,7 @@
   },
   "databases": {
     "title": "Cơ sở dữ liệu giám sát",
+    "password": "Mật khẩu",
     "allDatabases": "Tất cả cơ sở dữ liệu",
     "guidanceTitle": "Enterprise Database Endpoints & Monitoring Registry",
     "guidanceDesc": "Cấu hình tham số kết nối, tài khoản thăm dò, chu kỳ quét và gán nhóm cho các phiên bản cơ sở dữ liệu đa nền tảng.",

@@ -1999,7 +1999,7 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async cleanAllMonitorData(daysToKeep = 0, dbId = 'ALL') {
-    const cutoffDate = daysToKeep <= 0 ? new Date() : new Date(Date.now() - daysToKeep * 86400000);
+    const cutoffDate = daysToKeep <= 0 ? new Date(Date.now() + 60000) : new Date(Date.now() - daysToKeep * 86400000);
     const dbFilter = dbId === 'ALL' ? {} : { dbId };
 
     const [activeRes, histRes, metricsRes, logsRes] = await Promise.all([
@@ -2018,15 +2018,21 @@ export class PrismaRepository implements IStorageRepository {
       (this.prisma as any).metricDataPoint?.deleteMany({
         where: {
           ...(dbId === 'ALL' ? {} : { dbId }),
-          createdAt: { lte: cutoffDate },
+          measuredAt: { lte: cutoffDate },
         },
-      }).catch(() => ({ count: 0 })) || { count: 0 },
+      }).catch((e: any) => {
+        console.warn('Prisma metricDataPoint deleteMany failed:', e);
+        return { count: 0 };
+      }) || { count: 0 },
       (this.prisma as any).alertNotificationLog?.deleteMany({
         where: {
           ...dbFilter,
           timestamp: { lte: cutoffDate },
         },
-      }).catch(() => ({ count: 0 })) || { count: 0 },
+      }).catch((e: any) => {
+        console.warn('Prisma alertNotificationLog deleteMany failed:', e);
+        return { count: 0 };
+      }) || { count: 0 },
     ]);
 
     return {
@@ -2038,14 +2044,17 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async cleanRawQueryHistory(daysToKeep = 0, dbId = 'ALL') {
-    const cutoffDate = daysToKeep <= 0 ? new Date() : new Date(Date.now() - daysToKeep * 86400000);
+    const cutoffDate = daysToKeep <= 0 ? new Date(Date.now() + 60000) : new Date(Date.now() - daysToKeep * 86400000);
 
     const metricsRes = await ((this.prisma as any).metricDataPoint?.deleteMany({
       where: {
         ...(dbId === 'ALL' ? {} : { dbId }),
-        createdAt: { lte: cutoffDate },
+        measuredAt: { lte: cutoffDate },
       },
-    }).catch(() => ({ count: 0 })) || { count: 0 });
+    }).catch((e: any) => {
+      console.warn('Prisma metricDataPoint deleteMany failed:', e);
+      return { count: 0 };
+    }) || { count: 0 });
 
     return {
       metricDataPointsDeleted: metricsRes.count || 0,

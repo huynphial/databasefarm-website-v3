@@ -1981,7 +1981,7 @@ FROM pg_tablespace`,
   }
 
   async cleanAllMonitorData(daysToKeep = 0, dbId = 'ALL') {
-    const cutoffTime = daysToKeep <= 0 ? Date.now() : Date.now() - daysToKeep * 86400000;
+    const cutoffTime = daysToKeep <= 0 ? Date.now() + 60000 : Date.now() - daysToKeep * 86400000;
     const matchesDb = (targetDbId: string) => dbId === 'ALL' || targetDbId === dbId;
 
     const initActive = this.activeAlerts.length;
@@ -1999,12 +1999,15 @@ FROM pg_tablespace`,
     const initMetrics = this.metricHistory.length;
     this.metricHistory = this.metricHistory.filter((m) => {
       if (!matchesDb(m.dbId)) return true;
-      return new Date(m.createdAt).getTime() > cutoffTime;
+      const t = new Date(m.createdAt || 0).getTime();
+      return t > cutoffTime;
     });
 
+    const initRaws = this.rawMeasurements.length;
     this.rawMeasurements = this.rawMeasurements.filter((m) => {
       if (!matchesDb(m.dbId)) return true;
-      return new Date(m.measuredAt).getTime() > cutoffTime;
+      const t = new Date((m as any).measuredAt || 0).getTime();
+      return t > cutoffTime;
     });
 
     const initLogs = this.alertNotificationLogs.length;
@@ -2016,28 +2019,31 @@ FROM pg_tablespace`,
     return {
       activeAlertsDeleted: initActive - this.activeAlerts.length,
       alertHistoryDeleted: initHistory - this.alertHistory.length,
-      metricDataPointsDeleted: initMetrics - this.metricHistory.length,
+      metricDataPointsDeleted: (initMetrics - this.metricHistory.length) + (initRaws - this.rawMeasurements.length),
       notificationLogsDeleted: initLogs - this.alertNotificationLogs.length,
     };
   }
 
   async cleanRawQueryHistory(daysToKeep = 0, dbId = 'ALL') {
-    const cutoffTime = daysToKeep <= 0 ? Date.now() : Date.now() - daysToKeep * 86400000;
+    const cutoffTime = daysToKeep <= 0 ? Date.now() + 60000 : Date.now() - daysToKeep * 86400000;
     const matchesDb = (targetDbId: string) => dbId === 'ALL' || targetDbId === dbId;
 
     const initMetrics = this.metricHistory.length;
     this.metricHistory = this.metricHistory.filter((m) => {
       if (!matchesDb(m.dbId)) return true;
-      return new Date(m.createdAt).getTime() > cutoffTime;
+      const t = new Date(m.createdAt || 0).getTime();
+      return t > cutoffTime;
     });
 
+    const initRaws = this.rawMeasurements.length;
     this.rawMeasurements = this.rawMeasurements.filter((m) => {
       if (!matchesDb(m.dbId)) return true;
-      return new Date(m.measuredAt).getTime() > cutoffTime;
+      const t = new Date((m as any).measuredAt || 0).getTime();
+      return t > cutoffTime;
     });
 
     return {
-      metricDataPointsDeleted: initMetrics - this.metricHistory.length,
+      metricDataPointsDeleted: (initMetrics - this.metricHistory.length) + (initRaws - this.rawMeasurements.length),
     };
   }
 
