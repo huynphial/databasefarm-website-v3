@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   DatabaseEntity,
   MetricEntity,
@@ -9,6 +9,7 @@ import {
   SystemSettingsEntity,
   UserRole,
 } from '../../types';
+import { api } from '../../lib/api';
 import { combineTelemetryDataPoints } from './analytics/analyticsUtils';
 import { DatabaseFilterHeader } from './analytics/DatabaseFilterHeader';
 import { AnalyticsSummaryCards } from './analytics/AnalyticsSummaryCards';
@@ -107,11 +108,70 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
     setToDateTime(now.toISOString().slice(0, 16));
   };
 
-  // 3. COMBINE ALL TELEMETRY MEASUREMENTS (from rawMeasurements AND metricHistory [database table metric_data_points])
+  // 3. DYNAMIC TELEMETRY QUERYING FROM DATABASE
+  const [queriedRawMeasurements, setQueriedRawMeasurements] = useState<RawMeasurementEntity[]>([]);
+  const [queriedMetricHistory, setQueriedMetricHistory] = useState<MetricHistoryEntity[]>([]);
+  const [isLoadingTelemetry, setIsLoadingTelemetry] = useState<boolean>(false);
+  const [hasFetchedOnce, setHasFetchedOnce] = useState<boolean>(false);
+
+  const fetchDbTelemetry = useCallback(async () => {
+    if (!selectedDb?.id) return;
+    setIsLoadingTelemetry(true);
+    try {
+      const fromIso = fromDateTime ? new Date(fromDateTime).toISOString() : undefined;
+      const toIso = toDateTime ? new Date(toDateTime).toISOString() : undefined;
+
+      const [raws, history] = await Promise.all([
+        api.getRawMeasurements({
+          dbId: selectedDb.id,
+          fromDate: fromIso,
+          toDate: toIso,
+          limit: 10000,
+        }).catch(() => []),
+        api.getMetricHistory(selectedDb.id, undefined, fromIso, toIso).catch(() => []),
+      ]);
+
+      setQueriedRawMeasurements(Array.isArray(raws) ? raws : []);
+      setQueriedMetricHistory(Array.isArray(history) ? history : []);
+      setHasFetchedOnce(true);
+    } catch (err) {
+      console.error('Failed to query database telemetry points:', err);
+    } finally {
+      setIsLoadingTelemetry(false);
+    }
+  }, [selectedDb?.id, fromDateTime, toDateTime]);
+
+  // Query database whenever selected DB or time window changes
+  useEffect(() => {
+    fetchDbTelemetry();
+  }, [fetchDbTelemetry]);
+
+  // Handle manual refresh button
+  const handleRefresh = async () => {
+    await fetchDbTelemetry();
+    if (onRefresh) {
+      await onRefresh();
+    }
+  };
+
+  // 4. COMBINE ALL TELEMETRY MEASUREMENTS (from queried rawMeasurements AND metricHistory / database table metric_data_points)
   const unifiedMeasurements = useMemo(() => {
     if (!selectedDb) return [];
-    return combineTelemetryDataPoints(rawMeasurements, metricHistory, selectedDb.id, selectedDb.name);
-  }, [selectedDb, rawMeasurements, metricHistory]);
+    const activeRaws = hasFetchedOnce ? queriedRawMeasurements : rawMeasurements;
+    const activeHistory = hasFetchedOnce ? queriedMetricHistory : metricHistory;
+
+    const combined = combineTelemetryDataPoints(activeRaws, activeHistory, selectedDb.id, selectedDb.name);
+
+    // Apply strict time filter on combined points
+    const fromMs = fromDateTime ? new Date(fromDateTime).getTime() : 0;
+    const toMs = toDateTime ? new Date(toDateTime).getTime() : Infinity;
+
+    return combined.filter((p) => {
+      const t = new Date(p.measuredAt).getTime();
+      if (isNaN(t)) return true;
+      return (!fromMs || t >= fromMs) && (!toMs || t <= toMs);
+    });
+  }, [selectedDb, hasFetchedOnce, queriedRawMeasurements, queriedMetricHistory, rawMeasurements, metricHistory, fromDateTime, toDateTime]);
 
   // Filter metrics applicable to selected DB (matching dbType or inherited from metricIds)
   const applicableMetrics = useMemo(() => {
@@ -140,7 +200,7 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
     return applicableMetrics.filter((m) => m.metricQueryType === 3);
   }, [applicableMetrics]);
 
-  // 4. CHART SELECTION STATE
+  // 5. CHART SELECTION STATE
   const [chartMetricId, setChartMetricId] = useState<string>('');
   const [chartAttributeName, setChartAttributeName] = useState<string>('value');
   const [chartObjectName, setChartObjectName] = useState<string>('ALL');
@@ -187,7 +247,8 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
         onFromDateTimeChange={setFromDateTime}
         toDateTime={toDateTime}
         onToDateTimeChange={setToDateTime}
-        onRefresh={onRefresh}
+        onRefresh={handleRefresh}
+        isLoading={isLoadingTelemetry}
       />
 
       {/* 2. Overview Summary Cards */}

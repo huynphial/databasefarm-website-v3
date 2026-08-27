@@ -176,10 +176,12 @@ export const api = {
   },
 
   // Metric History
-  async getMetricHistory(dbId?: string, metricId?: string): Promise<MetricHistoryEntity[]> {
+  async getMetricHistory(dbId?: string, metricId?: string, fromDate?: string, toDate?: string): Promise<MetricHistoryEntity[]> {
     const params = new URLSearchParams();
     if (dbId) params.append('dbId', dbId);
     if (metricId) params.append('metricId', metricId);
+    if (fromDate) params.append('fromDate', fromDate);
+    if (toDate) params.append('toDate', toDate);
     const query = params.toString() ? `?${params.toString()}` : '';
     return fetchJson(`/api/metric-history${query}`);
   },

@@ -187,7 +187,9 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
       const numericValues: number[] = [];
 
       // Process points in chronological order (oldest first for chart)
-      const chronPoints = [...filtered].reverse();
+      const chronPoints = [...filtered].sort(
+        (a, b) => new Date(a.measuredAt).getTime() - new Date(b.measuredAt).getTime()
+      );
 
       chronPoints.forEach((point) => {
         const timeKey = formatTimeVN(point.measuredAt);

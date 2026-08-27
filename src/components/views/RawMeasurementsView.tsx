@@ -65,7 +65,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   // Dynamic discovery of unique objects and attributes
   const availableObjects = useMemo(() => {
     const set = new Set<string>();
-    measurementsData.forEach((m) => {
+    const allSources = [...measurementsData, ...measurements];
+    allSources.forEach((m) => {
       if (m.objectName && m.objectName.trim()) {
         if (selectedMetricFilter !== 'ALL' && m.metricId !== selectedMetricFilter) return;
         if (selectedDbFilter !== 'ALL' && m.dbId !== selectedDbFilter) return;
@@ -73,7 +74,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       }
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [measurementsData, selectedMetricFilter, selectedDbFilter]);
+  }, [measurementsData, measurements, selectedMetricFilter, selectedDbFilter]);
 
   const availableAttributes = useMemo(() => {
     const set = new Set<string>();
@@ -84,8 +85,17 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           if (a.attributeName && a.attributeName.trim()) set.add(a.attributeName.trim());
         });
       }
+    } else {
+      metrics.forEach((m) => {
+        if (m.thresholdsConfig?.perAttribute) {
+          m.thresholdsConfig.perAttribute.forEach((a) => {
+            if (a.attributeName && a.attributeName.trim()) set.add(a.attributeName.trim());
+          });
+        }
+      });
     }
-    measurementsData.forEach((m) => {
+    const allSources = [...measurementsData, ...measurements];
+    allSources.forEach((m) => {
       if (m.attributeName && m.attributeName.trim()) {
         if (selectedMetricFilter !== 'ALL' && m.metricId !== selectedMetricFilter) return;
         if (selectedDbFilter !== 'ALL' && m.dbId !== selectedDbFilter) return;
@@ -93,7 +103,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       }
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [measurementsData, metrics, selectedMetricFilter, selectedDbFilter]);
+  }, [measurementsData, measurements, metrics, selectedMetricFilter, selectedDbFilter]);
 
   // Sync with prop updates if not actively searching
   useEffect(() => {

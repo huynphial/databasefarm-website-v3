@@ -558,8 +558,13 @@ async function startServer() {
   // Metric History API
   app.get('/api/metric-history', async (req, res) => {
     try {
-      const { dbId, metricId } = req.query as { dbId?: string; metricId?: string };
-      const history = await repo.getMetricHistory(dbId, metricId);
+      const { dbId, metricId, fromDate, toDate } = req.query as {
+        dbId?: string;
+        metricId?: string;
+        fromDate?: string;
+        toDate?: string;
+      };
+      const history = await repo.getMetricHistory(dbId, metricId, fromDate, toDate);
       res.json(history);
     } catch (err: any) {
       res.status(500).json({ error: err.message });

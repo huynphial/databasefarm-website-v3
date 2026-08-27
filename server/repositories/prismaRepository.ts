@@ -999,16 +999,27 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   // --- Metric Value History ---
-  async getMetricHistory(dbId?: string, metricId?: string): Promise<MetricHistoryEntity[]> {
+  async getMetricHistory(dbId?: string, metricId?: string, fromDate?: string, toDate?: string): Promise<MetricHistoryEntity[]> {
     const whereDataPoint: any = {};
-    if (dbId) whereDataPoint.dbId = dbId;
-    if (metricId) whereDataPoint.metricId = metricId;
+    if (dbId && dbId !== 'ALL') whereDataPoint.dbId = dbId;
+    if (metricId && metricId !== 'ALL') whereDataPoint.metricId = metricId;
+
+    if (fromDate || toDate) {
+      whereDataPoint.measuredAt = {};
+      if (fromDate) {
+        whereDataPoint.measuredAt.gte = new Date(fromDate);
+      }
+      if (toDate) {
+        const toDateObj = toDate.length === 10 ? new Date(`${toDate}T23:59:59.999Z`) : new Date(toDate);
+        whereDataPoint.measuredAt.lte = toDateObj;
+      }
+    }
 
     const list = await (this.prisma as any).metricDataPoint.findMany({
       where: whereDataPoint,
       include: { database: true, metric: true },
       orderBy: { measuredAt: 'desc' },
-      take: 200,
+      take: 5000,
     });
 
     return list.map((m: any) => ({

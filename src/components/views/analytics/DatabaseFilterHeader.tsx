@@ -27,6 +27,7 @@ interface DatabaseFilterHeaderProps {
   toDateTime: string;
   onToDateTimeChange: (val: string) => void;
   onRefresh?: () => void;
+  isLoading?: boolean;
 }
 
 export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
@@ -45,6 +46,7 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
   toDateTime,
   onToDateTimeChange,
   onRefresh,
+  isLoading = false,
 }) => {
   const { t } = useLanguage();
   const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
@@ -244,11 +246,11 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
           <button
             type="button"
             onClick={handleManualRefresh}
-            disabled={isRefreshing}
+            disabled={isRefreshing || isLoading}
             className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs px-3 py-1.5 rounded-xl font-bold transition-colors cursor-pointer disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>{isRefreshing ? t('analytics.refreshing') : t('analytics.refresh')}</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing || isLoading ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing || isLoading ? t('analytics.refreshing') : t('analytics.refresh')}</span>
           </button>
         </div>
       </div>

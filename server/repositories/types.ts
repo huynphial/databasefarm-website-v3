@@ -75,7 +75,7 @@ export interface IStorageRepository {
   addAlertHistory(historyData: Partial<AlertHistoryEntity>): Promise<AlertHistoryEntity>;
 
   // Metric History & Raw Telemetry Measurements
-  getMetricHistory(dbId?: string, metricId?: string): Promise<MetricHistoryEntity[]>;
+  getMetricHistory(dbId?: string, metricId?: string, fromDate?: string, toDate?: string): Promise<MetricHistoryEntity[]>;
   addMetricHistory(historyData: Partial<MetricHistoryEntity>): Promise<MetricHistoryEntity>;
   getRawMeasurements(filterOrLimit?: number | RawMeasurementFilter): Promise<RawMeasurementEntity[]>;
   addRawMeasurement(data: Partial<RawMeasurementEntity>): Promise<RawMeasurementEntity>;
