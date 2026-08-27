@@ -458,7 +458,6 @@ model AlertNotificationMethod {
   statusOnOff         String                   @default("ACTIVE") @map("status_on_off")
   createdAt           DateTime                 @default(now()) @map("created_at")
   updatedAt           DateTime                 @updatedAt @map("updated_at")
-  notificationQueue   AlertNotificationQueue[]
   groupMappings       GroupNotificationMapping[]
 
   @@map("alert_notification_methods")
@@ -480,29 +479,30 @@ model GroupNotificationMapping {
 
 /// AlertNotificationLog Model: Records historical notifications sent to users/external systems.
 model AlertNotificationLog {
-  id             String   @id @default(uuid())
-  timestamp      DateTime @default(now())
-  alertId        String   @map("alert_id")
-  dbId           String   @map("db_id")
-  dbName         String   @map("db_name")
-  metricName     String   @map("metric_name")
-  attributeName  String?  @map("attribute_name")
-  alertLevel     String   @map("alert_level")
-  eventType      String   @default("NEW_ALERT") @map("event_type")
-  dispatcherId   String?  @map("dispatcher_id")
-  dispatcherName String?  @map("dispatcher_name")
-  dispatcherType String?  @map("dispatcher_type")
-  dispatchMethod String?  @map("dispatch_method")
-  dispatchType   String?  @map("dispatch_type")
-  senderIds      String?  @map("sender_ids") @db.Text
-  status         String   @default("DISPATCHED")
-  errorMessage   String?  @map("error_message") @db.Text
-  payloadSummary String?  @map("payload_summary") @db.Text
-  messageAlert   String?  @map("message_alert") @db.Text
-  detailResponse String?  @map("detail_response") @db.Text
-  latencyMs      Int?     @map("latency_ms")
+  id               String    @id @default(uuid())
+  alertId          String    @map("alert_id")
+  alertLevel       String    @map("alert_level")
+  dbId             String    @map("db_id")
+  dbName           String    @map("db_name")
+  metricId         String?   @map("metric_id")
+  metricName       String    @map("metric_name")
+  objectName       String?   @map("object_name")
+  attributeName    String?   @map("attribute_name")
+  value            String?   @map("value")
+  messageAlert     String?   @map("message_alert") @db.Text
+  senderIdList     String?   @map("sender_id_list") @db.Text
+  dispatcherId     String?   @map("dispatcher_id")
+  dispatcherName   String?   @map("dispatcher_name")
+  dispatcherType   String?   @map("dispatcher_type")
+  dispatcherConfig Json?     @map("dispatcher_config")
+  responseSuccess  Boolean   @default(true) @map("response_success")
+  responseStatus   String?   @map("response_status")
+  responseDetail   String?   @map("response_detail") @db.Text
+  lockedAt         DateTime? @map("locked_at")
+  lockedBy         String?   @map("locked_by")
+  finishedAt       DateTime? @default(now()) @map("finished_at")
 
-  @@index([timestamp(sort: Desc)])
+  @@index([finishedAt(sort: Desc)])
   @@map("alert_notification_logs")
 }
 
@@ -538,26 +538,25 @@ model DatabasePollLog {
 }
 
 model AlertNotificationQueue {
-  id             String                  @id @default(uuid())
-  alertId        String                  @map("alert_id")
-  dbId           String                  @map("db_id")
-  dbName         String                  @map("db_name")
-  metricName     String                  @map("metric_name")
-  attributeName  String?                 @map("attribute_name")
-  alertLevel     String                  @map("alert_level")
-  eventType      String                  @map("event_type")
-  dispatcherId   String                  @map("dispatcher_id")
-  dispatcherName String                  @map("dispatcher_name")
-  dispatcherType String                  @map("dispatcher_type")
-  status         String                  @default("PENDING")
-  lockedBy       String?                 @map("locked_by")
-  lockedAt       DateTime?               @map("locked_at")
-  scheduledAt    DateTime                @default(now()) @map("scheduled_at")
-  createdAt      DateTime                @default(now()) @map("created_at")
+  id               String    @id @default(uuid())
+  alertId          String    @map("alert_id")
+  alertLevel       String    @map("alert_level")
+  dbId             String    @map("db_id")
+  dbName           String    @map("db_name")
+  metricId         String?   @map("metric_id")
+  metricName       String    @map("metric_name")
+  objectName       String?   @map("object_name")
+  attributeName    String?   @map("attribute_name")
+  value            String?   @map("value")
+  messageAlert     String?   @map("message_alert") @db.Text
+  senderIdList     String?   @map("sender_id_list") @db.Text
+  dispatcherId     String?   @map("dispatcher_id")
+  dispatcherName   String?   @map("dispatcher_name")
+  dispatcherType   String?   @map("dispatcher_type")
+  dispatcherConfig Json?     @map("dispatcher_config")
+  lockedAt         DateTime? @map("locked_at")
+  lockedBy         String?   @map("locked_by")
 
-  dispatcher     AlertNotificationMethod @relation(fields: [dispatcherId], references: [id], onDelete: Cascade)
-
-  @@index([status, scheduledAt], map: "alert_notification_queue_status_scheduled_idx")
   @@index([alertId], map: "alert_notification_queue_alert_id_idx")
   @@map("alert_notification_queue")
 }

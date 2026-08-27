@@ -276,24 +276,37 @@ export interface AlertHistoryEntity {
 
 export interface AlertNotificationLogEntity {
   id: string;
-  timestamp: string;
   alertId: string;
+  alertLevel: AlertSeverity | string;
   dbId: string;
   dbName: string;
+  metricId?: string | null;
   metricName: string;
+  objectName?: string | null;
   attributeName?: string | null;
-  alertLevel: AlertSeverity;
-  eventType?: string; // 'NEW_ALERT' | 'CLEAR_ALERT' | 'TRIGGER'
-  dispatcherId?: string;
-  dispatcherName?: string;
-  dispatcherType?: AlertMethodType;
-  dispatchMethod?: string; // e.g. 'Telegram Bot', 'Corporate SMTP', 'Slack Alert'
-  dispatchType?: AlertMethodType;
-  senderIds: string; // Target recipients e.g. '-1001234567890', 'dba-team@company.internal'
-  status: string; // 'DISPATCHED' | 'SUCCESS' | 'FAILED' | 'PENDING'
+  value?: string | null;
+  messageAlert?: string | null;
+  senderIdList?: string | null;
+  dispatcherId?: string | null;
+  dispatcherName?: string | null;
+  dispatcherType?: AlertMethodType | string | null;
+  dispatcherConfig?: any;
+  responseSuccess?: boolean;
+  responseStatus?: string | null;
+  responseDetail?: string | null;
+  lockedAt?: string | null;
+  lockedBy?: string | null;
+  finishedAt?: string | null;
+
+  // Legacy/UI fallback getters & optional fields
+  timestamp?: string;
+  eventType?: string;
+  dispatchMethod?: string;
+  dispatchType?: string;
+  senderIds?: string;
+  status?: string;
   errorMessage?: string | null;
   payloadSummary?: string;
-  messageAlert?: string;
   detailResponse?: string | null;
   latencyMs?: number;
 }
@@ -345,19 +358,27 @@ export interface DatabasePollLogEntity {
 export interface AlertNotificationQueueEntity {
   id: string;
   alertId: string;
+  alertLevel: AlertSeverity | string;
   dbId: string;
   dbName: string;
+  metricId?: string | null;
   metricName: string;
+  objectName?: string | null;
   attributeName?: string | null;
-  alertLevel: string;
-  eventType: string;
-  dispatcherId: string;
-  dispatcherName: string;
-  dispatcherType: string;
-  status: string;
-  lockedBy?: string | null;
+  value?: string | null;
+  messageAlert?: string | null;
+  senderIdList?: string | null;
+  dispatcherId?: string | null;
+  dispatcherName?: string | null;
+  dispatcherType?: AlertMethodType | string | null;
+  dispatcherConfig?: any;
   lockedAt?: string | null;
-  scheduledAt: string;
-  createdAt: string;
+  lockedBy?: string | null;
+
+  // Legacy/UI fallback getters & optional fields
+  eventType?: string;
+  status?: string;
+  scheduledAt?: string;
+  createdAt?: string;
 }
 
