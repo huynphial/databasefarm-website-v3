@@ -148,8 +148,13 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
   // Set default metric for chart when applicable metrics update
   useEffect(() => {
     if (applicableMetrics.length > 0 && !applicableMetrics.some((m) => m.id === chartMetricId)) {
-      setChartMetricId(applicableMetrics[0].id);
-      setChartAttributeName('value');
+      const defaultMetric = applicableMetrics[0];
+      setChartMetricId(defaultMetric.id);
+      let initialAttr = 'value';
+      if (defaultMetric.thresholdsConfig?.perAttribute && defaultMetric.thresholdsConfig.perAttribute.length > 0) {
+        initialAttr = defaultMetric.thresholdsConfig.perAttribute[0].attributeName;
+      }
+      setChartAttributeName(initialAttr);
       setChartObjectName('ALL');
     }
   }, [applicableMetrics, chartMetricId]);

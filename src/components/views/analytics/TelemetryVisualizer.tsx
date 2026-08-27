@@ -68,18 +68,20 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
     const numericAttributesForChart = useMemo(() => {
       if (!selectedMetric) return [{ key: 'value', label: 'value' }];
 
+      const targetId = String(selectedMetric.id || '').trim().toLowerCase();
+      const targetName = (selectedMetric.name || '').trim().toLowerCase();
+
       const metricPoints = unifiedMeasurements.filter((m) => {
-        const mId = String(m.metricId || '').trim();
-        const targetId = String(selectedMetric.id || '').trim();
+        const mId = String(m.metricId || '').trim().toLowerCase();
         if (mId && targetId && mId === targetId) return true;
-        if (m.metricName && selectedMetric.name && m.metricName.trim().toLowerCase() === selectedMetric.name.trim().toLowerCase()) {
+        if (m.metricName && targetName && m.metricName.trim().toLowerCase() === targetName) {
           return true;
         }
         return false;
       });
       const attrSet = new Set<string>();
 
-      // Check perAttribute threshold configs if available
+      // Check perAttribute threshold configs if available (standard for Type 3 metrics)
       if (selectedMetric.thresholdsConfig?.perAttribute) {
         selectedMetric.thresholdsConfig.perAttribute.forEach((a) => {
           if (a.valueType === 'NUMBER' || !a.valueType) {
@@ -89,8 +91,8 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
       }
 
       metricPoints.forEach((p) => {
-        if (p.attributeName) {
-          attrSet.add(p.attributeName);
+        if (p.attributeName && p.attributeName.trim()) {
+          attrSet.add(p.attributeName.trim());
         }
       });
 
@@ -104,21 +106,47 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
     // Discover target objects for selected metric from unified measurements (includes metric_data_points)
     const availableObjectsForChart = useMemo(() => {
       if (!selectedMetric) return [];
+      const targetId = String(selectedMetric.id || '').trim().toLowerCase();
+      const targetName = (selectedMetric.name || '').trim().toLowerCase();
+
       const metricPoints = unifiedMeasurements.filter((m) => {
-        const mId = String(m.metricId || '').trim();
-        const targetId = String(selectedMetric.id || '').trim();
+        const mId = String(m.metricId || '').trim().toLowerCase();
         if (mId && targetId && mId === targetId) return true;
-        if (m.metricName && selectedMetric.name && m.metricName.trim().toLowerCase() === selectedMetric.name.trim().toLowerCase()) {
+        if (m.metricName && targetName && m.metricName.trim().toLowerCase() === targetName) {
           return true;
         }
         return false;
       });
       const objSet = new Set<string>();
       metricPoints.forEach((p) => {
-        if (p.objectName) objSet.add(p.objectName);
+        if (p.objectName && p.objectName.trim()) objSet.add(p.objectName.trim());
       });
       return Array.from(objSet);
     }, [selectedMetric, unifiedMeasurements]);
+
+    // Auto-synchronize chartAttributeName when metric changes or current attribute is not present
+    React.useEffect(() => {
+      if (numericAttributesForChart.length > 0) {
+        const isCurrentValid = numericAttributesForChart.some(
+          (a) => a.key.toLowerCase() === (chartAttributeName || '').toLowerCase()
+        );
+        if (!isCurrentValid) {
+          setChartAttributeName(numericAttributesForChart[0].key);
+        }
+      }
+    }, [selectedMetric?.id, numericAttributesForChart, chartAttributeName, setChartAttributeName]);
+
+    // Auto-synchronize chartObjectName when current object is not present
+    React.useEffect(() => {
+      if (chartObjectName !== 'ALL' && availableObjectsForChart.length > 0) {
+        const isCurrentObjValid = availableObjectsForChart.some(
+          (obj) => obj.toLowerCase() === (chartObjectName || '').toLowerCase()
+        );
+        if (!isCurrentObjValid) {
+          setChartObjectName('ALL');
+        }
+      }
+    }, [availableObjectsForChart, chartObjectName, setChartObjectName]);
 
     // Build time-series chart data points
     const chartDataResult = useMemo(() => {
@@ -126,23 +154,30 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
         return { timeSeriesData: [], objects: [], stats: { latest: '0', max: '0', min: '0', avg: '0', count: 0 } };
       }
 
+      const targetId = String(selectedMetric.id || '').trim().toLowerCase();
+      const targetName = (selectedMetric.name || '').trim().toLowerCase();
+
       let filtered = unifiedMeasurements.filter((m) => {
-        const mId = String(m.metricId || '').trim();
-        const targetId = String(selectedMetric.id || '').trim();
+        const mId = String(m.metricId || '').trim().toLowerCase();
         if (mId && targetId && mId === targetId) return true;
-        if (m.metricName && selectedMetric.name && m.metricName.trim().toLowerCase() === selectedMetric.name.trim().toLowerCase()) {
+        if (m.metricName && targetName && m.metricName.trim().toLowerCase() === targetName) {
           return true;
         }
         return false;
       });
 
-      if (chartAttributeName) {
-        filtered = filtered.filter((m) => m.attributeName === chartAttributeName || !m.attributeName);
+      // Filter by selected attribute
+      if (chartAttributeName && chartAttributeName !== 'ALL') {
+        filtered = filtered.filter((m) => {
+          const attr = (m.attributeName || 'value').trim().toLowerCase();
+          const targetAttr = chartAttributeName.trim().toLowerCase();
+          return attr === targetAttr || (!m.attributeName && targetAttr === 'value');
+        });
       }
 
       const objectsSet = new Set<string>();
       filtered.forEach((m) => {
-        if (m.objectName) objectsSet.add(m.objectName);
+        if (m.objectName && m.objectName.trim()) objectsSet.add(m.objectName.trim());
       });
       const objectList = Array.from(objectsSet);
       if (objectList.length === 0) objectList.push('INSTANCE');
@@ -160,7 +195,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
           timeGroupMap.set(timeKey, { time: timeKey, rawTime: point.measuredAt });
         }
         const item = timeGroupMap.get(timeKey)!;
-        const objKey = point.objectName || 'INSTANCE';
+        const objKey = point.objectName ? point.objectName.trim() : 'INSTANCE';
         const numVal = parseNumericValue(point.value);
         item[objKey] = numVal;
         numericValues.push(numVal);
@@ -188,35 +223,65 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
       };
     }, [selectedMetric, unifiedMeasurements, chartAttributeName, chartObjectName]);
 
-    // Threshold values for guide line
+    // Threshold values for guide line (supports global and perAttribute thresholds for Type 3)
     const chartThresholds = useMemo(() => {
       if (!selectedMetric) return { warn: null, high: null, crit: null };
+
+      // Check perAttribute threshold configs if available for Type 3 metric
+      if (selectedMetric.thresholdsConfig?.perAttribute && chartAttributeName) {
+        const attrConfig = selectedMetric.thresholdsConfig.perAttribute.find(
+          (a) => a.attributeName.trim().toLowerCase() === chartAttributeName.trim().toLowerCase()
+        );
+        if (attrConfig) {
+          return {
+            warn: attrConfig.warn ? parseNumericValue(attrConfig.warn) : null,
+            high: attrConfig.high ? parseNumericValue(attrConfig.high) : null,
+            crit: attrConfig.critical ? parseNumericValue(attrConfig.critical) : null,
+          };
+        }
+      }
+
       return {
         warn: selectedMetric.thresholdWarn ? parseNumericValue(selectedMetric.thresholdWarn) : null,
         high: selectedMetric.thresholdHigh ? parseNumericValue(selectedMetric.thresholdHigh) : null,
         crit: selectedMetric.thresholdCritical ? parseNumericValue(selectedMetric.thresholdCritical) : null,
       };
-    }, [selectedMetric]);
+    }, [selectedMetric, chartAttributeName]);
 
     // Detailed history table data
     const historyTableItems = useMemo(() => {
       if (!selectedMetric) return [];
-      let items = unifiedMeasurements.filter((m) => m.metricId === selectedMetric.id);
+      const targetId = String(selectedMetric.id || '').trim().toLowerCase();
+      const targetName = (selectedMetric.name || '').trim().toLowerCase();
 
-      if (chartAttributeName) {
-        items = items.filter((m) => m.attributeName === chartAttributeName || !m.attributeName);
+      let items = unifiedMeasurements.filter((m) => {
+        const mId = String(m.metricId || '').trim().toLowerCase();
+        if (mId && targetId && mId === targetId) return true;
+        if (m.metricName && targetName && m.metricName.trim().toLowerCase() === targetName) {
+          return true;
+        }
+        return false;
+      });
+
+      if (chartAttributeName && chartAttributeName !== 'ALL') {
+        items = items.filter((m) => {
+          const attr = (m.attributeName || 'value').trim().toLowerCase();
+          const targetAttr = chartAttributeName.trim().toLowerCase();
+          return attr === targetAttr || (!m.attributeName && targetAttr === 'value');
+        });
       }
       if (chartObjectName !== 'ALL') {
-        items = items.filter((m) => m.objectName === chartObjectName);
+        items = items.filter((m) => (m.objectName || 'INSTANCE').trim().toLowerCase() === chartObjectName.trim().toLowerCase());
       }
 
       if (historySearch.trim()) {
         const q = historySearch.toLowerCase();
         items = items.filter(
           (m) =>
-            m.objectName.toLowerCase().includes(q) ||
-            m.value.toLowerCase().includes(q) ||
-            m.status.toLowerCase().includes(q)
+            (m.objectName && m.objectName.toLowerCase().includes(q)) ||
+            (m.attributeName && m.attributeName.toLowerCase().includes(q)) ||
+            (m.value && m.value.toLowerCase().includes(q)) ||
+            (m.status && m.status.toLowerCase().includes(q))
         );
       }
 
@@ -322,7 +387,33 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
             <div className="relative">
               <select
                 value={chartMetricId}
-                onChange={(e) => setChartMetricId(e.target.value)}
+                onChange={(e) => {
+                  const newMetricId = e.target.value;
+                  setChartMetricId(newMetricId);
+                  const nextMetric = applicableMetrics.find((m) => m.id === newMetricId);
+                  if (nextMetric) {
+                    const targetId = String(nextMetric.id || '').trim().toLowerCase();
+                    const targetName = (nextMetric.name || '').trim().toLowerCase();
+                    const metricPoints = unifiedMeasurements.filter((m) => {
+                      const mId = String(m.metricId || '').trim().toLowerCase();
+                      if (mId && targetId && mId === targetId) return true;
+                      if (m.metricName && targetName && m.metricName.trim().toLowerCase() === targetName) return true;
+                      return false;
+                    });
+                    const attrSet = new Set<string>();
+                    if (nextMetric.thresholdsConfig?.perAttribute) {
+                      nextMetric.thresholdsConfig.perAttribute.forEach((a) => {
+                        if (a.valueType === 'NUMBER' || !a.valueType) attrSet.add(a.attributeName.trim());
+                      });
+                    }
+                    metricPoints.forEach((p) => {
+                      if (p.attributeName && p.attributeName.trim()) attrSet.add(p.attributeName.trim());
+                    });
+                    const firstAttr = Array.from(attrSet)[0] || 'value';
+                    setChartAttributeName(firstAttr);
+                    setChartObjectName('ALL');
+                  }
+                }}
                 className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-900 text-xs font-semibold rounded-xl px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-2xs"
               >
                 {applicableMetrics.map((m) => (

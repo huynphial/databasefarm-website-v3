@@ -1539,7 +1539,7 @@ export class PrismaRepository implements IStorageRepository {
     try {
       const client = (this.prisma as any).metricDataPoint;
       if (client) {
-        let limit = 10000;
+        let limit = 0;
         const where: any = {};
 
         if (typeof filterOrLimit === 'number') {
@@ -1558,6 +1558,12 @@ export class PrismaRepository implements IStorageRepository {
             where.database = {
               dbType: filterOrLimit.dbType,
             };
+          }
+          if (filterOrLimit.objectName && filterOrLimit.objectName !== 'ALL') {
+            where.objectName = filterOrLimit.objectName;
+          }
+          if (filterOrLimit.attributeName && filterOrLimit.attributeName !== 'ALL') {
+            where.attributeName = filterOrLimit.attributeName;
           }
           if (filterOrLimit.fromDate || filterOrLimit.toDate) {
             where.measuredAt = {};

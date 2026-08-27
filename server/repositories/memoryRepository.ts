@@ -1720,7 +1720,7 @@ FROM pg_tablespace`,
 
   // --- Raw Measurements / Telemetry ---
   async getRawMeasurements(filterOrLimit?: number | RawMeasurementFilter): Promise<RawMeasurementEntity[]> {
-    let limit = 10000;
+    let limit = 0;
     let filter: RawMeasurementFilter = {};
 
     if (typeof filterOrLimit === 'number') {
@@ -1742,6 +1742,14 @@ FROM pg_tablespace`,
     }
     if (filter.dbType && filter.dbType !== 'ALL') {
       list = list.filter((m) => (m.dbType || '').toUpperCase() === filter.dbType!.toUpperCase());
+    }
+    if (filter.objectName && filter.objectName !== 'ALL') {
+      const targetObj = filter.objectName.toLowerCase().trim();
+      list = list.filter((m) => (m.objectName || '').toLowerCase().trim() === targetObj);
+    }
+    if (filter.attributeName && filter.attributeName !== 'ALL') {
+      const targetAttr = filter.attributeName.toLowerCase().trim();
+      list = list.filter((m) => (m.attributeName || '').toLowerCase().trim() === targetAttr);
     }
     if (filter.fromDate) {
       const fromTime = new Date(filter.fromDate).getTime();

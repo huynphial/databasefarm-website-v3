@@ -135,7 +135,7 @@ function MainAppContent() {
         api.getDatabases().catch(() => storage.getDatabases()),
         api.getDatabaseEngines().catch(() => []),
         api.getAlertNotificationMethods().catch(() => []),
-        api.getRawMeasurements({ limit: 10000 }).catch(() => []),
+        api.getRawMeasurements().catch(() => []),
         api.getMetrics().catch(() => storage.getMetrics()),
         api.getTemplates().catch(() => storage.getTemplates()),
         api.getGroups().catch(() => storage.getGroups()),

@@ -320,6 +320,8 @@ export const api = {
       if (filterOrLimit.dbId) params.append('dbId', filterOrLimit.dbId);
       if (filterOrLimit.metricId) params.append('metricId', filterOrLimit.metricId);
       if (filterOrLimit.dbType) params.append('dbType', filterOrLimit.dbType);
+      if (filterOrLimit.objectName) params.append('objectName', filterOrLimit.objectName);
+      if (filterOrLimit.attributeName) params.append('attributeName', filterOrLimit.attributeName);
       if (filterOrLimit.fromDate) params.append('fromDate', filterOrLimit.fromDate);
       if (filterOrLimit.toDate) params.append('toDate', filterOrLimit.toDate);
       if (filterOrLimit.searchTerm) params.append('searchTerm', filterOrLimit.searchTerm);

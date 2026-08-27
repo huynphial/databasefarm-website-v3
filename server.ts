@@ -712,10 +712,12 @@ async function startServer() {
   // Raw Measurements & Telemetry API
   app.get('/api/raw-measurements', async (req, res) => {
     try {
-      const limit = req.query.limit !== undefined ? parseInt(req.query.limit as string, 10) : 10000;
+      const limit = req.query.limit !== undefined ? parseInt(req.query.limit as string, 10) : 0;
       const dbId = req.query.dbId as string | undefined;
       const metricId = req.query.metricId as string | undefined;
       const dbType = req.query.dbType as string | undefined;
+      const objectName = req.query.objectName as string | undefined;
+      const attributeName = req.query.attributeName as string | undefined;
       const fromDate = req.query.fromDate as string | undefined;
       const toDate = req.query.toDate as string | undefined;
       const searchTerm = req.query.searchTerm as string | undefined;
@@ -725,6 +727,8 @@ async function startServer() {
         dbId,
         metricId,
         dbType,
+        objectName,
+        attributeName,
         fromDate,
         toDate,
         searchTerm,

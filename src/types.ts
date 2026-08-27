@@ -197,6 +197,8 @@ export interface RawMeasurementFilter {
   dbId?: string;
   metricId?: string;
   dbType?: string;
+  objectName?: string;
+  attributeName?: string;
   fromDate?: string;
   toDate?: string;
   searchTerm?: string;
