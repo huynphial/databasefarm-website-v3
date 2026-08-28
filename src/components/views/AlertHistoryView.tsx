@@ -197,7 +197,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
         const ipPort = db ? `${db.host}:${db.port}` : '127.0.0.1:3306';
         const engineBadge = db ? getDbEngineBadgeClass(db.dbType) : 'text-slate-600 bg-slate-100 border-slate-200';
         return (
-          <div>
+          <div className="font-bold text-slate-900">
             <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
               {db && (
                 <span className={`px-1.5 py-0.2 text-[9px] font-bold border rounded mt-0.5 inline-block ${engineBadge}`}>

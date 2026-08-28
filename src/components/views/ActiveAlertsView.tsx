@@ -313,7 +313,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
         const ipPort = dbObj ? `${dbObj.host}:${dbObj.port}` : '127.0.0.1:3306';
         const engineBadge = dbObj ? getDbEngineBadgeClass(dbObj.dbType) : 'text-slate-600 bg-slate-100 border-slate-200';
         return (
-          <div>
+          <div className="font-bold text-slate-900">
             <span className="font-bold text-slate-900 text-xs tracking-tight flex items-center gap-1.5">
               {dbObj && (
                 <span className={`px-1.5 py-0.2 text-[9px] font-bold border rounded mt-0.5 inline-block ${engineBadge}`}>
