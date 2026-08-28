@@ -128,7 +128,6 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
                       <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                         <tr>
                           <th className="py-2.5 px-3.5">{t('analytics.colObjectIdentifier')}</th>
-                          <th className="py-2.5 px-3.5">{t('analytics.colAttributeName')}</th>
                           <th className="py-2.5 px-3.5">{t('analytics.colMeasuredValue')}</th>
                           <th className="py-2.5 px-3.5">{t('analytics.colStatus')}</th>
                           <th className="py-2.5 px-3.5">{t('analytics.colThresholdEval')}</th>
@@ -150,9 +149,6 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
                               <td className="py-2.5 px-3.5 font-bold font-mono text-slate-900 flex items-center gap-1.5">
                                 <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block" />
                                 {row.objectName || 'INSTANCE'}
-                              </td>
-                              <td className="py-2.5 px-3.5 font-mono text-[11px] text-slate-600">
-                                {row.attributeName || 'value'}
                               </td>
                               <td className="py-2.5 px-3.5">
                                 <span className="font-mono font-bold text-slate-900 text-sm">

@@ -1956,6 +1956,16 @@ export class PrismaRepository implements IStorageRepository {
         const finAt = safeIso(r.finishedAt || r.finished_at || r.lockedAt || r.locked_at);
         const lckAt = (r.lockedAt || r.locked_at) ? safeIso(r.lockedAt || r.locked_at) : null;
 
+        // Calculate latency in ms from finished_at - locked_at
+        let calculatedLatencyMs: number | undefined = undefined;
+        if (lckAt && finAt) {
+          const tLck = new Date(lckAt).getTime();
+          const tFin = new Date(finAt).getTime();
+          if (!isNaN(tLck) && !isNaN(tFin)) {
+            calculatedLatencyMs = Math.max(0, tFin - tLck);
+          }
+        }
+
         return {
           id: safeStr(r.id),
           alertId: safeStr(r.alertId || r.alert_id || ''),
@@ -1993,6 +2003,7 @@ export class PrismaRepository implements IStorageRepository {
           payloadSummary: msgAlert || '',
           detailResponse: respDetail || respStatus || null,
           errorMessage: !isSuccess ? (respDetail || respStatus || 'Dispatch failed') : null,
+          latencyMs: calculatedLatencyMs ?? (r.latencyMs || r.latency_ms || undefined),
         };
       });
     }

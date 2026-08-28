@@ -1116,7 +1116,10 @@ async function main() {
       WHERE \`d\`.\`isEnabled\` = true 
         AND \`anm\`.\`status_on_off\` = 'ACTIVE';
     `);
+
     console.log('✅ Analytical views created successfully.');
+
+    
   } catch (err: any) {
     console.warn('⚠️ Analytical views creation skipped or unsupported in this database dialect:', err.message);
   }

@@ -16,7 +16,7 @@ import {
 import { ActiveAlertEntity, DatabaseEntity, UserRole } from '../../types';
 import { DB_ENGINES, getDbEngineBadgeClass } from '../../config/dbEngines';
 import { DataTable, Column } from '../tables/DataTable';
-import { formatTimeVN, cn } from '../../lib/utils';
+import { formatTimeVN, formatRelativeDuration, cn } from '../../lib/utils';
 import { useToast } from '../ui/Toast';
 import { useTranslation } from '../../i18n/LanguageContext';
 
@@ -53,7 +53,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
   showInfoTips = true,
 }) => {
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   // Filters & Sorting State
   const [selectedDbType, setSelectedDbType] = useState<string>('ALL');
@@ -174,7 +174,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
-      setSortOrder(field === 'createdAt' ? 'desc' : 'asc');
+      setSortOrder(field === 'createdAt' || field === 'during' ? 'desc' : 'asc');
     }
     setCurrentPage(1);
   };
@@ -211,6 +211,11 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
         const timeA = new Date(a.createdAt).getTime();
         const timeB = new Date(b.createdAt).getTime();
         primaryCmp = timeA - timeB;
+      } else if (sortField === 'during') {
+        // during: asc = shortest elapsed time (more recent first), desc = longest elapsed time (older first)
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        primaryCmp = timeB - timeA;
       } else if (sortField === 'dbName') {
         primaryCmp = a.dbName.localeCompare(b.dbName);
       } else if (sortField === 'metricName') {
@@ -234,7 +239,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       }
 
       // Secondary Tie-Breaker 2: Detected time desc
-      if (sortField !== 'createdAt') {
+      if (sortField !== 'createdAt' && sortField !== 'during') {
         const timeCmp = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         if (timeCmp !== 0) return timeCmp;
       }
@@ -315,11 +320,11 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
                   {dbObj.dbType}
                 </span>
               )}
-              {row.dbName}
+              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                {ipPort}
+              </div>
             </span>
-            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-              {ipPort}
-            </div>
+            {row.dbName}
           </div>
         );
       },
@@ -361,6 +366,17 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       cell: (row) => (
         <span className="text-slate-500 text-xs font-mono">
           {formatTimeVN(row.createdAt)}
+        </span>
+      ),
+    },
+    {
+      header: t('activeAlerts.during'),
+      accessorKey: 'during',
+      sortable: true,
+      width: '150px',
+      cell: (row) => (
+        <span className="text-slate-700 text-xs font-medium whitespace-nowrap">
+          {formatRelativeDuration(row.createdAt, language)}
         </span>
       ),
     },

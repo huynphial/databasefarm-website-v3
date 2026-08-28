@@ -172,6 +172,7 @@
     "metric": "Chỉ số",
     "incidentMessage": "Nội dung sự cố",
     "detected": "Thời điểm phát hiện",
+    "during": "Thời gian",
     "action": "Hành động",
     "ack": "Xác nhận",
     "clear": "Đóng sự cố",
@@ -453,6 +454,7 @@
   "analytics": {
     "title": "Phân tích cơ sở dữ liệu",
     "search": "Tìm kiếm",
+    "metric_data_points": "Tổng số dữ liệu đã đo",
     "selectDatabase": "Chọn cơ sở dữ liệu mục tiêu...",
     "allEngineTypes": "Tất cả loại hệ quản trị",
     "searchPlaceholder": "Tìm kiếm tên CSDL, máy chủ, hoặc hệ quản trị...",
@@ -743,8 +745,9 @@
     "colMetric": "Chỉ số",
     "colMessage": "Nội dung cảnh báo",
     "colRaisedAt": "Thời điểm kích hoạt",
-    "colClearedResolver": "Người xử lý",
-    "colClearedState": "Thời điểm đóng"
+    "colClearedState": "Thời điểm đóng",
+    "colDuring": "Thời gian",
+    "colClearedResolver": "Người xử lý"
   },
   "alertNotifications": {
     "title": "Nhật ký gửi thông báo cảnh báo",

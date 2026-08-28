@@ -38,8 +38,10 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
 
       <div className="divide-y divide-rose-100 overflow-x-auto">
         {activeAlerts.map((alert) => {
-          const hasObject = Boolean(alert.objectName && alert.objectName.trim() !== '');
-          const alertTitle = hasObject ? `${alert.metricName} of ${alert.objectName}` : alert.metricName;
+          const hasObject = Boolean(alert.objectName && alert.objectName.trim() !== '' && alert.objectName.trim() !== 'DATABASEFARM_METRIC');
+          const hasAttr = Boolean(alert.attributeName && alert.attributeName.trim() !== '' && alert.attributeName.trim() !== 'value');
+          const metricTitleL1 = hasObject ? `${alert.metricName} of ${alert.objectName}` : alert.metricName;
+          const alertTitle = hasAttr ? `${metricTitleL1}.${alert.attributeName}` : metricTitleL1;
           const isAck = alert.status === 'ACKNOWLEDGED' || Boolean(alert.acknowledgedAt);
 
           return (
@@ -66,8 +68,10 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
                     {alertTitle}
                   </span>
                 </div>
-                <p className="text-slate-600 font-semibold truncate">{alert.message}</p>
-                <p className="text-[12px] text-slate-600 font-semibold pt-0.5">{t('analytics.triggered')} {formatTimeVN(alert.createdAt)}</p>
+                <div className="gap-2 px-5">
+                  <p className="text-slate-600 font-semibold truncate px-8">{alert.message}</p>
+                  <p className="text-[12px] text-slate-600 font-semibold pt-0.5 px-8">{t('analytics.triggered')} {formatTimeVN(alert.createdAt)}</p>
+                </div>
               </div>
 
               

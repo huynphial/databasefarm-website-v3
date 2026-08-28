@@ -172,6 +172,7 @@
     "metric": "Metric",
     "incidentMessage": "Incident Message",
     "detected": "Detected",
+    "during": "During",
     "action": "Action",
     "ack": "Ack",
     "clear": "Clear",
@@ -453,6 +454,7 @@
   "analytics": {
     "title": "Analytics Database",
     "search": "Search",
+    "metric_data_points": "Total Metric Data History",
     "selectDatabase": "Select Target Database...",
     "allEngineTypes": "All Engine Types",
     "searchPlaceholder": "Search database name, host, or engine...",
@@ -743,8 +745,9 @@
     "colMetric": "Metric",
     "colMessage": "Incident Message",
     "colRaisedAt": "Raised At",
-    "colClearedResolver": "Cleared Resolver",
-    "colClearedState": "Cleared At"
+    "colClearedState": "Cleared At",
+    "colDuring": "During",
+    "colClearedResolver": "Cleared Resolver"
   },
   "alertNotifications": {
     "title": "Alert Notification Log",

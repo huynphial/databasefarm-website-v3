@@ -3,7 +3,7 @@ import { History, Search, Calendar, Server, Filter, RefreshCw, CheckCircle2, Clo
 import { AlertHistoryEntity, DatabaseEntity } from '../../types';
 import { DB_ENGINES, getDbEngineBadgeClass } from '../../config/dbEngines';
 import { DataTable, Column } from '../tables/DataTable';
-import { formatTimeVN, cn } from '../../lib/utils';
+import { formatTimeVN, formatRelativeDuration, cn } from '../../lib/utils';
 import { useToast } from '../ui/Toast';
 import { useTranslation } from '../../i18n';
 
@@ -20,10 +20,22 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
   onRefresh,
   showInfoTips = true,
 }) => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [sortField, setSortField] = useState<string>('clearedAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'createdAt' || field === 'clearedAt' || field === 'during' ? 'desc' : 'asc');
+    }
+    setCurrentPage(1);
+  };
 
   // Compute 30 days ago and today as default date range
   const defaultToDate = useMemo(() => {
@@ -72,7 +84,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
   }, [databases]);
 
   const filteredHistory = useMemo(() => {
-    return alertHistory.filter((item) => {
+    const list = alertHistory.filter((item) => {
       // Date Range Filter (inclusive of entire days)
       if (fromDate) {
         const itemDate = new Date(item.createdAt).toISOString().split('T')[0];
@@ -103,7 +115,43 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
 
       return matchesSearch && matchesDb && matchesLevel;
     });
-  }, [alertHistory, fromDate, toDate, searchTerm, selectedDbType, selectedDbId, selectedLevel, dbMap]);
+
+    return list.sort((a, b) => {
+      let primaryCmp = 0;
+      if (sortField === 'createdAt') {
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        primaryCmp = timeA - timeB;
+      } else if (sortField === 'clearedAt') {
+        const timeA = new Date(a.clearedAt).getTime();
+        const timeB = new Date(b.clearedAt).getTime();
+        primaryCmp = timeA - timeB;
+      } else if (sortField === 'during') {
+        const durA = Math.max(0, new Date(a.clearedAt).getTime() - new Date(a.createdAt).getTime());
+        const durB = Math.max(0, new Date(b.clearedAt).getTime() - new Date(b.createdAt).getTime());
+        primaryCmp = durA - durB;
+      } else if (sortField === 'dbName') {
+        primaryCmp = a.dbName.localeCompare(b.dbName);
+      } else if (sortField === 'metricName') {
+        primaryCmp = a.metricName.localeCompare(b.metricName);
+      } else if (sortField === 'alertLevel') {
+        const severityRank: Record<string, number> = { DOWN: 4, CRITICAL: 3, HIGH: 2, WARN: 1 };
+        primaryCmp = (severityRank[a.alertLevel] || 0) - (severityRank[b.alertLevel] || 0);
+      } else {
+        const timeA = new Date(a.clearedAt).getTime();
+        const timeB = new Date(b.clearedAt).getTime();
+        primaryCmp = timeA - timeB;
+      }
+
+      if (sortOrder === 'desc') {
+        primaryCmp = -primaryCmp;
+      }
+
+      // Tie-breaker
+      if (primaryCmp !== 0) return primaryCmp;
+      return new Date(b.clearedAt).getTime() - new Date(a.clearedAt).getTime();
+    });
+  }, [alertHistory, fromDate, toDate, searchTerm, selectedDbType, selectedDbId, selectedLevel, dbMap, sortField, sortOrder]);
 
   const totalPages = Math.ceil(filteredHistory.length / pageSize) || 1;
   const paginatedData = filteredHistory.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -111,6 +159,8 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
   const columns: Column<AlertHistoryEntity>[] = [
     {
       header: t('alertHistory.colStatusSeverity'),
+      accessorKey: 'alertLevel',
+      sortable: true,
       width: '140px',
       cell: (row) => {
         const isDispatched = row.dispatchStatus === 'DISPATCHED';
@@ -140,6 +190,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
     {
       header: t('alertHistory.colDatabase'),
       accessorKey: 'dbName',
+      sortable: true,
       width: '140px',
       cell: (row) => {
         const db = dbMap.get(row.dbId);
@@ -153,11 +204,12 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
                   {db.dbType}
                 </span>
               )}
-              {row.dbName}
+              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                {ipPort}
+              </div>
+              
             </div>
-            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-              {ipPort}
-            </div>
+            {row.dbName}
           </div>
         );
       },
@@ -165,6 +217,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
     {
       header: t('alertHistory.colMetric'),
       accessorKey: 'metricName',
+      sortable: true,
       width: '180px',
       cell: (row) => {
         const hasObj = Boolean(row.objectName && row.objectName.trim() !== 'DATABASEFARM_METRIC');
@@ -192,6 +245,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
     {
       header: t('alertHistory.colRaisedAt'),
       accessorKey: 'createdAt',
+      sortable: true,
       width: '120px',
       cell: (row) => (
         <span className="text-slate-500 text-xs font-mono">{formatTimeVN(row.createdAt)}</span>
@@ -200,6 +254,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
     {
       header: t('alertHistory.colClearedState'),
       accessorKey: 'clearedAt',
+      sortable: true,
       width: '120px',
       cell: (row) => {
         return (
@@ -211,6 +266,17 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
           </div>
         );
       },
+    },
+    {
+      header: t('alertHistory.colDuring'),
+      accessorKey: 'during',
+      sortable: true,
+      width: '140px',
+      cell: (row) => (
+        <span className="text-slate-700 text-xs font-medium whitespace-nowrap">
+          {formatRelativeDuration(row.createdAt, row.clearedAt, language)}
+        </span>
+      ),
     },
     {
       header: t('alertHistory.colClearedResolver'),
@@ -469,6 +535,9 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
             setPageSize(newSize);
             setCurrentPage(1);
           }}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          onSortChange={handleSort}
           emptyMessage="No historical alerts match the specified date range and criteria."
         />
       </div>

@@ -120,7 +120,7 @@ export const AnalyticsSummaryCards: React.FC<AnalyticsSummaryCardsProps> = ({
         <div className="flex items-center justify-between text-xs font-bold text-slate-500">
           <span className="flex items-center gap-1.5">
             <Radio className="w-4 h-4 text-indigo-500" />
-            metric_data_points
+            {t('analytics.metric_data_points')}
           </span>
           <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-extrabold">
             {t('analytics.dbTelemetry')}

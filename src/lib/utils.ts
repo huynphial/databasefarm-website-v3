@@ -92,3 +92,110 @@ export function formatTimeVN(dateString: string | Date | number | null | undefin
     return date.toLocaleString();
   }
 }
+
+function parseDateInput(val: string | Date | number | null | undefined): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  if (typeof val === 'number') {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    const sqlMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/);
+    if (sqlMatch && !trimmed.endsWith('Z')) {
+      const [, y, m, d, hh, mm, ss] = sqlMatch;
+      const parsed = new Date(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm), Number(ss));
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+    const parsed = new Date(trimmed);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+export function formatRelativeDuration(
+  startDateOrDuration: string | Date | number | null | undefined,
+  endDateOrLang?: string | Date | number | null,
+  langArg: string = 'en'
+): string {
+  if (!startDateOrDuration) return '—';
+
+  let lang = langArg;
+  let endInput: string | Date | number | null | undefined = undefined;
+
+  if (typeof endDateOrLang === 'string' && (endDateOrLang === 'en' || endDateOrLang === 'vi')) {
+    lang = endDateOrLang;
+    endInput = undefined;
+  } else if (endDateOrLang !== undefined && endDateOrLang !== null) {
+    endInput = endDateOrLang;
+  }
+
+  const startDate = parseDateInput(startDateOrDuration);
+  if (!startDate) return '—';
+
+  const endDate = endInput !== undefined ? parseDateInput(endInput) : new Date();
+  if (!endDate) return '—';
+
+  const diffMs = Math.max(0, endDate.getTime() - startDate.getTime());
+  const diffSec = Math.floor(diffMs / 1000);
+  const isVi = lang === 'vi';
+
+  if (diffSec < 60) {
+    return isVi ? `${diffSec} giây` : `${diffSec} second${diffSec !== 1 ? 's' : ''}`;
+  }
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) {
+    const remSec = diffSec % 60;
+    if (remSec > 0 && diffMin < 5) {
+      return isVi
+        ? `${diffMin} phút ${remSec} giây`
+        : `${diffMin} minute${diffMin !== 1 ? 's' : ''} ${remSec} second${remSec !== 1 ? 's' : ''}`;
+    }
+    return isVi ? `${diffMin} phút` : `${diffMin} minute${diffMin !== 1 ? 's' : ''}`;
+  }
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) {
+    const remMin = diffMin % 60;
+    if (remMin > 0) {
+      return isVi
+        ? `${diffHours} giờ ${remMin} phút`
+        : `${diffHours} hour${diffHours !== 1 ? 's' : ''} ${remMin} minute${remMin !== 1 ? 's' : ''}`;
+    }
+    return isVi ? `${diffHours} giờ` : `${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) {
+    const remHours = diffHours % 24;
+    if (remHours > 0 && diffDays < 7) {
+      return isVi
+        ? `${diffDays} ngày ${remHours} giờ`
+        : `${diffDays} day${diffDays !== 1 ? 's' : ''} ${remHours} hour${remHours !== 1 ? 's' : ''}`;
+    }
+    return isVi ? `${diffDays} ngày` : `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+  }
+
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) {
+    const remDays = diffDays % 30;
+    if (remDays > 0) {
+      return isVi
+        ? `${diffMonths} tháng ${remDays} ngày`
+        : `${diffMonths} month${diffMonths !== 1 ? 's' : ''} ${remDays} day${remDays !== 1 ? 's' : ''}`;
+    }
+    return isVi ? `${diffMonths} tháng` : `${diffMonths} month${diffMonths !== 1 ? 's' : ''}`;
+  }
+
+  const diffYears = Math.floor(diffDays / 365);
+  const remMonths = Math.floor((diffDays % 365) / 30);
+  if (remMonths > 0) {
+    return isVi
+      ? `${diffYears} năm ${remMonths} tháng`
+      : `${diffYears} year${diffYears !== 1 ? 's' : ''} ${remMonths} month${remMonths !== 1 ? 's' : ''}`;
+  }
+  return isVi ? `${diffYears} năm` : `${diffYears} year${diffYears !== 1 ? 's' : ''}`;
+}

@@ -561,6 +561,30 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     return `${Math.floor(diff / 86400)}d ago`;
   };
 
+  // Helper to calculate Latency (ms) between finished_at and locked_at from alert_notification_logs
+  const getLogLatencyMs = (log: AlertNotificationLogEntity): number | null => {
+    if (log.lockedAt && log.finishedAt) {
+      const lck = new Date(log.lockedAt).getTime();
+      const fin = new Date(log.finishedAt).getTime();
+      if (!isNaN(lck) && !isNaN(fin)) {
+        return Math.max(0, fin - lck);
+      }
+    }
+    if (typeof log.latencyMs === 'number' && !isNaN(log.latencyMs)) {
+      return log.latencyMs;
+    }
+    return null;
+  };
+
+  const formatLatencyDisplay = (ms: number | null) => {
+    if (ms == null) return '—';
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(2)}s`;
+    const mins = Math.floor(ms / 60000);
+    const secs = Math.round((ms % 60000) / 1000);
+    return `${mins}m ${secs}s`;
+  };
+
   // FILTERED QUEUE: Queue tables DO NOT filter time (as requested: "queue tables not filter time")
   const filteredQueue = useMemo(() => {
     return queue.filter((item) => {
@@ -701,17 +725,17 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
   // Compute stats based on current view
   const stats = useMemo(() => {
     const total = filteredLogs.length;
-    const dispatched = filteredLogs.filter((l) => l.status === 'DISPATCHED').length;
-    const failed = filteredLogs.filter((l) => l.status === 'FAILED').length;
+    const dispatched = filteredLogs.filter((l) => l.status === 'DISPATCHED' || l.status === 'SUCCESS' || l.responseSuccess === true).length;
+    const failed = filteredLogs.filter((l) => l.status === 'FAILED' || l.status === 'REJECTED' || l.responseSuccess === false).length;
     const pendingInQueue = filteredQueue.filter((q) => q.status === 'PENDING').length;
     const processingInQueue = filteredQueue.filter((q) => q.status === 'PROCESSING').length;
     const latencies = filteredLogs
-      .filter((l) => typeof l.latencyMs === 'number')
-      .map((l) => l.latencyMs as number);
+      .map((l) => getLogLatencyMs(l))
+      .filter((lat): lat is number => lat != null && !isNaN(lat));
     const avgLatency =
       latencies.length > 0
         ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
-        : 185;
+        : 0;
 
     return { total, dispatched, failed, pendingInQueue, processingInQueue, avgLatency };
   }, [filteredLogs, filteredQueue]);
@@ -1705,13 +1729,14 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                   <th className="py-2.5 px-3">Destination Sender IDs</th>
                   <th className="py-2.5 px-3">Message Alert</th>
                   <th className="py-2.5 px-3 text-center">Status</th>
-                  <th className="py-2.5 px-3">Detail Response / Latency</th>
+                  <th className="py-2.5 px-3 text-center">Latency</th>
+                  <th className="py-2.5 px-3">Detail Response</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {paginatedLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-400">
+                    <td colSpan={11} className="py-12 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <BellRing className="w-8 h-8 text-slate-300" />
                         <span className="font-semibold text-slate-600">No alert notification logs found</span>
@@ -1730,6 +1755,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                     const senderText = log.senderIdList || log.senderIds || '—';
                     const isSuccess = log.status === 'DISPATCHED' || log.status === 'SUCCESS' || log.responseSuccess === true;
                     const isFailed = log.status === 'FAILED' || log.status === 'REJECTED' || log.responseSuccess === false;
+                    const latencyMs = getLogLatencyMs(log);
 
                     return (
                       <tr
@@ -1873,7 +1899,38 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                           )}
                         </td>
 
-                        {/* 10. Detail Response / Latency */}
+                        {/* 10. Latency (calculated from finished_at - locked_at) */}
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          {latencyMs != null ? (
+                            <div
+                              className="inline-flex flex-col items-center"
+                              title={`Calculated from locked_at: ${log.lockedAt ? formatDateTime(log.lockedAt) : 'N/A'} → finished_at: ${log.finishedAt ? formatDateTime(log.finishedAt) : 'N/A'}`}
+                            >
+                              <span
+                                className={cn(
+                                  'font-mono text-[11px] font-bold px-2 py-0.5 rounded border inline-flex items-center gap-1 shadow-2xs',
+                                  latencyMs <= 1000
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : latencyMs <= 5000
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                                )}
+                              >
+                                <span>⚡</span>
+                                {formatLatencyDisplay(latencyMs)}
+                              </span>
+                              {log.lockedAt && log.finishedAt && (
+                                <span className="text-[9px] text-slate-400 font-mono mt-0.5">
+                                  {latencyMs} ms
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-[11px]">—</span>
+                          )}
+                        </td>
+
+                        {/* 11. Detail Response */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
                           <div className="flex flex-col gap-0.5 items-start">
                             {detailText ? (
@@ -1890,11 +1947,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                               </span>
                             ) : (
                               <span className="text-[10px] text-slate-400 font-mono">200 OK Delivered</span>
-                            )}
-                            {log.latencyMs != null && (
-                              <span className="text-[9px] font-mono text-slate-500 bg-slate-50 border border-slate-200 px-1 py-0.2 rounded inline-flex items-center gap-0.5">
-                                ⚡ {log.latencyMs}ms
-                              </span>
                             )}
                           </div>
                         </td>
@@ -2007,10 +2059,32 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                 </span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">Latency</span>
-                <span className="font-mono font-semibold text-slate-800">
-                  {selectedLog.latencyMs != null ? `${selectedLog.latencyMs} ms` : '—'}
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Latency (finished - locked)</span>
+                <span className="font-mono font-bold text-indigo-700 flex items-center gap-1">
+                  {getLogLatencyMs(selectedLog) != null ? (
+                    <>
+                      <span>⚡ {formatLatencyDisplay(getLogLatencyMs(selectedLog))}</span>
+                      <span className="text-[10px] font-normal text-slate-400">({getLogLatencyMs(selectedLog)} ms)</span>
+                    </>
+                  ) : (
+                    '—'
+                  )}
                 </span>
+              </div>
+            </div>
+
+            {/* Execution Timestamps: locked_at and finished_at */}
+            <div className="grid grid-cols-2 gap-3 bg-slate-50/60 p-2.5 rounded-lg border border-slate-200 text-[11px]">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Worker Locked At (`locked_at`)</span>
+                <span className="font-mono text-slate-700">{formatDateTime(selectedLog.lockedAt)}</span>
+                {selectedLog.lockedBy && (
+                  <span className="text-[10px] text-slate-400 font-mono block">by: {selectedLog.lockedBy}</span>
+                )}
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Finished At (`finished_at`)</span>
+                <span className="font-mono text-slate-700">{formatDateTime(selectedLog.finishedAt)}</span>
               </div>
             </div>
 
