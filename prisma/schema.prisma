@@ -320,8 +320,8 @@ model ActiveAlert {
   /// Timestamp when alert was triggered.
   createdAt      DateTime   @default(now())
 
-  database Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
-  metric   Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  database Database? @relation(fields: [dbId], references: [id], onDelete: Cascade)
+  metric   Metric?   @relation(fields: [metricId], references: [id], onDelete: Cascade)
 
   /// Constraint: Ensures unique active alert record per database, metric, object_name, and attribute_name.
   @@unique([dbId, metricId, objectName, attributeName], map: "active_alerts_dbId_metricId_key")
@@ -355,9 +355,9 @@ model AlertHistory {
   /// FK referencing user who cleared the alert (null for auto-cleared).
   clearedById      String?
 
-  database  Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
-  metric    Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
-  clearedBy User?    @relation("ClearedByUser", fields: [clearedById], references: [id], onDelete: SetNull)
+  database  Database? @relation(fields: [dbId], references: [id], onDelete: Cascade)
+  metric    Metric?   @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  clearedBy User?     @relation("ClearedByUser", fields: [clearedById], references: [id], onDelete: SetNull)
 
   @@index([dbId, createdAt])
   @@map("alert_history")
@@ -373,8 +373,8 @@ model MetricDataPoint {
   value         String
   measuredAt    DateTime @default(now()) @map("measured_at")
 
-  database Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
-  metric   Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  database Database? @relation(fields: [dbId], references: [id], onDelete: Cascade)
+  metric   Metric?   @relation(fields: [metricId], references: [id], onDelete: Cascade)
 
   @@id([id, measuredAt])
   @@index([dbId, metricId, measuredAt(sort: Desc)])

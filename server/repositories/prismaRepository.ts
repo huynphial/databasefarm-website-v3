@@ -841,9 +841,9 @@ export class PrismaRepository implements IStorageRepository {
       return {
         id: String(a.id),
         dbId: a.dbId,
-        dbName: a.database.name,
+        dbName: a.database?.name || a.dbId,
         metricId: a.metricId,
-        metricName: a.metric.name,
+        metricName: a.metric?.name || a.metricId,
         objectName: a.objectName || 'INSTANCE',
         attributeName: a.attributeName || undefined,
         alertLevel: a.alertLevel as any,
@@ -894,9 +894,9 @@ export class PrismaRepository implements IStorageRepository {
     return {
       id: String(alert.id),
       dbId: alert.dbId,
-      dbName: alert.database.name,
+      dbName: alert.database?.name || alert.dbId,
       metricId: alert.metricId,
-      metricName: alert.metric.name,
+      metricName: alert.metric?.name || alert.metricId,
       objectName: alert.objectName || 'INSTANCE',
       attributeName: alert.attributeName || undefined,
       alertLevel: alert.alertLevel as any,
@@ -1086,24 +1086,96 @@ export class PrismaRepository implements IStorageRepository {
       }
     }
 
-    const list = await (this.prisma as any).metricDataPoint.findMany({
-      where: whereDataPoint,
-      include: { database: true, metric: true },
-      orderBy: { measuredAt: 'desc' },
-      take: 5000,
-    });
+    try {
+      const list = await (this.prisma as any).metricDataPoint.findMany({
+        where: whereDataPoint,
+        include: { database: true, metric: true },
+        orderBy: { measuredAt: 'desc' },
+        take: 5000,
+      });
 
-    return list.map((m: any) => ({
-      id: m.id,
-      dbId: m.dbId || m.databaseId,
-      dbName: m.database?.name,
-      metricId: m.metricId,
-      metricName: m.metric?.name,
-      objectName: m.objectName,
-      attributeName: m.attributeName || 'value',
-      value: m.value,
-      createdAt: m.measuredAt.toISOString(),
-    }));
+      return list.map((m: any) => ({
+        id: String(m.id),
+        dbId: m.dbId || m.databaseId || '',
+        dbName: m.database?.name || m.dbName || '',
+        metricId: m.metricId || '',
+        metricName: m.metric?.name || m.metricName || '',
+        objectName: m.objectName || 'INSTANCE',
+        attributeName: m.attributeName || 'value',
+        value: m.value != null ? String(m.value) : '0',
+        createdAt: (m.measuredAt instanceof Date ? m.measuredAt : new Date(m.measuredAt || Date.now())).toISOString(),
+      }));
+    } catch (prismaErr) {
+      // Fallback 1: Query without include and map names in memory
+      try {
+        const [dbs, metrics, rawList] = await Promise.all([
+          (this.prisma as any).database.findMany({ select: { id: true, name: true } }).catch(() => []),
+          (this.prisma as any).metric.findMany({ select: { id: true, name: true } }).catch(() => []),
+          (this.prisma as any).metricDataPoint.findMany({
+            where: whereDataPoint,
+            orderBy: { measuredAt: 'desc' },
+            take: 5000,
+          }),
+        ]);
+
+        const dbMap = new Map<string, string>(dbs.map((d: any) => [d.id, d.name]));
+        const metricMap = new Map<string, string>(metrics.map((m: any) => [m.id, m.name]));
+
+        return rawList.map((m: any) => {
+          const dId = m.dbId || m.databaseId || '';
+          const mId = m.metricId || '';
+          return {
+            id: String(m.id),
+            dbId: dId,
+            dbName: dbMap.get(dId) || '',
+            metricId: mId,
+            metricName: metricMap.get(mId) || '',
+            objectName: m.objectName || 'INSTANCE',
+            attributeName: m.attributeName || 'value',
+            value: m.value != null ? String(m.value) : '0',
+            createdAt: (m.measuredAt instanceof Date ? m.measuredAt : new Date(m.measuredAt || Date.now())).toISOString(),
+          };
+        });
+      } catch (rawErr) {
+        // Fallback 2: Raw SQL with LEFT JOIN
+        try {
+          const conditions: string[] = [];
+          if (dbId && dbId !== 'ALL') conditions.push(`mdp.database_id = '${dbId.replace(/'/g, "''")}'`);
+          if (metricId && metricId !== 'ALL') conditions.push(`mdp.metric_id = '${metricId.replace(/'/g, "''")}'`);
+          if (fromDate) conditions.push(`mdp.measured_at >= '${new Date(fromDate).toISOString().slice(0, 19).replace('T', ' ')}'`);
+          if (toDate) {
+            const toDateObj = toDate.length === 10 ? new Date(`${toDate}T23:59:59.999Z`) : new Date(toDate);
+            conditions.push(`mdp.measured_at <= '${toDateObj.toISOString().slice(0, 19).replace('T', ' ')}'`);
+          }
+          const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+          const sql = `
+            SELECT mdp.id, mdp.database_id, mdp.metric_id, mdp.object_name, mdp.attribute_name, mdp.value, mdp.measured_at,
+                   d.name as db_name, m.name as metric_name
+            FROM metric_data_points mdp
+            LEFT JOIN databases d ON mdp.database_id = d.id
+            LEFT JOIN metrics m ON mdp.metric_id = m.id
+            ${whereClause}
+            ORDER BY mdp.measured_at DESC
+            LIMIT 5000
+          `;
+          const sqlRes: any[] = await (this.prisma as any).$queryRawUnsafe(sql);
+          return (sqlRes || []).map((r: any) => ({
+            id: String(r.id),
+            dbId: r.database_id || r.dbId || '',
+            dbName: r.db_name || r.dbName || '',
+            metricId: r.metric_id || r.metricId || '',
+            metricName: r.metric_name || r.metricName || '',
+            objectName: r.object_name || r.objectName || 'INSTANCE',
+            attributeName: r.attribute_name || r.attributeName || 'value',
+            value: r.value != null ? String(r.value) : '0',
+            createdAt: (r.measured_at instanceof Date ? r.measured_at : new Date(r.measured_at || Date.now())).toISOString(),
+          }));
+        } catch (finalErr) {
+          console.error('getMetricHistory error:', finalErr);
+          return [];
+        }
+      }
+    }
   }
 
   async addMetricHistory(historyData: Partial<MetricHistoryEntity>): Promise<MetricHistoryEntity> {
@@ -1120,15 +1192,15 @@ export class PrismaRepository implements IStorageRepository {
     });
 
     return {
-      id: entry.id,
+      id: String(entry.id),
       dbId: entry.dbId || entry.databaseId,
-      dbName: entry.database?.name,
+      dbName: entry.database?.name || '',
       metricId: entry.metricId,
-      metricName: entry.metric?.name,
+      metricName: entry.metric?.name || '',
       objectName: entry.objectName || 'INSTANCE',
       attributeName: entry.attributeName || 'value',
       value: entry.value,
-      createdAt: entry.measuredAt.toISOString(),
+      createdAt: (entry.measuredAt instanceof Date ? entry.measuredAt : new Date(entry.measuredAt || Date.now())).toISOString(),
     };
   }
 
