@@ -55,7 +55,7 @@ const NOTIFICATION_TOKENS = [
   { token: 'D_ALERT_SEVERITY', label: 'Alert Severity', desc: 'CRITICAL Level' },
   { token: 'D_DATABASE_NAME', label: 'DB Name', desc: 'Target database display name' },
   { token: 'D_DATABASE_TYPE', label: 'Engine Type', desc: 'e.g. ORACLE, POSTGRES' },
-  { token: 'D_DATABASE_ID', label: 'DB ID', desc: 'Database UUID identifier' },
+  { token: 'D_DATABASE_HOST', label: 'DB Hostname/IP', desc: 'Database Hostname or IP' },
   { token: 'D_DATABASE_PORT', label: 'Port', desc: 'Port number e.g. 5432' },
   { token: 'D_METRIC_NAME', label: 'Metric', desc: 'Evaluated metric name' },
   { token: 'D_OBJECT_NAME', label: 'Object', desc: 'Measured object e.g. TS_DATA' },
