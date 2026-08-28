@@ -82,7 +82,7 @@ const getDefaultNotificationMessage = (type: AlertMethodType): string => {
 
 interface AlertNotificationLogViewProps {
   queue?: AlertNotificationQueueEntity[];
-  logs: AlertNotificationLogEntity[];
+  logs?: AlertNotificationLogEntity[];
   databases: DatabaseEntity[];
   databaseEngines?: DatabaseEngineEntity[];
   alertMethods?: AlertNotificationMethodEntity[];
@@ -95,7 +95,7 @@ interface AlertNotificationLogViewProps {
 
 export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> = ({
   queue = [],
-  logs,
+  logs = [],
   databases,
   databaseEngines = [],
   alertMethods = [],
@@ -121,7 +121,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     notificationMessage: getDefaultNotificationMessage('EMAIL'),
     statusOnOff: 'ACTIVE' as 'ACTIVE' | 'INACTIVE',
     configJsonStr: JSON.stringify({
-      smtpHost: 'smtp.mailgun.org',
+      smtpHost: 'smtp.gmail.com',
       smtpPort: 587,
       smtpUser: 'alerts@dbfarm.internal',
       useTls: true,
@@ -133,9 +133,10 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     switch (type) {
       case 'EMAIL':
         return JSON.stringify({
-          smtpHost: 'smtp.thenicedata.com',
+          smtpHost: 'smtp.gmail.com',
           smtpPort: 587,
           smtpUser: 'alerts@thenicedata.com',
+          smtpPassword: '',
           useTls: true,
           fromAddress: 'Database Sentinel <noreply-alerts@thenicedata.com>',
         }, null, 2);
@@ -143,7 +144,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
         return JSON.stringify({
           botToken: 'YOUR_BOT_TOKEN_HERE',
           apiBaseUrl: 'https://api.telegram.org',
-          defaultChatTopic: 'DB_ALERTS',
           parseMode: 'HTML',
         }, null, 2);
       case 'WEBHOOK':
@@ -425,18 +425,40 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     setCurrentPage(1);
   };
 
+  // Safe timestamp parser helper
+  const parseLogTimestamp = (log: AlertNotificationLogEntity): number => {
+    const raw = log.finishedAt || log.timestamp || log.lockedAt;
+    if (!raw) return 0;
+    if (typeof raw === 'number') return raw;
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return d.getTime();
+    const s = String(raw).trim();
+    const d2 = new Date(s.replace(' ', 'T') + (s.includes('Z') || s.includes('+') ? '' : 'Z'));
+    if (!isNaN(d2.getTime())) return d2.getTime();
+    return 0;
+  };
+
   // Time boundaries in milliseconds for Log filtering
   const fromTimeMs = useMemo(() => {
-    if (timeRangePreset === 'all' || !fromDateTime) return 0;
+    if (timeRangePreset === 'all') return 0;
+    if (timeRangePreset === '1h') return Date.now() - 1 * 60 * 60 * 1000;
+    if (timeRangePreset === '6h') return Date.now() - 6 * 60 * 60 * 1000;
+    if (timeRangePreset === '24h') return Date.now() - 24 * 60 * 60 * 1000;
+    if (timeRangePreset === '3d') return Date.now() - 3 * 24 * 60 * 60 * 1000;
+    if (timeRangePreset === '7d') return Date.now() - 7 * 24 * 60 * 60 * 1000;
+    if (!fromDateTime) return 0;
     const t = new Date(fromDateTime).getTime();
     return isNaN(t) ? 0 : t;
   }, [fromDateTime, timeRangePreset]);
 
   const toTimeMs = useMemo(() => {
+    if (timeRangePreset !== 'custom') {
+      return Date.now() + 86400000;
+    }
     if (!toDateTime) return Date.now() + 86400000;
     const t = new Date(toDateTime).getTime();
     return isNaN(t) ? Date.now() + 86400000 : t;
-  }, [toDateTime]);
+  }, [toDateTime, timeRangePreset]);
 
   // DB lookup
   const dbMap = useMemo(() => {
@@ -493,7 +515,22 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
   const formatDateTime = (isoString?: string | null) => {
     if (!isoString) return '—';
     const date = new Date(isoString);
-    if (isNaN(date.getTime())) return isoString;
+    if (isNaN(date.getTime())) {
+      const d2 = new Date(String(isoString).replace(' ', 'T') + (String(isoString).includes('Z') || String(isoString).includes('+') ? '' : 'Z'));
+      if (!isNaN(d2.getTime())) {
+        return new Intl.DateTimeFormat('vi-VN', {
+          timeZone: 'Asia/Ho_Chi_Minh',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }).format(d2);
+      }
+      return isoString;
+    }
     return new Intl.DateTimeFormat('vi-VN', {
       timeZone: 'Asia/Ho_Chi_Minh',
       year: 'numeric',
@@ -508,7 +545,10 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
 
   const formatRelativeTime = (isoString?: string | null) => {
     if (!isoString) return '';
-    const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+    const date = new Date(isoString);
+    const timeMs = !isNaN(date.getTime()) ? date.getTime() : new Date(String(isoString).replace(' ', 'T')).getTime();
+    if (isNaN(timeMs)) return '';
+    const diff = Math.floor((Date.now() - timeMs) / 1000);
     if (diff < 0) {
       const future = Math.abs(diff);
       if (future < 60) return `in ${future}s`;
@@ -540,14 +580,14 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
 
   // FILTERED LOGS: Applies Time Filter (Default 24H) + Engine + Target DB + Secondary filters
   const filteredLogs = useMemo(() => {
-    return logs
+    return (logs || [])
       .filter((log) => {
         // Time window filter
-        if (fromTimeMs || toTimeMs) {
-          const logTime = new Date(log.timestamp).getTime();
-          if (!isNaN(logTime)) {
-            if (fromTimeMs && logTime < fromTimeMs) return false;
-            if (toTimeMs && logTime > toTimeMs) return false;
+        if (fromTimeMs > 0 || (timeRangePreset === 'custom' && toTimeMs)) {
+          const logTime = parseLogTimestamp(log);
+          if (logTime > 0) {
+            if (fromTimeMs > 0 && logTime < fromTimeMs) return false;
+            if (timeRangePreset === 'custom' && toTimeMs && logTime > toTimeMs) return false;
           }
         }
 
@@ -557,7 +597,8 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
           const dbType = dbObj?.dbType || '';
           const matchesEngine =
             dbType.toUpperCase() === selectedEngineType.toUpperCase() ||
-            (log.dbName && log.dbName.toUpperCase().includes(selectedEngineType.toUpperCase()));
+            (log.dbName && log.dbName.toUpperCase().includes(selectedEngineType.toUpperCase())) ||
+            (log.messageAlert && log.messageAlert.toUpperCase().includes(selectedEngineType.toUpperCase()));
           if (!matchesEngine) return false;
         }
 
@@ -565,16 +606,31 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
         if (selectedDbId !== 'ALL') {
           const matchesDb =
             log.dbId === selectedDbId ||
-            (selectedDb && log.dbName === selectedDb.name);
+            (selectedDb && (log.dbName === selectedDb.name || log.dbName === selectedDb.databaseName)) ||
+            (log.dbName && selectedDbId.toLowerCase().includes(log.dbName.toLowerCase()));
           if (!matchesDb) return false;
         }
 
         // Status filter
         if (statusFilter !== 'ALL') {
+          const isSuccess =
+            log.status === 'DISPATCHED' ||
+            log.status === 'SUCCESS' ||
+            log.responseSuccess === true ||
+            (log.responseStatus && (log.responseStatus.toUpperCase().includes('OK') || log.responseStatus.toUpperCase() === 'SUCCESS'));
+
+          const isFailed =
+            log.status === 'FAILED' ||
+            log.status === 'REJECTED' ||
+            log.responseSuccess === false ||
+            (log.responseStatus && (log.responseStatus.toUpperCase().includes('FAIL') || log.responseStatus.toUpperCase().includes('ERR')));
+
           if (statusFilter === 'DISPATCHED' || statusFilter === 'SUCCESS') {
-            if (log.status !== 'DISPATCHED' && log.status !== 'SUCCESS') return false;
+            if (!isSuccess) return false;
           } else if (statusFilter === 'FAILED') {
-            if (log.status !== 'FAILED' && log.status !== 'REJECTED') return false;
+            if (!isFailed) return false;
+          } else if (statusFilter === 'PENDING') {
+            if (log.status !== 'PENDING' && !log.lockedAt) return false;
           } else if (log.status !== statusFilter) {
             return false;
           }
@@ -587,25 +643,37 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
         }
 
         // Severity filter
-        if (severityFilter !== 'ALL' && log.alertLevel !== severityFilter) return false;
+        if (severityFilter !== 'ALL') {
+          const level = (log.alertLevel || '').toUpperCase();
+          if (level !== severityFilter.toUpperCase()) return false;
+        }
 
         // Event Type filter
-        if (eventTypeFilter !== 'ALL' && log.eventType !== eventTypeFilter) return false;
+        if (eventTypeFilter !== 'ALL') {
+          const evType = log.eventType || (log.messageAlert?.startsWith('CLEAR') ? 'CLEAR_ALERT' : 'NEW_ALERT');
+          if (evType !== eventTypeFilter) return false;
+        }
 
         // Search term
         if (searchTerm.trim()) {
           const term = searchTerm.toLowerCase();
           const matchesTerm =
             log.alertId?.toLowerCase().includes(term) ||
+            log.id?.toLowerCase().includes(term) ||
             log.dbName?.toLowerCase().includes(term) ||
             log.metricName?.toLowerCase().includes(term) ||
+            log.objectName?.toLowerCase().includes(term) ||
             log.attributeName?.toLowerCase().includes(term) ||
             (log.dispatcherName || log.dispatchMethod)?.toLowerCase().includes(term) ||
+            (log.dispatcherType || log.dispatchType)?.toLowerCase().includes(term) ||
+            log.senderIdList?.toLowerCase().includes(term) ||
             log.senderIds?.toLowerCase().includes(term) ||
             log.errorMessage?.toLowerCase().includes(term) ||
             log.payloadSummary?.toLowerCase().includes(term) ||
             log.messageAlert?.toLowerCase().includes(term) ||
             log.detailResponse?.toLowerCase().includes(term) ||
+            log.responseDetail?.toLowerCase().includes(term) ||
+            log.responseStatus?.toLowerCase().includes(term) ||
             log.eventType?.toLowerCase().includes(term);
 
           if (!matchesTerm) return false;
@@ -613,11 +681,12 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
 
         return true;
       })
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      .sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
   }, [
     logs,
     fromTimeMs,
     toTimeMs,
+    timeRangePreset,
     selectedEngineType,
     selectedDbId,
     selectedDb,
@@ -1656,7 +1725,11 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                   paginatedLogs.map((log) => {
                     const dbObj = dbMap.get(log.dbId);
                     const msgText = log.messageAlert || log.payloadSummary || '—';
-                    const detailText = log.detailResponse || log.errorMessage || null;
+                    const detailText = log.responseDetail || log.detailResponse || log.errorMessage || log.responseStatus || null;
+                    const logTimestamp = log.finishedAt || log.timestamp || log.lockedAt;
+                    const senderText = log.senderIdList || log.senderIds || '—';
+                    const isSuccess = log.status === 'DISPATCHED' || log.status === 'SUCCESS' || log.responseSuccess === true;
+                    const isFailed = log.status === 'FAILED' || log.status === 'REJECTED' || log.responseSuccess === false;
 
                     return (
                       <tr
@@ -1667,11 +1740,11 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                         {/* 1. Timestamp */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
                           <div className="font-mono text-[11px] font-semibold text-slate-800">
-                            {formatDateTime(log.timestamp)}
+                            {formatDateTime(logTimestamp)}
                           </div>
                           <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
                             <Clock className="w-2.5 h-2.5" />
-                            <span>{formatRelativeTime(log.timestamp)}</span>
+                            <span>{formatRelativeTime(logTimestamp)}</span>
                           </div>
                         </td>
 
@@ -1681,18 +1754,18 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                             <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100">
                               {log.alertId || log.id}
                             </span>
-                            {log.eventType && (
+                            {(log.eventType || log.messageAlert) && (
                               <span
                                 className={cn(
                                   'text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border uppercase',
-                                  log.eventType === 'CLEAR_ALERT'
+                                  (log.eventType === 'CLEAR_ALERT' || log.messageAlert?.startsWith('CLEAR'))
                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : log.eventType === 'NEW_ALERT' || log.eventType === 'TRIGGER'
+                                    : (log.eventType === 'NEW_ALERT' || log.eventType === 'TRIGGER' || log.messageAlert?.startsWith('NEW_ALERT'))
                                     ? 'bg-amber-50 text-amber-700 border-amber-200'
                                     : 'bg-slate-50 text-slate-600 border-slate-200'
                                 )}
                               >
-                                {log.eventType}
+                                {log.eventType || (log.messageAlert?.startsWith('CLEAR') ? 'CLEAR_ALERT' : 'NEW_ALERT')}
                               </span>
                             )}
                           </div>
@@ -1702,7 +1775,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                         <td className="py-2.5 px-3 whitespace-nowrap">
                           <div className="font-bold text-slate-900 flex items-center gap-1.5">
                             <Server className="w-3 h-3 text-slate-400" />
-                            {log.dbName}
+                            {log.dbName || (dbObj ? dbObj.name : '—')}
                           </div>
                           {dbObj && (
                             <span
@@ -1719,11 +1792,11 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                         {/* 4. Metric / Attribute */}
                         <td className="py-2.5 px-3">
                           <div className="font-semibold text-slate-800 max-w-[160px] truncate" title={log.metricName}>
-                            {log.metricName}
+                            {log.metricName || '—'}
                           </div>
-                          {log.attributeName && (
-                            <div className="text-[10px] text-slate-400 font-mono truncate max-w-[160px]" title={log.attributeName}>
-                              {log.attributeName}
+                          {(log.attributeName || log.objectName) && (
+                            <div className="text-[10px] text-slate-400 font-mono truncate max-w-[160px]" title={log.attributeName || log.objectName || ''}>
+                              {log.attributeName || log.objectName}
                             </div>
                           )}
                         </td>
@@ -1764,9 +1837,9 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                         <td className="py-2.5 px-3">
                           <div
                             className="text-[11px] font-mono text-slate-700 max-w-[160px] truncate bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200"
-                            title={log.senderIds}
+                            title={senderText}
                           >
-                            {log.senderIds || '—'}
+                            {senderText}
                           </div>
                         </td>
 
@@ -1782,20 +1855,20 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
 
                         {/* 9. Status */}
                         <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                          {log.status === 'DISPATCHED' || log.status === 'SUCCESS' ? (
+                          {isSuccess ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              {log.status}
+                              {log.status || 'DISPATCHED'}
                             </span>
-                          ) : log.status === 'FAILED' || log.status === 'REJECTED' ? (
+                          ) : isFailed ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
                               <XCircle className="w-3 h-3 text-rose-600" />
-                              {log.status}
+                              {log.status || 'FAILED'}
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
                               <Clock className="w-3 h-3 text-amber-600" />
-                              {log.status}
+                              {log.status || 'PENDING'}
                             </span>
                           )}
                         </td>
@@ -1807,7 +1880,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                               <span
                                 className={cn(
                                   'text-[10px] font-mono px-1.5 py-0.5 rounded max-w-[180px] truncate block',
-                                  log.errorMessage
+                                  isFailed
                                     ? 'text-rose-600 bg-rose-50 border border-rose-200 font-semibold'
                                     : 'text-slate-700 bg-slate-100 border border-slate-200'
                                 )}
@@ -1911,23 +1984,27 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">Timestamp</span>
-                <span className="font-mono font-semibold text-slate-800">{formatDateTime(selectedLog.timestamp)}</span>
+                <span className="font-mono font-semibold text-slate-800">
+                  {formatDateTime(selectedLog.finishedAt || selectedLog.timestamp || selectedLog.lockedAt)}
+                </span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">Status</span>
                 <span className="font-bold text-slate-900 flex items-center gap-1 mt-0.5">
-                  {selectedLog.status === 'DISPATCHED' || selectedLog.status === 'SUCCESS' ? (
-                    <span className="text-emerald-600 font-bold">✓ {selectedLog.status}</span>
-                  ) : selectedLog.status === 'FAILED' ? (
-                    <span className="text-rose-600 font-bold">✕ FAILED</span>
+                  {selectedLog.status === 'DISPATCHED' || selectedLog.status === 'SUCCESS' || selectedLog.responseSuccess === true ? (
+                    <span className="text-emerald-600 font-bold">✓ {selectedLog.status || 'DISPATCHED'}</span>
+                  ) : selectedLog.status === 'FAILED' || selectedLog.status === 'REJECTED' || selectedLog.responseSuccess === false ? (
+                    <span className="text-rose-600 font-bold">✕ {selectedLog.status || 'FAILED'}</span>
                   ) : (
-                    <span>{selectedLog.status}</span>
+                    <span>{selectedLog.status || 'PENDING'}</span>
                   )}
                 </span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">Event Type</span>
-                <span className="font-mono font-bold text-indigo-700">{selectedLog.eventType || 'NEW_ALERT'}</span>
+                <span className="font-mono font-bold text-indigo-700">
+                  {selectedLog.eventType || (selectedLog.messageAlert?.startsWith('CLEAR') ? 'CLEAR_ALERT' : 'NEW_ALERT')}
+                </span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">Latency</span>
@@ -1945,9 +2022,11 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">Metric & Attribute</span>
-                <span className="font-bold text-slate-900">{selectedLog.metricName}</span>
-                {selectedLog.attributeName && (
-                  <span className="text-[10px] font-mono text-slate-500 block">{selectedLog.attributeName}</span>
+                <span className="font-bold text-slate-900">{selectedLog.metricName || '—'}</span>
+                {(selectedLog.attributeName || selectedLog.objectName) && (
+                  <span className="text-[10px] font-mono text-slate-500 block">
+                    {selectedLog.attributeName || selectedLog.objectName}
+                  </span>
                 )}
               </div>
               <div>
@@ -1966,9 +2045,9 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[11px] font-bold text-slate-700">Destination Sender IDs / Recipients:</span>
-                {selectedLog.senderIds && (
+                {(selectedLog.senderIdList || selectedLog.senderIds) && (
                   <button
-                    onClick={() => handleCopyText(selectedLog.senderIds, 'Sender IDs')}
+                    onClick={() => handleCopyText((selectedLog.senderIdList || selectedLog.senderIds)!, 'Sender IDs')}
                     className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
                   >
                     {copiedField === 'Sender IDs' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
@@ -1977,7 +2056,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                 )}
               </div>
               <div className="bg-slate-100 p-2.5 rounded-lg font-mono text-slate-800 break-all select-all border border-slate-200">
-                {selectedLog.senderIds || '—'}
+                {selectedLog.senderIdList || selectedLog.senderIds || '—'}
               </div>
             </div>
 
@@ -2001,12 +2080,12 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
             </div>
 
             {/* Detail Response */}
-            {selectedLog.detailResponse && (
+            {(selectedLog.responseDetail || selectedLog.detailResponse) && (
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] font-bold text-slate-700">Detail API Response (`detail_response`):</span>
                   <button
-                    onClick={() => handleCopyText(selectedLog.detailResponse!, 'Detail Response')}
+                    onClick={() => handleCopyText((selectedLog.responseDetail || selectedLog.detailResponse)!, 'Detail Response')}
                     className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
                   >
                     {copiedField === 'Detail Response' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
@@ -2014,16 +2093,18 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                   </button>
                 </div>
                 <div className="bg-slate-100 p-2.5 rounded-lg font-mono text-[11px] text-slate-800 break-all border border-slate-200">
-                  {selectedLog.detailResponse}
+                  {selectedLog.responseDetail || selectedLog.detailResponse}
                 </div>
               </div>
             )}
 
             {/* Error Message */}
-            {selectedLog.errorMessage && (
+            {(selectedLog.errorMessage || (!selectedLog.responseSuccess && selectedLog.responseStatus && selectedLog.responseStatus !== 'SUCCESS')) && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800">
                 <span className="font-bold block mb-0.5">Gateway Error Response (`error_message`):</span>
-                <span className="font-mono text-[11px] break-all">{selectedLog.errorMessage}</span>
+                <span className="font-mono text-[11px] break-all">
+                  {selectedLog.errorMessage || selectedLog.responseStatus}
+                </span>
               </div>
             )}
 

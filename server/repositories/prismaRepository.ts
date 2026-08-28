@@ -1789,6 +1789,25 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async getAlertNotificationLogs(): Promise<AlertNotificationLogEntity[]> {
+    const safeIso = (val: any): string => {
+      if (!val) return new Date().toISOString();
+      if (val instanceof Date) {
+        return isNaN(val.getTime()) ? new Date().toISOString() : val.toISOString();
+      }
+      const s = String(val).trim();
+      const d1 = new Date(s);
+      if (!isNaN(d1.getTime())) return d1.toISOString();
+      const d2 = new Date(s.replace(' ', 'T') + (s.includes('Z') || s.includes('+') ? '' : 'Z'));
+      if (!isNaN(d2.getTime())) return d2.toISOString();
+      return s || new Date().toISOString();
+    };
+
+    const safeStr = (val: any): string => {
+      if (val == null) return '';
+      if (typeof val === 'bigint') return val.toString();
+      return String(val);
+    };
+
     let records: any[] = [];
     try {
       if ((this.prisma as any).alertNotificationLog) {
@@ -1829,22 +1848,23 @@ export class PrismaRepository implements IStorageRepository {
         const dispType = r.dispatcherType || r.dispatcher_type || 'EMAIL';
         const dispName = r.dispatcherName || r.dispatcher_name || '';
         const senderIds = r.senderIdList || r.sender_id_list || '';
-        const finAt = r.finishedAt || r.finished_at || r.lockedAt || r.locked_at || new Date().toISOString();
+        const finAt = safeIso(r.finishedAt || r.finished_at || r.lockedAt || r.locked_at);
+        const lckAt = (r.lockedAt || r.locked_at) ? safeIso(r.lockedAt || r.locked_at) : null;
 
         return {
-          id: String(r.id),
-          alertId: String(r.alertId || r.alert_id || ''),
+          id: safeStr(r.id),
+          alertId: safeStr(r.alertId || r.alert_id || ''),
           alertLevel: r.alertLevel || r.alert_level || 'WARN',
-          dbId: r.dbId || r.db_id || '',
+          dbId: safeStr(r.dbId || r.db_id || ''),
           dbName: r.dbName || r.db_name || '',
-          metricId: r.metricId || r.metric_id || null,
+          metricId: (r.metricId || r.metric_id) ? safeStr(r.metricId || r.metric_id) : null,
           metricName: r.metricName || r.metric_name || '',
           objectName: r.objectName || r.object_name || null,
           attributeName: r.attributeName || r.attribute_name || null,
-          value: r.value != null ? String(r.value) : null,
+          value: r.value != null ? safeStr(r.value) : null,
           messageAlert: msgAlert,
           senderIdList: senderIds,
-          dispatcherId: r.dispatcherId || r.dispatcher_id || null,
+          dispatcherId: (r.dispatcherId || r.dispatcher_id) ? safeStr(r.dispatcherId || r.dispatcher_id) : null,
           dispatcherName: dispName,
           dispatcherType: dispType,
           dispatcherConfig:
@@ -1854,13 +1874,13 @@ export class PrismaRepository implements IStorageRepository {
           responseSuccess: isSuccess,
           responseStatus: respStatus,
           responseDetail: respDetail,
-          lockedAt: (r.lockedAt || r.locked_at) ? new Date(r.lockedAt || r.locked_at).toISOString() : null,
+          lockedAt: lckAt,
           lockedBy: r.lockedBy || r.locked_by || null,
-          finishedAt: new Date(finAt).toISOString(),
+          finishedAt: finAt,
 
           // Compatibility fields for UI table views & filters
-          timestamp: new Date(finAt).toISOString(),
-          eventType: r.eventType || r.event_type || 'NEW_ALERT',
+          timestamp: finAt,
+          eventType: r.eventType || r.event_type || (msgAlert?.startsWith('CLEAR') ? 'CLEAR_ALERT' : 'NEW_ALERT'),
           dispatchMethod: dispName,
           dispatchType: dispType,
           senderIds: senderIds,
@@ -1876,6 +1896,25 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async getAlertNotificationQueue(): Promise<AlertNotificationQueueEntity[]> {
+    const safeIso = (val: any): string => {
+      if (!val) return new Date().toISOString();
+      if (val instanceof Date) {
+        return isNaN(val.getTime()) ? new Date().toISOString() : val.toISOString();
+      }
+      const s = String(val).trim();
+      const d1 = new Date(s);
+      if (!isNaN(d1.getTime())) return d1.toISOString();
+      const d2 = new Date(s.replace(' ', 'T') + (s.includes('Z') || s.includes('+') ? '' : 'Z'));
+      if (!isNaN(d2.getTime())) return d2.toISOString();
+      return s || new Date().toISOString();
+    };
+
+    const safeStr = (val: any): string => {
+      if (val == null) return '';
+      if (typeof val === 'bigint') return val.toString();
+      return String(val);
+    };
+
     let records: any[] = [];
     try {
       if ((this.prisma as any).alertNotificationQueue) {
@@ -1907,34 +1946,35 @@ export class PrismaRepository implements IStorageRepository {
         const dispType = r.dispatcherType || r.dispatcher_type || 'TELEGRAM';
         const dispName = r.dispatcherName || r.dispatcher_name || null;
         const msgAlert = r.messageAlert || r.message_alert || null;
+        const lckAt = (r.lockedAt || r.locked_at) ? safeIso(r.lockedAt || r.locked_at) : null;
 
         return {
-          id: String(r.id),
-          alertId: String(r.alertId || r.alert_id || ''),
+          id: safeStr(r.id),
+          alertId: safeStr(r.alertId || r.alert_id || ''),
           alertLevel: r.alertLevel || r.alert_level || 'WARN',
-          dbId: r.dbId || r.db_id || '',
+          dbId: safeStr(r.dbId || r.db_id || ''),
           dbName: r.dbName || r.db_name || '',
-          metricId: r.metricId || r.metric_id || null,
+          metricId: (r.metricId || r.metric_id) ? safeStr(r.metricId || r.metric_id) : null,
           metricName: r.metricName || r.metric_name || '',
           objectName: r.objectName || r.object_name || null,
           attributeName: r.attributeName || r.attribute_name || null,
-          value: r.value != null ? String(r.value) : null,
+          value: r.value != null ? safeStr(r.value) : null,
           messageAlert: msgAlert,
           senderIdList: r.senderIdList || r.sender_id_list || null,
-          dispatcherId: r.dispatcherId || r.dispatcher_id || null,
+          dispatcherId: (r.dispatcherId || r.dispatcher_id) ? safeStr(r.dispatcherId || r.dispatcher_id) : null,
           dispatcherName: dispName,
           dispatcherType: dispType,
           dispatcherConfig:
             typeof (r.dispatcherConfig || r.dispatcher_config) === 'object'
               ? JSON.stringify(r.dispatcherConfig || r.dispatcher_config)
               : (r.dispatcherConfig || r.dispatcher_config || null),
-          lockedAt: (r.lockedAt || r.locked_at) ? new Date(r.lockedAt || r.locked_at).toISOString() : null,
+          lockedAt: lckAt,
           lockedBy: r.lockedBy || r.locked_by || null,
 
           // Compatibility fields for UI
           status: isLocked ? 'PROCESSING' : 'PENDING',
           eventType: 'TRIGGER',
-          scheduledAt: (r.lockedAt || r.locked_at) ? new Date(r.lockedAt || r.locked_at).toISOString() : new Date().toISOString(),
+          scheduledAt: lckAt || new Date().toISOString(),
           createdAt: new Date().toISOString(),
         };
       });
