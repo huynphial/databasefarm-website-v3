@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { PrismaClient, Role, DbType, ValueType, AlertLevel } from '@prisma/client';
 import { IStorageRepository } from './types';
 import { encryptPassword, decryptPassword } from '../utils/crypto';
+import { sqlLogger } from '../utils/sqlLogger';
 import {
   User,
   DatabaseEntity,
@@ -28,7 +29,39 @@ export class PrismaRepository implements IStorageRepository {
   private prisma: PrismaClient;
 
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = new (PrismaClient as any)({
+      log: [
+        { emit: 'event', level: 'query' },
+        { emit: 'event', level: 'error' },
+        { emit: 'event', level: 'warn' },
+        { emit: 'event', level: 'info' },
+      ],
+    });
+
+    // Attach SQL logger to log all database queries, execution duration, and parameters
+    (this.prisma as any).$on('query', (e: any) => {
+      sqlLogger.logQuery({
+        query: e.query,
+        params: e.params,
+        duration: e.duration,
+        target: e.target,
+        timestamp: e.timestamp,
+        context: 'Prisma:Query',
+      });
+    });
+
+    // Log query execution errors
+    (this.prisma as any).$on('error', (e: any) => {
+      sqlLogger.logError('Prisma Query Execution Error', e.message || e, e.target);
+    });
+
+    // Log Prisma warnings
+    (this.prisma as any).$on('warn', (e: any) => {
+      sqlLogger.logQuery({
+        query: `[WARNING] ${e.message || e}`,
+        context: 'Prisma:Warn',
+      });
+    });
   }
 
   getStorageType(): 'prisma' | 'memory' {
