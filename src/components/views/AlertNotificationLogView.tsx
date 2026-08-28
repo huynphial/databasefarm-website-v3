@@ -1303,11 +1303,11 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="py-2.5 px-3">Queue ID</th>
                 <th className="py-2.5 px-3">Alert ID</th>
                 <th className="py-2.5 px-3">Database Instance</th>
                 <th className="py-2.5 px-3">Metric / Attribute</th>
                 <th className="py-2.5 px-3 text-center">Severity</th>
+                <th className="py-2.5 px-3">Message Alert</th>
                 <th className="py-2.5 px-3">Dispatcher / Channel</th>
                 <th className="py-2.5 px-3 text-center">Status</th>
                 <th className="py-2.5 px-3">Locked By / Worker</th>
@@ -1332,13 +1332,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                   const dbObj = dbMap.get(item.dbId);
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      {/* ID */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className="font-mono text-[11px] font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                          #{item.id}
-                        </span>
-                      </td>
-
                       {/* Alert ID */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
                         <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100">
@@ -1397,6 +1390,17 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200 font-mono">
                             DOWN
                           </span>
+                        )}
+                      </td>
+
+                      {/* Message Alert */}
+                      <td className="py-2.5 px-3 min-w-[200px] max-w-[320px]">
+                        {item.messageAlert ? (
+                          <div className="text-[11px] text-slate-700 font-mono line-clamp-2 bg-slate-50 p-1.5 rounded border border-slate-200/80 break-words" title={item.messageAlert}>
+                            {item.messageAlert}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic text-[11px]">-</span>
                         )}
                       </td>
 
