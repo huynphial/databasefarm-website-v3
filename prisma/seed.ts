@@ -107,9 +107,9 @@ async function main() {
       id: 'meth-email-01',
       name: 'Corporate SMTP Dispatcher',
       type: 'EMAIL',
-      notificationMessage: 'D_NOTIFICATION_TYPE: <b>D_DATABASE_TYPE: D_DATABASE_NAME</b> (ID: D_DATABASE_HOST:D_DATABASE_PORT)\nMetric: <b>D_METRIC_NAME</b>\nObject: D_OBJECT_NAME | Attr: D_ATTR_NAME\nValue: <code>D_ALERT_VALUE</code>\nDetails: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT',
+      notificationMessage: 'D_ALERT_SEVERITY: <b>D_DATABASE_NAME</b> \n🔸DB: D_DATABASE_TYPE\n🔸IP: D_DATABASE_HOST:D_DATABASE_PORT\n🔸Metric: <b>D_METRIC_NAME</b>\n🔸Object: D_OBJECT_NAME\n🔸Attr: D_ATTR_NAME\n🔸Value: D_ALERT_VALUE\n🔸Created At: D_ALERT_CREATED_AT\n--------------------------\n🔹Details: D_ALERT_MESSAGE',
       configJson: {
-        smtpHost: 'smtp.thenicedata.com',
+        smtpHost: 'smtp.gmail.com',
         smtpPort: 587,
         smtpUser: 'alerts@thenicedata.com',
         smtpPassword: '',
@@ -122,7 +122,7 @@ async function main() {
       id: 'meth-tg-02',
       name: 'Telegram Incident Operations Bot',
       type: 'TELEGRAM',
-      notificationMessage: 'D_NOTIFICATION_TYPE: </b> 🚨\nDatabase: <b>D_DATABASE_TYPE: D_DATABASE_NAME</b> (ID: D_DATABASE_HOST:D_DATABASE_PORT)\nMetric: <b>D_METRIC_NAME</b>\nObject: D_OBJECT_NAME | Attr: D_ATTR_NAME\nValue: <code>D_ALERT_VALUE</code>\nDetails: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT',
+      notificationMessage: 'D_ALERT_SEVERITY: <b>D_DATABASE_NAME</b> \n🔸DB: D_DATABASE_TYPE\n🔸IP: D_DATABASE_HOST:D_DATABASE_PORT\n🔸Metric: <b>D_METRIC_NAME</b>\n🔸Object: D_OBJECT_NAME\n🔸Attr: D_ATTR_NAME\n🔸Value: D_ALERT_VALUE\n🔸Created At: D_ALERT_CREATED_AT\n--------------------------\n🔹Details: D_ALERT_MESSAGE',
       configJson: {
         botToken: '6829103847:AAH9f_KzL2e-wZ5qM7Nx982Qp',
         apiBaseUrl: 'https://api.telegram.org',
