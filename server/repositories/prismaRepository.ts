@@ -2105,8 +2105,8 @@ export class PrismaRepository implements IStorageRepository {
       try {
         const isoCutoff = cutoffDate.toISOString().slice(0, 19).replace('T', ' ');
         const whereClause = dbId === 'ALL'
-          ? `WHERE timestamp <= '${isoCutoff}'`
-          : `WHERE db_id = '${dbId}' AND timestamp <= '${isoCutoff}'`;
+          ? `WHERE finished_at <= '${isoCutoff}'`
+          : `WHERE db_id = '${dbId}' AND finished_at <= '${isoCutoff}'`;
         const rawRes = await (this.prisma as any).$executeRawUnsafe(`DELETE FROM alert_notification_logs ${whereClause}`);
         logsCount = typeof rawRes === 'number' ? rawRes : 0;
       } catch (rawErr) {
