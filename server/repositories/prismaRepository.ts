@@ -2093,7 +2093,7 @@ export class PrismaRepository implements IStorageRepository {
       const logsRes = await (this.prisma as any).alertNotificationLog?.deleteMany({
         where: {
           ...dbFilter,
-          timestamp: { lte: cutoffDate },
+          finishedAt: { lte: cutoffDate },
         },
       });
       logsCount = logsRes?.count || 0;
