@@ -1789,92 +1789,158 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async getAlertNotificationLogs(): Promise<AlertNotificationLogEntity[]> {
+    let records: any[] = [];
     try {
-      const records = await (this.prisma as any).alertNotificationLog?.findMany({
-        orderBy: { finishedAt: 'desc' },
-      });
-      if (records && records.length > 0) {
-        return records.map((r: any) => ({
-          id: String(r.id),
-          alertId: r.alertId || '',
-          alertLevel: r.alertLevel || 'WARN',
-          dbId: r.dbId || '',
-          dbName: r.dbName || '',
-          metricId: r.metricId || null,
-          metricName: r.metricName || '',
-          objectName: r.objectName || null,
-          attributeName: r.attributeName || null,
-          value: r.value != null ? String(r.value) : null,
-          messageAlert: r.messageAlert || null,
-          senderIdList: r.senderIdList || null,
-          dispatcherId: r.dispatcherId || null,
-          dispatcherName: r.dispatcherName || null,
-          dispatcherType: r.dispatcherType || null,
-          dispatcherConfig: r.dispatcherConfig || null,
-          responseSuccess: r.responseSuccess ?? true,
-          responseStatus: r.responseStatus || null,
-          responseDetail: r.responseDetail || null,
-          lockedAt: r.lockedAt ? new Date(r.lockedAt).toISOString() : null,
-          lockedBy: r.lockedBy || null,
-          finishedAt: r.finishedAt ? new Date(r.finishedAt).toISOString() : new Date().toISOString(),
-
-          // Compatibility fields for UI
-          timestamp: r.finishedAt ? new Date(r.finishedAt).toISOString() : new Date().toISOString(),
-          eventType: 'NEW_ALERT',
-          dispatchMethod: r.dispatcherName || '',
-          dispatchType: r.dispatcherType || 'TELEGRAM',
-          senderIds: r.senderIdList || '',
-          status: r.responseSuccess === false ? 'FAILED' : 'DISPATCHED',
-          payloadSummary: r.messageAlert || '',
-          detailResponse: r.responseDetail || r.responseStatus || null,
-          errorMessage: r.responseSuccess === false ? (r.responseDetail || r.responseStatus) : null,
-        }));
+      if ((this.prisma as any).alertNotificationLog) {
+        records = await (this.prisma as any).alertNotificationLog.findMany({
+          orderBy: { finishedAt: 'desc' },
+        });
       }
-      return [];
     } catch (e) {
-      console.warn('Prisma getAlertNotificationLogs error:', e);
-      return [];
+      console.warn('Prisma alertNotificationLog.findMany error:', e);
     }
+
+    if (!records || records.length === 0) {
+      try {
+        records = await (this.prisma as any).$queryRawUnsafe(
+          'SELECT * FROM alert_notification_log ORDER BY finished_at DESC LIMIT 500'
+        );
+      } catch (e1) {
+        try {
+          records = await (this.prisma as any).$queryRawUnsafe(
+            'SELECT * FROM alert_notification_logs ORDER BY finished_at DESC LIMIT 500'
+          );
+        } catch (e2) {}
+      }
+    }
+
+    if (records && records.length > 0) {
+      return records.map((r: any) => {
+        const isSuccess =
+          r.responseStatus === 'SUCCESS' ||
+          r.response_status === 'SUCCESS' ||
+          r.response_success === 1 ||
+          r.response_success === true ||
+          (r.responseSuccess === true && r.responseStatus !== 'FAILED' && r.response_status !== 'FAILED');
+
+        const respStatus = r.responseStatus || r.response_status || (isSuccess ? 'SUCCESS' : 'FAILED');
+        const respDetail = r.responseDetail || r.response_detail || null;
+        const msgAlert = r.messageAlert || r.message_alert || null;
+        const dispType = r.dispatcherType || r.dispatcher_type || 'EMAIL';
+        const dispName = r.dispatcherName || r.dispatcher_name || '';
+        const senderIds = r.senderIdList || r.sender_id_list || '';
+        const finAt = r.finishedAt || r.finished_at || r.lockedAt || r.locked_at || new Date().toISOString();
+
+        return {
+          id: String(r.id),
+          alertId: String(r.alertId || r.alert_id || ''),
+          alertLevel: r.alertLevel || r.alert_level || 'WARN',
+          dbId: r.dbId || r.db_id || '',
+          dbName: r.dbName || r.db_name || '',
+          metricId: r.metricId || r.metric_id || null,
+          metricName: r.metricName || r.metric_name || '',
+          objectName: r.objectName || r.object_name || null,
+          attributeName: r.attributeName || r.attribute_name || null,
+          value: r.value != null ? String(r.value) : null,
+          messageAlert: msgAlert,
+          senderIdList: senderIds,
+          dispatcherId: r.dispatcherId || r.dispatcher_id || null,
+          dispatcherName: dispName,
+          dispatcherType: dispType,
+          dispatcherConfig:
+            typeof (r.dispatcherConfig || r.dispatcher_config) === 'object'
+              ? JSON.stringify(r.dispatcherConfig || r.dispatcher_config)
+              : (r.dispatcherConfig || r.dispatcher_config || null),
+          responseSuccess: isSuccess,
+          responseStatus: respStatus,
+          responseDetail: respDetail,
+          lockedAt: (r.lockedAt || r.locked_at) ? new Date(r.lockedAt || r.locked_at).toISOString() : null,
+          lockedBy: r.lockedBy || r.locked_by || null,
+          finishedAt: new Date(finAt).toISOString(),
+
+          // Compatibility fields for UI table views & filters
+          timestamp: new Date(finAt).toISOString(),
+          eventType: r.eventType || r.event_type || 'NEW_ALERT',
+          dispatchMethod: dispName,
+          dispatchType: dispType,
+          senderIds: senderIds,
+          status: isSuccess ? 'DISPATCHED' : 'FAILED',
+          payloadSummary: msgAlert || '',
+          detailResponse: respDetail || respStatus || null,
+          errorMessage: !isSuccess ? (respDetail || respStatus || 'Dispatch failed') : null,
+        };
+      });
+    }
+
+    return [];
   }
 
   async getAlertNotificationQueue(): Promise<AlertNotificationQueueEntity[]> {
+    let records: any[] = [];
     try {
-      const records = await (this.prisma as any).alertNotificationQueue?.findMany({
-        orderBy: { id: 'asc' },
-      });
-      if (records && records.length > 0) {
-        return records.map((r: any) => ({
+      if ((this.prisma as any).alertNotificationQueue) {
+        records = await (this.prisma as any).alertNotificationQueue.findMany({
+          orderBy: { id: 'asc' },
+        });
+      }
+    } catch (e) {
+      console.warn('Prisma alertNotificationQueue.findMany error:', e);
+    }
+
+    if (!records || records.length === 0) {
+      try {
+        records = await (this.prisma as any).$queryRawUnsafe(
+          'SELECT * FROM alert_notification_queue ORDER BY id ASC LIMIT 500'
+        );
+      } catch (e1) {
+        try {
+          records = await (this.prisma as any).$queryRawUnsafe(
+            'SELECT * FROM alert_notification_queues ORDER BY id ASC LIMIT 500'
+          );
+        } catch (e2) {}
+      }
+    }
+
+    if (records && records.length > 0) {
+      return records.map((r: any) => {
+        const isLocked = !!(r.lockedBy || r.locked_by || r.lockedAt || r.locked_at);
+        const dispType = r.dispatcherType || r.dispatcher_type || 'TELEGRAM';
+        const dispName = r.dispatcherName || r.dispatcher_name || null;
+        const msgAlert = r.messageAlert || r.message_alert || null;
+
+        return {
           id: String(r.id),
-          alertId: r.alertId || '',
-          alertLevel: r.alertLevel || 'WARN',
-          dbId: r.dbId || '',
-          dbName: r.dbName || '',
-          metricId: r.metricId || null,
-          metricName: r.metricName || '',
-          objectName: r.objectName || null,
-          attributeName: r.attributeName || null,
+          alertId: String(r.alertId || r.alert_id || ''),
+          alertLevel: r.alertLevel || r.alert_level || 'WARN',
+          dbId: r.dbId || r.db_id || '',
+          dbName: r.dbName || r.db_name || '',
+          metricId: r.metricId || r.metric_id || null,
+          metricName: r.metricName || r.metric_name || '',
+          objectName: r.objectName || r.object_name || null,
+          attributeName: r.attributeName || r.attribute_name || null,
           value: r.value != null ? String(r.value) : null,
-          messageAlert: r.messageAlert || null,
-          senderIdList: r.senderIdList || null,
-          dispatcherId: r.dispatcherId || null,
-          dispatcherName: r.dispatcherName || null,
-          dispatcherType: r.dispatcherType || null,
-          dispatcherConfig: r.dispatcherConfig || null,
-          lockedAt: r.lockedAt ? new Date(r.lockedAt).toISOString() : null,
-          lockedBy: r.lockedBy || null,
+          messageAlert: msgAlert,
+          senderIdList: r.senderIdList || r.sender_id_list || null,
+          dispatcherId: r.dispatcherId || r.dispatcher_id || null,
+          dispatcherName: dispName,
+          dispatcherType: dispType,
+          dispatcherConfig:
+            typeof (r.dispatcherConfig || r.dispatcher_config) === 'object'
+              ? JSON.stringify(r.dispatcherConfig || r.dispatcher_config)
+              : (r.dispatcherConfig || r.dispatcher_config || null),
+          lockedAt: (r.lockedAt || r.locked_at) ? new Date(r.lockedAt || r.locked_at).toISOString() : null,
+          lockedBy: r.lockedBy || r.locked_by || null,
 
           // Compatibility fields for UI
-          status: r.lockedBy || r.lockedAt ? 'PROCESSING' : 'PENDING',
+          status: isLocked ? 'PROCESSING' : 'PENDING',
           eventType: 'TRIGGER',
-          scheduledAt: r.lockedAt ? new Date(r.lockedAt).toISOString() : new Date().toISOString(),
+          scheduledAt: (r.lockedAt || r.locked_at) ? new Date(r.lockedAt || r.locked_at).toISOString() : new Date().toISOString(),
           createdAt: new Date().toISOString(),
-        }));
-      }
-      return [];
-    } catch (e) {
-      console.warn('Prisma getAlertNotificationQueue error:', e);
-      return [];
+        };
+      });
     }
+
+    return [];
   }
 
   async getDatabasePollQueue(): Promise<DatabasePollQueueEntity[]> {

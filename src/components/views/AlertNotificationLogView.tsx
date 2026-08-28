@@ -405,8 +405,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     setToDateTime(now.toISOString().slice(0, 16));
 
     if (preset === 'all') {
-      const past = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      setFromDateTime(past.toISOString().slice(0, 16));
+      setFromDateTime('');
     } else if (preset === '1h') {
       const past = new Date(Date.now() - 1 * 60 * 60 * 1000);
       setFromDateTime(past.toISOString().slice(0, 16));
@@ -428,11 +427,15 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
 
   // Time boundaries in milliseconds for Log filtering
   const fromTimeMs = useMemo(() => {
-    return fromDateTime ? new Date(fromDateTime).getTime() : 0;
-  }, [fromDateTime]);
+    if (timeRangePreset === 'all' || !fromDateTime) return 0;
+    const t = new Date(fromDateTime).getTime();
+    return isNaN(t) ? 0 : t;
+  }, [fromDateTime, timeRangePreset]);
 
   const toTimeMs = useMemo(() => {
-    return toDateTime ? new Date(toDateTime).getTime() : Date.now() + 86400000;
+    if (!toDateTime) return Date.now() + 86400000;
+    const t = new Date(toDateTime).getTime();
+    return isNaN(t) ? Date.now() + 86400000 : t;
   }, [toDateTime]);
 
   // DB lookup
@@ -539,26 +542,49 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
   const filteredLogs = useMemo(() => {
     return logs
       .filter((log) => {
-        // Time window filter (Default 24H)
-        const logTime = new Date(log.timestamp).getTime();
-        if (fromTimeMs && logTime < fromTimeMs) return false;
-        if (toTimeMs && logTime > toTimeMs) return false;
+        // Time window filter
+        if (fromTimeMs || toTimeMs) {
+          const logTime = new Date(log.timestamp).getTime();
+          if (!isNaN(logTime)) {
+            if (fromTimeMs && logTime < fromTimeMs) return false;
+            if (toTimeMs && logTime > toTimeMs) return false;
+          }
+        }
 
         // Database Engine filter
         if (selectedEngineType !== 'ALL') {
           const dbObj = dbMap.get(log.dbId);
           const dbType = dbObj?.dbType || '';
-          if (dbType.toUpperCase() !== selectedEngineType.toUpperCase()) return false;
+          const matchesEngine =
+            dbType.toUpperCase() === selectedEngineType.toUpperCase() ||
+            (log.dbName && log.dbName.toUpperCase().includes(selectedEngineType.toUpperCase()));
+          if (!matchesEngine) return false;
         }
 
         // Target Database filter
-        if (selectedDbId !== 'ALL' && log.dbId !== selectedDbId) return false;
+        if (selectedDbId !== 'ALL') {
+          const matchesDb =
+            log.dbId === selectedDbId ||
+            (selectedDb && log.dbName === selectedDb.name);
+          if (!matchesDb) return false;
+        }
 
         // Status filter
-        if (statusFilter !== 'ALL' && log.status !== statusFilter) return false;
+        if (statusFilter !== 'ALL') {
+          if (statusFilter === 'DISPATCHED' || statusFilter === 'SUCCESS') {
+            if (log.status !== 'DISPATCHED' && log.status !== 'SUCCESS') return false;
+          } else if (statusFilter === 'FAILED') {
+            if (log.status !== 'FAILED' && log.status !== 'REJECTED') return false;
+          } else if (log.status !== statusFilter) {
+            return false;
+          }
+        }
 
         // Channel filter
-        if (channelFilter !== 'ALL' && log.dispatchType !== channelFilter) return false;
+        if (channelFilter !== 'ALL') {
+          const channel = (log.dispatcherType || log.dispatchType || '').toUpperCase();
+          if (channel !== channelFilter.toUpperCase()) return false;
+        }
 
         // Severity filter
         if (severityFilter !== 'ALL' && log.alertLevel !== severityFilter) return false;
@@ -594,6 +620,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     toTimeMs,
     selectedEngineType,
     selectedDbId,
+    selectedDb,
     statusFilter,
     channelFilter,
     severityFilter,

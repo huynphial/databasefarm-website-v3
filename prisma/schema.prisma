@@ -498,7 +498,7 @@ model AlertNotificationLog {
   finishedAt       DateTime? @default(now()) @map("finished_at")
 
   @@index([finishedAt(sort: Desc)])
-  @@map("alert_notification_logs")
+  @@map("alert_notification_log")
 }
 
 model DatabasePollQueue {

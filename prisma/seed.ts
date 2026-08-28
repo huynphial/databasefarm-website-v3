@@ -112,6 +112,7 @@ async function main() {
         smtpHost: 'smtp.thenicedata.com',
         smtpPort: 587,
         smtpUser: 'alerts@thenicedata.com',
+        smtpPassword: '',
         useTls: true,
         fromAddress: 'Database Sentinel <noreply-alerts@thenicedata.com>',
       },
