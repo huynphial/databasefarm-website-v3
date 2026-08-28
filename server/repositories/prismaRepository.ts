@@ -1803,12 +1803,12 @@ export class PrismaRepository implements IStorageRepository {
     if (!records || records.length === 0) {
       try {
         records = await (this.prisma as any).$queryRawUnsafe(
-          'SELECT * FROM alert_notification_log ORDER BY finished_at DESC LIMIT 500'
+          'SELECT * FROM alert_notification_logs ORDER BY finished_at DESC LIMIT 500'
         );
       } catch (e1) {
         try {
           records = await (this.prisma as any).$queryRawUnsafe(
-            'SELECT * FROM alert_notification_logs ORDER BY finished_at DESC LIMIT 500'
+            'SELECT * FROM alert_notification_log ORDER BY finished_at DESC LIMIT 500'
           );
         } catch (e2) {}
       }
