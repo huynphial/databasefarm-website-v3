@@ -357,6 +357,15 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
 
   // Selected Log Detail Modal State
   const [selectedLog, setSelectedLog] = useState<AlertNotificationLogEntity | null>(null);
+  const [selectedQueueMessage, setSelectedQueueMessage] = useState<{
+    alertId: string;
+    dbName: string;
+    metricName?: string;
+    objectName?: string | null;
+    messageAlert: string;
+    dispatcherName?: string | null;
+    dispatcherType?: string | null;
+  } | null>(null);
 
   // Close dropdown on click outside or escape key
   useEffect(() => {
@@ -1394,11 +1403,27 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                       </td>
 
                       {/* Message Alert */}
-                      <td className="py-2.5 px-3 min-w-[200px] max-w-[320px]">
+                      <td className="py-2.5 px-3 whitespace-nowrap">
                         {item.messageAlert ? (
-                          <div className="text-[11px] text-slate-700 font-mono line-clamp-2 bg-slate-50 p-1.5 rounded border border-slate-200/80 break-words" title={item.messageAlert}>
-                            {item.messageAlert}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedQueueMessage({
+                                alertId: item.alertId,
+                                dbName: item.dbName,
+                                metricName: item.metricName,
+                                objectName: item.objectName,
+                                messageAlert: item.messageAlert,
+                                dispatcherName: item.dispatcherName,
+                                dispatcherType: item.dispatcherType,
+                              })
+                            }
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 hover:border-indigo-300 transition-all shadow-2xs cursor-pointer group"
+                            title="Click to view full message alert content"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 text-indigo-500 group-hover:scale-110 transition-transform" />
+                            <span>View Message</span>
+                          </button>
                         ) : (
                           <span className="text-slate-400 italic text-[11px]">-</span>
                         )}
@@ -1981,6 +2006,78 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors cursor-pointer"
               >
                 Close Audit Inspection
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Queue Item Message Alert Modal */}
+      {selectedQueueMessage && (
+        <Dialog
+          isOpen={!!selectedQueueMessage}
+          onClose={() => setSelectedQueueMessage(null)}
+          title="Alert Notification Message Information"
+          description={`Message payload preview for Alert #${selectedQueueMessage.alertId}`}
+          maxWidth="lg"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Alert ID</span>
+                <span className="font-mono font-bold text-indigo-700">#{selectedQueueMessage.alertId}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Database Target</span>
+                <span className="font-bold text-slate-900">{selectedQueueMessage.dbName}</span>
+              </div>
+              {selectedQueueMessage.metricName && (
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Metric Name</span>
+                  <span className="font-semibold text-slate-800">{selectedQueueMessage.metricName}</span>
+                </div>
+              )}
+              {selectedQueueMessage.dispatcherName && (
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Dispatcher</span>
+                  <span className="font-semibold text-indigo-700">
+                    {selectedQueueMessage.dispatcherName} {selectedQueueMessage.dispatcherType ? `(${selectedQueueMessage.dispatcherType})` : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <MessageSquare className="w-4 h-4 text-indigo-600" />
+                  Dispatched Message Alert (`message_alert`):
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(selectedQueueMessage.messageAlert, 'Message Alert Queue')}
+                  className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                >
+                  {copiedField === 'Message Alert Queue' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                  {copiedField === 'Message Alert Queue' ? 'Copied' : 'Copy Message'}
+                </button>
+              </div>
+              <div className="bg-slate-900 text-slate-100 p-3.5 rounded-xl font-mono text-xs leading-relaxed whitespace-pre-wrap border border-slate-800 shadow-inner max-h-[280px] overflow-y-auto selection:bg-indigo-500/40">
+                {selectedQueueMessage.messageAlert}
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedQueueMessage(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>
