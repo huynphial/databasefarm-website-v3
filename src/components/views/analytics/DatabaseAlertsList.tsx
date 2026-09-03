@@ -43,14 +43,27 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
           const metricTitleL1 = hasObject ? `${alert.metricName} of ${alert.objectName}` : alert.metricName;
           const alertTitle = hasAttr ? `${metricTitleL1}.${alert.attributeName}` : metricTitleL1;
           const isAck = alert.status === 'ACKNOWLEDGED' || Boolean(alert.acknowledgedAt);
+          const isDown = alert.alertLevel === 'DOWN' || alert.alertLevel?.toUpperCase() === 'DOWN';
+
+          const rowClass = !isAck
+            ? isDown
+              ? 'alert-row-down-unack border-l-4 border-l-red-600 px-3 my-1 rounded-lg'
+              : alert.alertLevel === 'CRITICAL'
+              ? 'alert-row-critical-unack border-l-4 border-l-rose-500 px-3 my-1 rounded-lg'
+              : alert.alertLevel === 'HIGH'
+              ? 'alert-row-high-unack border-l-4 border-l-orange-500 px-3 my-1 rounded-lg'
+              : 'alert-row-warn-unack border-l-4 border-l-amber-500 px-3 my-1 rounded-lg'
+            : 'hover:bg-slate-50 px-3 my-1 rounded-lg border-l-4 border-l-emerald-400';
 
           return (
-            <div key={alert.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+            <div key={alert.id} className={`py-2.5 flex items-center justify-between gap-3 text-xs ${rowClass}`}>
               <div className="space-y-0.5 min-w-0">
                 <div className="flex items-center gap-2">
                   <span
                     className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                      alert.alertLevel === 'CRITICAL' || alert.alertLevel === 'DOWN'
+                      isDown
+                        ? 'bg-red-600 text-white border-red-700 animate-pulse'
+                        : alert.alertLevel === 'CRITICAL'
                         ? 'bg-rose-100 text-rose-800 border-rose-300'
                         : alert.alertLevel === 'HIGH'
                         ? 'bg-orange-100 text-orange-800 border-orange-300'
@@ -59,8 +72,12 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
                   >
                     {alert.alertLevel}
                   </span>
-                  {isAck && (
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                  {!isAck ? (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase tracking-wider bg-red-100 text-red-900 border border-red-300 animate-pulse">
+                      UNACK
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                       {t('analytics.ack')}
                     </span>
                   )}
@@ -73,8 +90,6 @@ export const DatabaseAlertsList: React.FC<DatabaseAlertsListProps> = ({
                   <p className="text-[12px] text-slate-600 font-semibold pt-0.5 px-8">{t('analytics.triggered')} {formatTimeVN(alert.createdAt)}</p>
                 </div>
               </div>
-
-              
             </div>
           );
         })}

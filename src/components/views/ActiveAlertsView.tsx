@@ -250,6 +250,33 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
   const totalPages = Math.ceil(filteredAlerts.length / pageSize) || 1;
   const paginatedAlerts = filteredAlerts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
+  // Dynamic Row Styling:
+  // - Unacknowledged (not ACK): animated pulsating/blinking state
+  // - Unacknowledged DOWN: intense impressive red blinking background
+  // - Acknowledged (ACK): calm, static subtle green-bordered state
+  const getRowClassName = (row: ActiveAlertEntity) => {
+    const isUnack = row.status === 'OPEN' || !row.status;
+    const isDown = row.alertLevel === 'DOWN' || row.alertLevel?.toUpperCase() === 'DOWN';
+
+    if (isUnack) {
+      if (isDown) {
+        return 'alert-row-down-unack border-l-4 border-l-red-600 font-medium text-slate-900 shadow-xs';
+      }
+      if (row.alertLevel === 'CRITICAL') {
+        return 'alert-row-critical-unack border-l-4 border-l-rose-500 font-medium text-slate-900';
+      }
+      if (row.alertLevel === 'HIGH') {
+        return 'alert-row-high-unack border-l-4 border-l-orange-500 font-medium text-slate-900';
+      }
+      if (row.alertLevel === 'WARN') {
+        return 'alert-row-warn-unack border-l-4 border-l-amber-500 font-medium text-slate-900';
+      }
+      return 'alert-row-default-unack border-l-4 border-l-indigo-400 font-medium text-slate-900';
+    }
+
+    return 'hover:bg-slate-50/80 bg-white text-slate-700 opacity-90 border-l-4 border-l-emerald-400';
+  };
+
   const handleAcknowledge = async (alert: ActiveAlertEntity) => {
     if (onAcknowledgeAlert) {
       await onAcknowledgeAlert(alert.id);
@@ -287,8 +314,82 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       header: t('activeAlerts.severity'),
       accessorKey: 'alertLevel',
       sortable: true,
-      width: '85px',
+      width: '105px',
       cell: (row) => {
+        const isUnack = row.status === 'OPEN' || !row.status;
+        const isDown = row.alertLevel === 'DOWN' || row.alertLevel?.toUpperCase() === 'DOWN';
+
+        if (isUnack) {
+          if (isDown) {
+            return (
+              <div className="flex flex-col gap-1 items-start">
+                <span className="px-2 py-0.5 border border-red-700 rounded text-[10px] font-black tracking-wider bg-red-600 text-white shadow-sm inline-flex items-center gap-1.5 animate-pulse">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-90"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                  </span>
+                  DOWN
+                </span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase tracking-wider bg-red-100 text-red-900 border border-red-300 animate-pulse inline-flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping shrink-0" />
+                  UNACK
+                </span>
+              </div>
+            );
+          }
+
+          if (row.alertLevel === 'CRITICAL') {
+            return (
+              <div className="flex flex-col gap-1 items-start">
+                <span className="px-2 py-0.5 border border-rose-300 rounded text-[10px] font-extrabold tracking-wider bg-rose-100 text-rose-800 shadow-2xs inline-flex items-center gap-1.5 animate-pulse">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
+                  </span>
+                  CRITICAL
+                </span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">
+                  UNACK
+                </span>
+              </div>
+            );
+          }
+
+          if (row.alertLevel === 'HIGH') {
+            return (
+              <div className="flex flex-col gap-1 items-start">
+                <span className="px-2 py-0.5 border border-orange-300 rounded text-[10px] font-bold tracking-wider bg-orange-100 text-orange-800 shadow-2xs inline-flex items-center gap-1.5 animate-pulse">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-orange-600"></span>
+                  </span>
+                  HIGH
+                </span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200 animate-pulse">
+                  UNACK
+                </span>
+              </div>
+            );
+          }
+
+          // WARN or others
+          return (
+            <div className="flex flex-col gap-1 items-start">
+              <span className="px-2 py-0.5 border border-amber-300 rounded text-[10px] font-bold tracking-wider bg-amber-100 text-amber-800 shadow-2xs inline-flex items-center gap-1.5 animate-pulse">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-600"></span>
+                </span>
+                WARN
+              </span>
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
+                UNACK
+              </span>
+            </div>
+          );
+        }
+
+        // Acknowledged (ACK) - peaceful static state
         const styles = {
           DOWN: 'bg-rose-50 text-rose-700 border-rose-200',
           CRITICAL: 'bg-rose-50 text-rose-700 border-rose-200',
@@ -297,9 +398,15 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
         }[row.alertLevel] || 'bg-slate-100 text-slate-700 border-slate-200';
 
         return (
-          <span className={cn('px-2 py-0.5 border rounded text-[10px] font-bold tracking-wider inline-block', styles)}>
-            {row.alertLevel}
-          </span>
+          <div className="flex flex-col gap-1 items-start">
+            <span className={cn('px-2 py-0.5 border rounded text-[10px] font-bold tracking-wider inline-block', styles)}>
+              {row.alertLevel}
+            </span>
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+              ACK
+            </span>
+          </div>
         );
       },
     },
@@ -529,8 +636,8 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
             </div>
           </div>
 
-          {/* Hover Tooltip */}
-          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+          {/* Hover Tooltip - Positioned below card */}
+          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-rose-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
               {t('dashboard.downDatabasesTooltip')} ({affectedDownDbs.length})
             </div>
@@ -566,8 +673,8 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
             </div>
           </div>
 
-          {/* Hover Tooltip */}
-          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+          {/* Hover Tooltip - Positioned below card */}
+          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-rose-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
               {t('dashboard.criticalAlertsTooltip')}
             </div>
@@ -603,8 +710,8 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
             </div>
           </div>
 
-          {/* Hover Tooltip */}
-          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+          {/* Hover Tooltip - Positioned below card */}
+          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-orange-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
               {t('dashboard.highAlertsTooltip')}
             </div>
@@ -640,8 +747,8 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
             </div>
           </div>
 
-          {/* Hover Tooltip */}
-          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+          {/* Hover Tooltip - Positioned below card */}
+          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-amber-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
               {t('dashboard.warningAlertsTooltip')}
             </div>
@@ -749,6 +856,7 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
           sortField={sortField}
           sortOrder={sortOrder}
           onSortChange={handleSortChange}
+          rowClassName={getRowClassName}
           emptyMessage={t('common.noDataFound')}
         />
       </div>

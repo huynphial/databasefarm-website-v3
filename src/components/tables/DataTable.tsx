@@ -27,6 +27,7 @@ interface DataTableProps<T> {
   sortField?: string;
   sortOrder?: 'asc' | 'desc';
   onSortChange?: (field: string) => void;
+  rowClassName?: (row: T, index: number) => string;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -44,6 +45,7 @@ export function DataTable<T extends Record<string, any>>({
   sortField,
   sortOrder,
   onSortChange,
+  rowClassName,
 }: DataTableProps<T>) {
   const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalCount);
@@ -103,7 +105,10 @@ export function DataTable<T extends Record<string, any>>({
               data.map((row, rowIdx) => (
                 <tr
                   key={row.id || rowIdx}
-                  className="hover:bg-slate-50/80 transition-colors"
+                  className={cn(
+                    'transition-colors',
+                    rowClassName ? rowClassName(row, rowIdx) : 'hover:bg-slate-50/80'
+                  )}
                 >
                   {columns.map((col, colIdx) => (
                     <td
