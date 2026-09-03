@@ -475,9 +475,10 @@ export class MemoryRepository implements IStorageRepository {
     dataRetentionDays: 90,
     autoClearResolvedAlerts: true,
 
-    showInfoTips: true,
-    sessionTimeoutMinutes: 30,
-    SESSION_TIMEOUT_MINUTES: '30',
+    showInfoTips: false,
+    sessionTimeoutMinutes: 2880,
+    SESSION_TIMEOUT_MINUTES: '2880',
+    annual_license_key: '',
     updatedAt: new Date().toISOString(),
     updatedBy: 'admin',
   };
@@ -2172,21 +2173,10 @@ FROM pg_tablespace`,
   async getSystemSettingsList(): Promise<SystemSettingItem[]> {
     const s = this.systemSettings;
     return [
-      { id: 'ss-01', name: 'apiCollectorEnabled', value: String(s.apiCollectorEnabled), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-02', name: 'collectorEndpoint', value: s.collectorEndpoint, updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-03', name: 'collectorApiKey', value: s.collectorApiKey, updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-04', name: 'collectorPollIntervalSeconds', value: String(s.collectorPollIntervalSeconds), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-05', name: 'collectorBatchSize', value: String(s.collectorBatchSize), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-06', name: 'collectorTimeoutMs', value: String(s.collectorTimeoutMs), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-07', name: 'collectorRetryPolicy', value: s.collectorRetryPolicy, updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-08', name: 'globalAlertThresholdMode', value: s.globalAlertThresholdMode, updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-09', name: 'maxRetryAttempts', value: String(s.maxRetryAttempts), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-10', name: 'notificationDispatchIntervalSeconds', value: String(s.notificationDispatchIntervalSeconds), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-11', name: 'defaultTimezone', value: s.defaultTimezone, updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-12', name: 'dataRetentionDays', value: String(s.dataRetentionDays), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-13', name: 'autoClearResolvedAlerts', value: String(s.autoClearResolvedAlerts), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-14', name: 'showInfoTips', value: String(s.showInfoTips ?? true), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
-      { id: 'ss-15', name: 'SESSION_TIMEOUT_MINUTES', value: String(s.SESSION_TIMEOUT_MINUTES || s.sessionTimeoutMinutes || '30'), updatedAt: s.updatedAt, updatedBy: s.updatedBy },
+      { id: 'ss-01', name: 'autoClearResolvedAlerts', value: String(s.autoClearResolvedAlerts ?? 'true'), updatedAt: s.updatedAt, updatedBy: s.updatedBy || 'admin' },
+      { id: 'ss-02', name: 'showInfoTips', value: String(s.showInfoTips ?? 'false'), updatedAt: s.updatedAt, updatedBy: s.updatedBy || 'admin' },
+      { id: 'ss-03', name: 'SESSION_TIMEOUT_MINUTES', value: String(s.SESSION_TIMEOUT_MINUTES || s.sessionTimeoutMinutes || '2880'), updatedAt: s.updatedAt, updatedBy: s.updatedBy || 'admin' },
+      { id: 'ss-04', name: 'annual_license_key', value: String(s.annual_license_key || ''), updatedAt: s.updatedAt, updatedBy: s.updatedBy || 'admin' },
     ];
   }
 
@@ -2197,13 +2187,17 @@ FROM pg_tablespace`,
     const updatedAt = new Date().toISOString();
 
     if (name === 'SESSION_TIMEOUT_MINUTES') {
-      const minutes = parseInt(value, 10) || 30;
+      const minutes = parseInt(value, 10) || 2880;
       this.systemSettings.sessionTimeoutMinutes = minutes;
       this.systemSettings.SESSION_TIMEOUT_MINUTES = String(minutes);
     } else if (name === 'collectorEndpoint') {
       this.systemSettings.collectorEndpoint = value;
     } else if (name === 'showInfoTips') {
       this.systemSettings.showInfoTips = value !== 'false';
+    } else if (name === 'autoClearResolvedAlerts') {
+      this.systemSettings.autoClearResolvedAlerts = value !== 'false';
+    } else if (name === 'annual_license_key') {
+      this.systemSettings.annual_license_key = value;
     }
 
     this.systemSettings.updatedAt = updatedAt;

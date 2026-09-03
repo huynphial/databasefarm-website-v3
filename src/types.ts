@@ -117,6 +117,7 @@ export interface SystemSettingsEntity {
 
   // Global UI Customization
   showInfoTips?: boolean;
+  annual_license_key?: string;
 
   updatedAt: string;
   updatedBy?: string;

@@ -1223,7 +1223,7 @@ export class PrismaRepository implements IStorageRepository {
           }
         }
 
-        const sessionTimeoutMinutes = parseInt(map['SESSION_TIMEOUT_MINUTES'] || map['sessionTimeoutMinutes'] || '30', 10) || 30;
+        const sessionTimeoutMinutes = parseInt(map['SESSION_TIMEOUT_MINUTES'] || map['sessionTimeoutMinutes'] || '2880', 10) || 2880;
 
         return {
           apiCollectorEnabled: map['apiCollectorEnabled'] !== 'false',
@@ -1239,7 +1239,8 @@ export class PrismaRepository implements IStorageRepository {
           defaultTimezone: map['defaultTimezone'] || 'Asia/Ho_Chi_Minh (UTC+7)',
           dataRetentionDays: parseInt(map['dataRetentionDays'] || '7', 10) || 7,
           autoClearResolvedAlerts: map['autoClearResolvedAlerts'] !== 'false',
-          showInfoTips: map['showInfoTips'] !== 'false',
+          showInfoTips: map['showInfoTips'] === 'true',
+          annual_license_key: map['annual_license_key'] || '',
           sessionTimeoutMinutes,
           SESSION_TIMEOUT_MINUTES: String(sessionTimeoutMinutes),
           updatedAt: latestDate.getTime() > 0 ? latestDate.toISOString() : new Date().toISOString(),
@@ -1264,7 +1265,8 @@ export class PrismaRepository implements IStorageRepository {
       defaultTimezone: 'Asia/Ho_Chi_Minh (UTC+7)',
       dataRetentionDays: 7,
       autoClearResolvedAlerts: true,
-      showInfoTips: true,
+      showInfoTips: false,
+      annual_license_key: '',
       sessionTimeoutMinutes: 2880,
       SESSION_TIMEOUT_MINUTES: '2880',
       updatedAt: new Date().toISOString(),
@@ -1292,6 +1294,7 @@ export class PrismaRepository implements IStorageRepository {
     if (settingsData.showInfoTips !== undefined) entriesToSave.push({ name: 'showInfoTips', value: String(settingsData.showInfoTips) });
     if (settingsData.sessionTimeoutMinutes !== undefined) entriesToSave.push({ name: 'SESSION_TIMEOUT_MINUTES', value: String(settingsData.sessionTimeoutMinutes) });
     if (settingsData.SESSION_TIMEOUT_MINUTES !== undefined) entriesToSave.push({ name: 'SESSION_TIMEOUT_MINUTES', value: String(settingsData.SESSION_TIMEOUT_MINUTES) });
+    if (settingsData.annual_license_key !== undefined) entriesToSave.push({ name: 'annual_license_key', value: settingsData.annual_license_key });
 
     for (const entry of entriesToSave) {
       await (this.prisma as any).systemSettings.upsert({
@@ -1305,9 +1308,16 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async getSystemSettingsList(): Promise<SystemSettingItem[]> {
+    const systemSettingsData = [
+      { id: 'ss-01', name: 'autoClearResolvedAlerts', value: 'true', updatedBy: 'admin' },
+      { id: 'ss-02', name: 'showInfoTips', value: 'false', updatedBy: 'admin' },
+      { id: 'ss-03', name: 'SESSION_TIMEOUT_MINUTES', value: '2880', updatedBy: 'admin' },
+      { id: 'ss-04', name: 'annual_license_key', value: '', updatedBy: 'admin' },
+    ];
+
     try {
       const records = await (this.prisma as any).systemSettings.findMany({
-        orderBy: { name: 'asc' },
+        orderBy: { id: 'asc' },
       });
       if (records && records.length > 0) {
         return records.map((r: any) => ({
@@ -1321,29 +1331,13 @@ export class PrismaRepository implements IStorageRepository {
     } catch (e) {
       console.warn('Prisma getSystemSettingsList failed, returning defaults:', e);
     }
-    const defaults = [
-      { name: 'apiCollectorEnabled', value: 'true' },
-      { name: 'collectorEndpoint', value: 'http://localhost:3000/api/collector/mock-health' },
-      { name: 'collectorApiKey', value: 'dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3' },
-      { name: 'collectorPollIntervalSeconds', value: '60' },
-      { name: 'collectorBatchSize', value: '250' },
-      { name: 'collectorTimeoutMs', value: '5000' },
-      { name: 'collectorRetryPolicy', value: 'Exponential Backoff (Max 5 retries)' },
-      { name: 'globalAlertThresholdMode', value: 'STANDARD' },
-      { name: 'maxRetryAttempts', value: '3' },
-      { name: 'notificationDispatchIntervalSeconds', value: '30' },
-      { name: 'defaultTimezone', value: 'Asia/Ho_Chi_Minh (UTC+7)' },
-      { name: 'dataRetentionDays', value: '90' },
-      { name: 'autoClearResolvedAlerts', value: 'true' },
-      { name: 'showInfoTips', value: 'true' },
-      { name: 'SESSION_TIMEOUT_MINUTES', value: '30' },
-    ];
-    return defaults.map((d, i) => ({
-      id: `ss-${i + 1}`,
+
+    return systemSettingsData.map((d) => ({
+      id: d.id,
       name: d.name,
       value: d.value,
       updatedAt: new Date().toISOString(),
-      updatedBy: 'admin',
+      updatedBy: d.updatedBy,
     }));
   }
 
