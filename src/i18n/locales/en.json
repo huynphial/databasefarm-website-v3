@@ -186,7 +186,13 @@
     "permissionDenied": "Permission Denied",
     "adminOnlyClear": "Only users with the ADMIN role can clear active alerts.",
     "incidentCleared": "Incident Cleared",
-    "alertAcknowledged": "Alert Acknowledged"
+    "alertAcknowledged": "Alert Acknowledged",
+    "exportCsv": "Export CSV",
+    "exportAllCsv": "Export All Active Alerts (CSV)",
+    "noAlertsToExport": "No Active Alerts",
+    "noAlertsToExportDesc": "There are no active alerts to export.",
+    "alertsExported": "Active Alerts Exported",
+    "alertsExportedDesc": "{count} active alert(s) have been exported to CSV."
   },
   "databases": {
     "title": "Monitored Databases",

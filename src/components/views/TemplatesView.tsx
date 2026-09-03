@@ -115,6 +115,15 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
   // EXPORT TEMPLATE TO JSON
   // ----------------------------------------------------
   const handleExportTemplate = (tpl: TemplateEntity) => {
+    if (userRole !== 'ADMIN') {
+      toast({
+        title: 'Permission Denied',
+        description: 'Only administrators can export monitoring templates.',
+        type: 'error',
+      });
+      return;
+    }
+
     const linkedMetrics = metrics.filter(
       (m) => m.templateIds?.includes(tpl.id) || m.templateId === tpl.id
     );
@@ -170,6 +179,15 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
   };
 
   const handleExportAllTemplates = () => {
+    if (userRole !== 'ADMIN') {
+      toast({
+        title: 'Permission Denied',
+        description: 'Only administrators can export monitoring templates.',
+        type: 'error',
+      });
+      return;
+    }
+
     const exportBundle = {
       $schema: 'https://database-monitoring/schema/template-bundle-v1.json',
       version: '1.0',
@@ -310,6 +328,15 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
   };
 
   const handleExecuteImport = async () => {
+    if (userRole !== 'ADMIN') {
+      toast({
+        title: 'Permission Denied',
+        description: 'Only administrators can import monitoring templates.',
+        type: 'error',
+      });
+      return;
+    }
+
     if (!importPreview || importPreview.templates.length === 0) {
       toast({ title: 'Validation Error', description: 'No valid template data to import.', type: 'error' });
       return;
@@ -635,13 +662,6 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
         ) : (
           <div className="flex items-center justify-end gap-1.5">
             <button
-              onClick={() => handleExportTemplate(row)}
-              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
-              title="Export template to JSON"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
-            <button
               onClick={() => setMetricManagerTemplate(row)}
               className="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors cursor-pointer"
             >
@@ -740,14 +760,16 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
           <div className="flex items-center gap-2.5 flex-wrap">
             {/* Export All Templates */}
-            <button
-              onClick={handleExportAllTemplates}
-              className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs px-3 py-2 rounded-lg font-medium transition-colors shadow-2xs cursor-pointer shrink-0"
-              title="Export all templates and metrics to JSON"
-            >
-              <Download className="w-3.5 h-3.5 text-indigo-600" />
-              <span>{t('templates.exportAll')}</span>
-            </button>
+            {userRole === 'ADMIN' && (
+              <button
+                onClick={handleExportAllTemplates}
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs px-3 py-2 rounded-lg font-medium transition-colors shadow-2xs cursor-pointer shrink-0"
+                title="Export all templates and metrics to JSON"
+              >
+                <Download className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{t('templates.exportAll')}</span>
+              </button>
+            )}
 
             {/* Import Template Button */}
             {userRole === 'ADMIN' && (

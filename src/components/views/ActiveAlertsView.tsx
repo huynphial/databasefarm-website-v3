@@ -11,7 +11,8 @@ import {
   Play,
   Pause,
   Info,
-  Trash2
+  Trash2,
+  Download
 } from 'lucide-react';
 import { ActiveAlertEntity, DatabaseEntity, UserRole } from '../../types';
 import { DB_ENGINES, getDbEngineBadgeClass } from '../../config/dbEngines';
@@ -309,6 +310,79 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     });
   };
 
+  const handleExportCsv = () => {
+    // Export all active alerts
+    const alertsToExport = activeAlerts;
+    if (!alertsToExport || alertsToExport.length === 0) {
+      toast({
+        title: t('activeAlerts.noAlertsToExport') || 'No Active Alerts',
+        description: t('activeAlerts.noAlertsToExportDesc') || 'There are no active alerts to export.',
+        type: 'info',
+      });
+      return;
+    }
+
+    const headers = [
+      'Alert ID',
+      'Database Name',
+      'Database Engine',
+      'Host:Port',
+      'Severity',
+      'Status',
+      'Metric Name',
+      'Object Name',
+      'Attribute Name',
+      'Incident Message',
+      'Detected At (UTC)',
+      'Detected At (Local)',
+      'Acknowledged At',
+      'Acknowledged By',
+    ];
+
+    const rows = alertsToExport.map((a) => {
+      const db = databases.find((d) => d.id === a.dbId || d.name === a.dbName);
+      const dbEngine = db?.dbType || '';
+      const ipPort = db ? `${db.host}:${db.port}` : '';
+      const isAck = a.status === 'ACKNOWLEDGED' || Boolean(a.acknowledgedAt);
+      const statusText = isAck ? 'ACKNOWLEDGED' : 'OPEN';
+
+      return [
+        `"${String(a.id || '').replace(/"/g, '""')}"`,
+        `"${String(a.dbName || '').replace(/"/g, '""')}"`,
+        `"${String(dbEngine).replace(/"/g, '""')}"`,
+        `"${String(ipPort).replace(/"/g, '""')}"`,
+        `"${String(a.alertLevel || '').replace(/"/g, '""')}"`,
+        `"${statusText}"`,
+        `"${String(a.metricName || '').replace(/"/g, '""')}"`,
+        `"${String(a.objectName || '').replace(/"/g, '""')}"`,
+        `"${String(a.attributeName || '').replace(/"/g, '""')}"`,
+        `"${String(a.message || '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`,
+        `"${String(a.createdAt || '')}"`,
+        `"${formatTimeVN(a.createdAt)}"`,
+        `"${a.acknowledgedAt ? formatTimeVN(a.acknowledgedAt) : ''}"`,
+        `"${String(a.acknowledgedByName || '').replace(/"/g, '""')}"`,
+      ];
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_');
+    link.href = url;
+    link.download = `active_alerts_${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: t('activeAlerts.alertsExported') || 'Active Alerts Exported',
+      description: t('activeAlerts.alertsExportedDesc', { count: alertsToExport.length }) || `Exported ${alertsToExport.length} active alert(s) to CSV.`,
+      type: 'success',
+    });
+  };
+
   const columns: Column<ActiveAlertEntity>[] = [
     {
       header: t('activeAlerts.severity'),
@@ -586,6 +660,15 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
             <RefreshCw className="w-3.5 h-3.5" />
             <span>{t('common.refreshNow')}</span>
           </button>
+
+          <button
+            onClick={handleExportCsv}
+            title={t('activeAlerts.exportAllCsv') || 'Export all active alerts to CSV'}
+            className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg font-bold shadow-2xs transition-colors cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-indigo-600" />
+            <span>{t('activeAlerts.exportCsv')}</span>
+          </button>
         </div>
       </div>
 
@@ -835,6 +918,16 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
               className="w-full bg-slate-50 border border-slate-300 text-xs pl-8 pr-2.5 py-1 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-2xs"
             />
           </div>
+
+          {/* Export CSV button */}
+          <button
+            onClick={handleExportCsv}
+            title={t('activeAlerts.exportAllCsv') || 'Export all active alerts to CSV'}
+            className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs px-2.5 py-1 rounded-lg font-semibold shadow-2xs transition-colors cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-indigo-600" />
+            <span>{t('activeAlerts.exportCsv')}</span>
+          </button>
         </div>
       </div>
 

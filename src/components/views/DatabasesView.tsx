@@ -289,6 +289,15 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   // EXPORT ALL DATABASES (JSON BUNDLE)
   // ----------------------------------------------------
   const handleExportAllDatabases = () => {
+    if (userRole !== 'ADMIN') {
+      toast({
+        title: t('activeAlerts.permissionDenied') || 'Permission Denied',
+        description: 'Only administrators can export database configurations.',
+        type: 'error',
+      });
+      return;
+    }
+
     if (databases.length === 0) {
       toast({
         title: t('databases.noDbsToExport'),
@@ -352,6 +361,15 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   // EXPORT SINGLE DATABASE (JSON)
   // ----------------------------------------------------
   const handleExportSingleDatabase = (db: DatabaseEntity) => {
+    if (userRole !== 'ADMIN') {
+      toast({
+        title: t('activeAlerts.permissionDenied') || 'Permission Denied',
+        description: 'Only administrators can export database configurations.',
+        type: 'error',
+      });
+      return;
+    }
+
     const cipherPass = getExportCiphertext(db);
     const exportPayload = {
       $schema: 'https://database-monitoring/schema/database-v1.json',
@@ -1000,15 +1018,15 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               <BarChart3 className="w-3.5 h-3.5" />
             </button>
           )}
-          <button
-            onClick={() => handleExportSingleDatabase(row)}
-            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-            title={t('databases.exportConfigJson')}
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
           {userRole === 'ADMIN' ? (
             <>
+              <button
+                onClick={() => handleExportSingleDatabase(row)}
+                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                title={t('databases.exportConfigJson')}
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
               <button
                 onClick={() => openEditDialog(row)}
                 className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
@@ -1129,14 +1147,16 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 justify-end shrink-0">
-          <button
-            onClick={handleExportAllDatabases}
-            title="Export all database connection configurations to JSON"
-            className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-600" />
-            <span>{t('databases.exportJson')}</span>
-          </button>
+          {userRole === 'ADMIN' && (
+            <button
+              onClick={handleExportAllDatabases}
+              title="Export all database connection configurations to JSON"
+              className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-600" />
+              <span>{t('databases.exportJson')}</span>
+            </button>
+          )}
 
           {userRole === 'ADMIN' && (
             <button

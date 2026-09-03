@@ -186,7 +186,13 @@
     "permissionDenied": "Không có quyền thực hiện",
     "adminOnlyClear": "Chỉ tài khoản Quản trị viên (ADMIN) mới có quyền đóng sự cố cảnh báo.",
     "incidentCleared": "Sự cố đã được đóng",
-    "alertAcknowledged": "Đã xác nhận sự cố"
+    "alertAcknowledged": "Đã xác nhận sự cố",
+    "exportCsv": "Xuất CSV",
+    "exportAllCsv": "Xuất tất cả sự cố (CSV)",
+    "noAlertsToExport": "Không có cảnh báo",
+    "noAlertsToExportDesc": "Không có cảnh báo đang mở nào để xuất dữ liệu.",
+    "alertsExported": "Đã xuất cảnh báo ra CSV",
+    "alertsExportedDesc": "Đã xuất thành công {count} sự cố cảnh báo ra tệp CSV."
   },
   "databases": {
     "title": "Cơ sở dữ liệu giám sát",
