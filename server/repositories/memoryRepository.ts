@@ -1994,10 +1994,11 @@ FROM pg_tablespace`,
     return this.databasePollQueue;
   }
 
-  async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit = 500): Promise<DatabasePollLogEntity[]> {
+  async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]> {
     let result = [...this.databasePollLogs];
     if (dbId && dbId !== 'ALL') {
-      result = result.filter((l) => l.dbId === dbId);
+      const q = dbId.toLowerCase();
+      result = result.filter((l) => (l.dbId && l.dbId.toLowerCase() === q) || (l.dbName && l.dbName.toLowerCase() === q));
     }
     if (fromDate) {
       const fromMs = new Date(fromDate).getTime();
@@ -2012,10 +2013,8 @@ FROM pg_tablespace`,
       }
     }
     result.sort((a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime());
-    if (limit) {
-      result = result.slice(0, limit);
-    }
-    return result;
+    const effectiveLimit = limit !== undefined && limit > 0 ? limit : (dbId && dbId !== 'ALL' ? 5000 : 2000);
+    return result.slice(0, effectiveLimit);
   }
 
   // --- System Settings ---

@@ -2123,11 +2123,15 @@ export class PrismaRepository implements IStorageRepository {
     return [];
   }
 
-  async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit = 500): Promise<DatabasePollLogEntity[]> {
+  async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]> {
     try {
+      const effectiveLimit = limit !== undefined && limit > 0 ? limit : (dbId && dbId !== 'ALL' ? 5000 : 2000);
       const where: any = {};
       if (dbId && dbId !== 'ALL') {
-        where.dbId = dbId;
+        where.OR = [
+          { dbId: dbId },
+          { dbName: dbId },
+        ];
       }
       if (fromDate || toDate) {
         where.startedAt = {};
@@ -2138,7 +2142,7 @@ export class PrismaRepository implements IStorageRepository {
       let records = await (this.prisma as any).databasePollLog?.findMany({
         where,
         orderBy: { finishedAt: 'desc' },
-        take: limit || 500,
+        take: effectiveLimit,
       });
 
       if (!records || records.length === 0) {
@@ -2146,7 +2150,8 @@ export class PrismaRepository implements IStorageRepository {
           let sql = 'SELECT * FROM database_poll_log';
           const conditions: string[] = [];
           if (dbId && dbId !== 'ALL') {
-            conditions.push(`db_id = '${dbId.replace(/'/g, "''")}'`);
+            const escaped = dbId.replace(/'/g, "''");
+            conditions.push(`(db_id = '${escaped}' OR db_name = '${escaped}')`);
           }
           if (fromDate) {
             conditions.push(`started_at >= '${new Date(fromDate).toISOString().slice(0, 19).replace('T', ' ')}'`);
@@ -2157,7 +2162,7 @@ export class PrismaRepository implements IStorageRepository {
           if (conditions.length > 0) {
             sql += ' WHERE ' + conditions.join(' AND ');
           }
-          sql += ` ORDER BY finished_at DESC LIMIT ${limit || 500}`;
+          sql += ` ORDER BY finished_at DESC LIMIT ${effectiveLimit}`;
           records = await (this.prisma as any).$queryRawUnsafe(sql);
         } catch (rawErr) {
           // silent fallback

@@ -72,8 +72,10 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
         setSelectedEngineType('ALL');
         setDbSearchQuery('');
       }
+    } else if (!selectedDbId && databases.length > 0) {
+      setSelectedDbId(databases[0].id);
     }
-  }, [initialDbId, databases]);
+  }, [initialDbId, databases, selectedDbId]);
 
   // Selected Database Entity
   const selectedDb = useMemo(() => {
