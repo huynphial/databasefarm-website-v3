@@ -82,7 +82,7 @@ export interface IStorageRepository {
   getAlertNotificationLogs(): Promise<AlertNotificationLogEntity[]>;
   getAlertNotificationQueue(): Promise<AlertNotificationQueueEntity[]>;
   getDatabasePollQueue(): Promise<DatabasePollQueueEntity[]>;
-  getDatabasePollLogs(): Promise<DatabasePollLogEntity[]>;
+  getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]>;
 
   // System Settings
   getSystemSettings(): Promise<SystemSettingsEntity>;

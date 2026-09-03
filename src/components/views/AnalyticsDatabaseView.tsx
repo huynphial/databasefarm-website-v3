@@ -8,11 +8,13 @@ import {
   DatabaseEngineEntity,
   SystemSettingsEntity,
   UserRole,
+  DatabasePollLogEntity,
 } from '../../types';
 import { api } from '../../lib/api';
 import { combineTelemetryDataPoints } from './analytics/analyticsUtils';
 import { DatabaseFilterHeader } from './analytics/DatabaseFilterHeader';
 import { AnalyticsSummaryCards } from './analytics/AnalyticsSummaryCards';
+import { DatabaseUptimePerformanceCharts } from './analytics/DatabaseUptimePerformanceCharts';
 import { MetricType1Table } from './analytics/MetricType1Table';
 import { MetricType2Tables } from './analytics/MetricType2Tables';
 import { MetricType3Tables } from './analytics/MetricType3Tables';
@@ -117,6 +119,7 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
   // 3. DYNAMIC TELEMETRY QUERYING FROM DATABASE
   const [queriedRawMeasurements, setQueriedRawMeasurements] = useState<RawMeasurementEntity[]>([]);
   const [queriedMetricHistory, setQueriedMetricHistory] = useState<MetricHistoryEntity[]>([]);
+  const [queriedPollLogs, setQueriedPollLogs] = useState<DatabasePollLogEntity[]>([]);
   const [isLoadingTelemetry, setIsLoadingTelemetry] = useState<boolean>(false);
   const [hasFetchedOnce, setHasFetchedOnce] = useState<boolean>(false);
 
@@ -147,7 +150,7 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
         }
       }
 
-      const [raws, history] = await Promise.all([
+      const [raws, history, pollLogsData] = await Promise.all([
         api.getRawMeasurements({
           dbId: selectedDb.id,
           fromDate: fromIso,
@@ -155,10 +158,12 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
           limit: 10000,
         }).catch(() => []),
         api.getMetricHistory(selectedDb.id, undefined, fromIso, toIso).catch(() => []),
+        api.getDatabasePollLogs(selectedDb.id, fromIso, toIso).catch(() => []),
       ]);
 
       setQueriedRawMeasurements(Array.isArray(raws) ? raws : []);
       setQueriedMetricHistory(Array.isArray(history) ? history : []);
+      setQueriedPollLogs(Array.isArray(pollLogsData) ? pollLogsData : []);
       setHasFetchedOnce(true);
     } catch (err) {
       console.error('Failed to query database telemetry points:', err);
@@ -301,7 +306,14 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
         telemetryPointsCount={unifiedMeasurements.length}
       />
 
-      {/* 3. Active Alerts Panel */}
+      {/* 3. Database Uptime & Query Response Time Performance Charts (base on database_poll_log) */}
+      <DatabaseUptimePerformanceCharts
+        selectedDb={selectedDb}
+        pollLogs={queriedPollLogs}
+        isLoading={isLoadingTelemetry}
+      />
+
+      {/* 4. Active Alerts Panel */}
       {selectedDb && (
         <DatabaseAlertsList
           activeAlerts={selectedDbAlerts}

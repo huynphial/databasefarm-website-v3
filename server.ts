@@ -773,7 +773,11 @@ async function startServer() {
 
   app.get('/api/database-poll-logs', async (req, res) => {
     try {
-      const logs = await repo.getDatabasePollLogs();
+      const dbId = req.query.dbId as string | undefined;
+      const fromDate = req.query.fromDate as string | undefined;
+      const toDate = req.query.toDate as string | undefined;
+      const limit = req.query.limit !== undefined ? parseInt(req.query.limit as string, 10) : undefined;
+      const logs = await repo.getDatabasePollLogs(dbId, fromDate, toDate, limit);
       res.json(logs);
     } catch (err: any) {
       res.status(500).json({ error: err.message });

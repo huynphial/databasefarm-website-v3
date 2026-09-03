@@ -72,6 +72,77 @@ export class MemoryRepository implements IStorageRepository {
 
   constructor() {
     this.initUsersFromEnv();
+    this.initDatabasePollLogs();
+  }
+
+  private initDatabasePollLogs() {
+    const dbConfigs = [
+      { id: 'db-01', name: 'ERP_PROD_ORA', baseLatency: 85, jitter: 45, failRate: 0.01 },
+      { id: 'db-02', name: 'PAYMENT_API_PG', baseLatency: 42, jitter: 25, failRate: 0.005 },
+      { id: 'db-03', name: 'CRM_PORTAL_MY', baseLatency: 110, jitter: 60, failRate: 0.02 },
+      { id: 'db-04', name: 'DW_REPORTS_MS', baseLatency: 180, jitter: 95, failRate: 0.015 },
+      { id: 'db-05', name: 'INVENTORY_STG_MY', baseLatency: 220, jitter: 120, failRate: 0.25 },
+    ];
+
+    const logs: DatabasePollLogEntity[] = [];
+    const nowMs = Date.now();
+    let logIdCounter = 1;
+
+    // Generate periodic poll events for the last 7 days (dense over last 24h)
+    // 1. Last 24 hours: every 5 to 15 minutes
+    for (let minAgo = 5; minAgo <= 24 * 60; minAgo += 10) {
+      const startedTimeMs = nowMs - minAgo * 60000;
+      dbConfigs.forEach((db) => {
+        // Special case: db-05 recently is DOWN (last 2 hours)
+        const isDb5RecentDown = db.id === 'db-05' && minAgo <= 120;
+        const isFailed = isDb5RecentDown || Math.random() < db.failRate;
+        
+        // Random duration in ms
+        const durationMs = isFailed && isDb5RecentDown
+          ? Math.floor(5000 + Math.random() * 2000) // Timeout 5-7s
+          : Math.max(15, Math.floor(db.baseLatency + (Math.random() * db.jitter * 2 - db.jitter)));
+
+        const finishedTimeMs = startedTimeMs + durationMs;
+
+        logs.push({
+          id: String(logIdCounter++),
+          dbId: db.id,
+          dbName: db.name,
+          status: isFailed ? 'failed' : 'success',
+          errorMessage: isFailed
+            ? (isDb5RecentDown
+                ? 'Connection refused: TCP handshake timed out after 5000ms on 10.0.40.72:3306'
+                : 'Probe query execution timed out or returned connection error')
+            : null,
+          startedAt: new Date(startedTimeMs).toISOString(),
+          finishedAt: new Date(finishedTimeMs).toISOString(),
+        });
+      });
+    }
+
+    // 2. Day 2 to Day 7: every 30 to 60 minutes
+    for (let hourAgo = 25; hourAgo <= 7 * 24; hourAgo += 1) {
+      const startedTimeMs = nowMs - hourAgo * 3600000;
+      dbConfigs.forEach((db) => {
+        const isFailed = Math.random() < db.failRate;
+        const durationMs = isFailed
+          ? Math.floor(4000 + Math.random() * 2000)
+          : Math.max(20, Math.floor(db.baseLatency + (Math.random() * db.jitter * 2 - db.jitter)));
+
+        logs.push({
+          id: String(logIdCounter++),
+          dbId: db.id,
+          dbName: db.name,
+          status: isFailed ? 'failed' : 'success',
+          errorMessage: isFailed ? 'Transient socket timeout' : null,
+          startedAt: new Date(startedTimeMs).toISOString(),
+          finishedAt: new Date(startedTimeMs + durationMs).toISOString(),
+        });
+      });
+    }
+
+    logs.sort((a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime());
+    this.databasePollLogs = logs;
   }
 
   private initUsersFromEnv() {
@@ -1923,8 +1994,28 @@ FROM pg_tablespace`,
     return this.databasePollQueue;
   }
 
-  async getDatabasePollLogs(): Promise<DatabasePollLogEntity[]> {
-    return this.databasePollLogs;
+  async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit = 500): Promise<DatabasePollLogEntity[]> {
+    let result = [...this.databasePollLogs];
+    if (dbId && dbId !== 'ALL') {
+      result = result.filter((l) => l.dbId === dbId);
+    }
+    if (fromDate) {
+      const fromMs = new Date(fromDate).getTime();
+      if (!isNaN(fromMs)) {
+        result = result.filter((l) => new Date(l.startedAt).getTime() >= fromMs);
+      }
+    }
+    if (toDate) {
+      const toMs = new Date(toDate).getTime();
+      if (!isNaN(toMs)) {
+        result = result.filter((l) => new Date(l.startedAt).getTime() <= toMs);
+      }
+    }
+    result.sort((a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime());
+    if (limit) {
+      result = result.slice(0, limit);
+    }
+    return result;
   }
 
   // --- System Settings ---

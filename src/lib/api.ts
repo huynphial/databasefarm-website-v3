@@ -167,9 +167,15 @@ export const api = {
     }
   },
 
-  async getDatabasePollLogs(): Promise<DatabasePollLogEntity[]> {
+  async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]> {
     try {
-      return await fetchJson('/api/database-poll-logs');
+      const params = new URLSearchParams();
+      if (dbId && dbId !== 'ALL') params.append('dbId', dbId);
+      if (fromDate) params.append('fromDate', fromDate);
+      if (toDate) params.append('toDate', toDate);
+      if (limit) params.append('limit', String(limit));
+      const query = params.toString() ? `?${params.toString()}` : '';
+      return await fetchJson(`/api/database-poll-logs${query}`);
     } catch {
       return [];
     }

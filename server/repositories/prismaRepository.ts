@@ -2123,21 +2123,56 @@ export class PrismaRepository implements IStorageRepository {
     return [];
   }
 
-  async getDatabasePollLogs(): Promise<DatabasePollLogEntity[]> {
+  async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit = 500): Promise<DatabasePollLogEntity[]> {
     try {
-      const records = await (this.prisma as any).databasePollLog?.findMany({
+      const where: any = {};
+      if (dbId && dbId !== 'ALL') {
+        where.dbId = dbId;
+      }
+      if (fromDate || toDate) {
+        where.startedAt = {};
+        if (fromDate) where.startedAt.gte = new Date(fromDate);
+        if (toDate) where.startedAt.lte = new Date(toDate);
+      }
+
+      let records = await (this.prisma as any).databasePollLog?.findMany({
+        where,
         orderBy: { finishedAt: 'desc' },
-        take: 200,
+        take: limit || 500,
       });
-      if (records) {
+
+      if (!records || records.length === 0) {
+        try {
+          let sql = 'SELECT * FROM database_poll_log';
+          const conditions: string[] = [];
+          if (dbId && dbId !== 'ALL') {
+            conditions.push(`db_id = '${dbId.replace(/'/g, "''")}'`);
+          }
+          if (fromDate) {
+            conditions.push(`started_at >= '${new Date(fromDate).toISOString().slice(0, 19).replace('T', ' ')}'`);
+          }
+          if (toDate) {
+            conditions.push(`started_at <= '${new Date(toDate).toISOString().slice(0, 19).replace('T', ' ')}'`);
+          }
+          if (conditions.length > 0) {
+            sql += ' WHERE ' + conditions.join(' AND ');
+          }
+          sql += ` ORDER BY finished_at DESC LIMIT ${limit || 500}`;
+          records = await (this.prisma as any).$queryRawUnsafe(sql);
+        } catch (rawErr) {
+          // silent fallback
+        }
+      }
+
+      if (records && records.length > 0) {
         return records.map((r: any) => ({
           id: String(r.id),
-          dbId: r.dbId || '',
-          dbName: r.dbName || '',
-          status: r.status || 'success',
-          errorMessage: r.errorMessage || null,
-          startedAt: r.startedAt ? new Date(r.startedAt).toISOString() : new Date().toISOString(),
-          finishedAt: r.finishedAt ? new Date(r.finishedAt).toISOString() : new Date().toISOString(),
+          dbId: r.dbId || r.db_id || '',
+          dbName: r.dbName || r.db_name || '',
+          status: (r.status || 'success').toLowerCase() === 'success' ? 'success' : 'failed',
+          errorMessage: r.errorMessage || r.error_message || null,
+          startedAt: r.startedAt || r.started_at ? new Date(r.startedAt || r.started_at).toISOString() : new Date().toISOString(),
+          finishedAt: r.finishedAt || r.finished_at ? new Date(r.finishedAt || r.finished_at).toISOString() : new Date().toISOString(),
         }));
       }
     } catch (e) {

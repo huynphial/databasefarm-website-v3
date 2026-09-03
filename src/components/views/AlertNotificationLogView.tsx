@@ -65,14 +65,15 @@ const NOTIFICATION_TOKENS = [
   { token: 'D_ALERT_CREATED_AT', label: 'Created At', desc: 'Timestamp when alert created' },
   { token: 'D_ALERT_RESOLVE_AT', label: 'Resolved At', desc: 'Timestamp when alert resolved' },
   { token: 'D_ALERT_RESOLVER', label: 'Resolver', desc: 'User or process who resolved alert' },
+  { token: 'D_METRIC_COMBINE', label: 'Metric + Object + Attr', desc: 'The short of alert object' },
 ];
 
 const getDefaultNotificationMessage = (type: AlertMethodType): string => {
   switch (type) {
     case 'EMAIL':
-      return '[D_NOTIFICATION_TYPE] D_ALERT_SEVERITY Database D_DATABASE_NAME (D_DATABASE_TYPE:D_DATABASE_PORT) Metric D_METRIC_NAME triggered alert!\nValue: D_ALERT_VALUE\nMessage: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT';
+      return 'D_ALERT_SEVERITY: <b>D_DATABASE_NAME</b> (D_DATABASE_HOST:D_DATABASE_PORT)\n--------------------------\n🔹Details: D_ALERT_MESSAGE\n--------------------------\n🔸Time: D_ALERT_CREATED_AT\n🔸DB: D_DATABASE_TYPE';
     case 'TELEGRAM':
-      return '<b>D_NOTIFICATION_TYPE D_ALERT_SEVERITY</b>\nDatabase: <b>D_DATABASE_NAME</b> (ID: D_DATABASE_ID, Engine: D_DATABASE_TYPE:D_DATABASE_PORT)\nMetric: <b>D_METRIC_NAME</b>\nObject: D_OBJECT_NAME | Attr: D_ATTR_NAME\nValue: <code>D_ALERT_VALUE</code>\nDetails: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT';
+      return 'D_ALERT_SEVERITY: <b>D_DATABASE_NAME</b> (D_DATABASE_HOST:D_DATABASE_PORT)\n--------------------------\n🔹Details: D_ALERT_MESSAGE\n--------------------------\n🔸Time: D_ALERT_CREATED_AT\n🔸DB: D_DATABASE_TYPE';
     case 'WEBHOOK':
       return '{"event":"ALERT_TRIGGERED","database_name":"D_DATABASE_NAME","database_type":"D_DATABASE_TYPE","database_id":"D_DATABASE_ID","port":"D_DATABASE_PORT","metric":"D_METRIC_NAME","object":"D_OBJECT_NAME","attribute":"D_ATTR_NAME","value":"D_ALERT_VALUE","message":"D_ALERT_MESSAGE","created_at":"D_ALERT_CREATED_AT"}';
     default:
