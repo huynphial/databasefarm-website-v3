@@ -1343,19 +1343,7 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
                       </button>
                     </td>
                     <td className="py-2.5 px-3 text-right space-x-1">
-                      <button
-                        onClick={() => handleTestDispatcher(method)}
-                        disabled={testingMethodId === method.id}
-                        className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded font-semibold text-[11px] transition-colors cursor-pointer inline-flex items-center gap-1"
-                        title="Dispatch synthetic test message"
-                      >
-                        {testingMethodId === method.id ? (
-                          <RefreshCw className="w-3 h-3 animate-spin text-sky-600" />
-                        ) : (
-                          <Send className="w-3 h-3 text-sky-600" />
-                        )}
-                        Test
-                      </button>
+                      
                       {isAdmin && (
                         <>
                           <button

@@ -9,21 +9,41 @@ export interface User {
   lastLogin?: string;
 }
 
-export type DbEngine = 'ORACLE' | 'MYSQL' | 'POSTGRES' | 'MSSQL' | 'SINGLESTORE' | 'MONGODB' | 'REDIS' | string;
+export type DbEngine =
+  | 'ORACLE'
+  | 'MYSQL'
+  | 'POSTGRES'
+  | 'MSSQL'
+  | 'MARIADB'
+  | 'DB2'
+  | 'MONGODB'
+  | 'REDIS'
+  | 'SINGLESTORE'
+  | 'CLICKHOUSE'
+  | 'ELASTICSEARCH'
+  | 'OPENSEARCH'
+  | 'CASSANDRA'
+  | 'SAPHANA'
+  | 'SNOWFLAKE'
+  | 'BIGQUERY'
+  | 'REDSHIFT'
+  | 'DATABRICKS'
+  | string;
 
 export interface DbEngineConfig {
   code: string;
   name: string;
   defaultPort: number;
   badgeColor?: string;
+  color?: string;
   description?: string;
 }
 
 export interface DatabaseEngineEntity {
   id: string;
-  dbCode: string; // e.g. 'ORACLE', 'MYSQL', 'POSTGRES', 'MSSQL', 'SINGLESTORE', 'MONGODB', 'REDIS'
-  dbName: string; // e.g. 'Oracle', 'MySQL', 'PostgreSQL', 'Microsoft SQL Server', 'SingleStore', 'MongoDB', 'Redis'
-  dbColor: string; // e.g. '#EA580C', '#16A34A', '#2563EB', '#0F172A', '#9333EA', '#059669', '#D97706'
+  dbCode: string;
+  dbName: string;
+  dbColor: string;
   defaultPort: number;
   statusOnOff: 'ACTIVE' | 'INACTIVE';
   description?: string;

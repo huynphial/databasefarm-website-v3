@@ -32,12 +32,20 @@
     "description": "Enterprise relational database management system developed by Microsoft."
   },
   {
-    "code": "SINGLESTORE",
-    "name": "SingleStore",
+    "code": "MARIADB",
+    "name": "MariaDB",
     "defaultPort": 3306,
-    "badgeColor": "text-purple-700 bg-purple-50 border-purple-200",
-    "color": "#9333EA",
-    "description": "Cloud-native, real-time distributed SQL database for transactions and analytics."
+    "badgeColor": "text-amber-800 bg-amber-50 border-amber-300",
+    "color": "#C05621",
+    "description": "Community-developed, commercially supported fork of the MySQL relational database."
+  },
+  {
+    "code": "DB2",
+    "name": "IBM Db2",
+    "defaultPort": 50000,
+    "badgeColor": "text-cyan-800 bg-cyan-50 border-cyan-300",
+    "color": "#0062FF",
+    "description": "Family of data management products developed by IBM for enterprise workloads."
   },
   {
     "code": "MONGODB",
@@ -51,8 +59,88 @@
     "code": "REDIS",
     "name": "Redis",
     "defaultPort": 6379,
-    "badgeColor": "text-amber-700 bg-amber-50 border-amber-200",
-    "color": "#D97706",
+    "badgeColor": "text-red-700 bg-red-50 border-red-200",
+    "color": "#DC2626",
     "description": "In-memory data structure store used as a database, cache, message broker, and streaming engine."
+  },
+  {
+    "code": "SINGLESTORE",
+    "name": "SingleStore",
+    "defaultPort": 3306,
+    "badgeColor": "text-purple-700 bg-purple-50 border-purple-200",
+    "color": "#9333EA",
+    "description": "Cloud-native, real-time distributed SQL database for transactions and analytics."
+  },
+  {
+    "code": "CLICKHOUSE",
+    "name": "ClickHouse",
+    "defaultPort": 8123,
+    "badgeColor": "text-yellow-800 bg-yellow-50 border-yellow-300",
+    "color": "#F59E0B",
+    "description": "Fast open-source column-oriented database management system for real-time analytical reporting."
+  },
+  {
+    "code": "ELASTICSEARCH",
+    "name": "Elasticsearch",
+    "defaultPort": 9200,
+    "badgeColor": "text-teal-800 bg-teal-50 border-teal-300",
+    "color": "#005571",
+    "description": "Distributed, JSON-based search and analytics engine designed for horizontal scalability."
+  },
+  {
+    "code": "OPENSEARCH",
+    "name": "OpenSearch",
+    "defaultPort": 9200,
+    "badgeColor": "text-sky-800 bg-sky-50 border-sky-300",
+    "color": "#005FB8",
+    "description": "Community-driven, open-source search and analytics suite derived from Elasticsearch."
+  },
+  {
+    "code": "CASSANDRA",
+    "name": "Cassandra",
+    "defaultPort": 9042,
+    "badgeColor": "text-cyan-900 bg-cyan-50 border-cyan-200",
+    "color": "#1287A5",
+    "description": "Highly-scalable, distributed NoSQL database designed to handle large amounts of data across commodity servers."
+  },
+  {
+    "code": "SAPHANA",
+    "name": "SAP HANA",
+    "defaultPort": 39015,
+    "badgeColor": "text-blue-900 bg-blue-50 border-blue-300",
+    "color": "#008FD3",
+    "description": "High-performance in-memory database and application platform from SAP."
+  },
+  {
+    "code": "SNOWFLAKE",
+    "name": "Snowflake",
+    "defaultPort": 443,
+    "badgeColor": "text-cyan-700 bg-cyan-50 border-cyan-200",
+    "color": "#29B5E8",
+    "description": "Cloud computing-based data warehousing and analytics service."
+  },
+  {
+    "code": "BIGQUERY",
+    "name": "BigQuery",
+    "defaultPort": 443,
+    "badgeColor": "text-indigo-700 bg-indigo-50 border-indigo-200",
+    "color": "#4285F4",
+    "description": "Fully-managed, serverless enterprise data warehouse for analytics by Google Cloud."
+  },
+  {
+    "code": "REDSHIFT",
+    "name": "Redshift",
+    "defaultPort": 5439,
+    "badgeColor": "text-violet-700 bg-violet-50 border-violet-200",
+    "color": "#8C4FFF",
+    "description": "Fast, fully managed, petabyte-scale data warehouse service in the cloud by AWS."
+  },
+  {
+    "code": "DATABRICKS",
+    "name": "Databricks",
+    "defaultPort": 443,
+    "badgeColor": "text-rose-700 bg-rose-50 border-rose-200",
+    "color": "#FF3621",
+    "description": "Unified analytics and Lakehouse data intelligence platform built on Apache Spark."
   }
 ]

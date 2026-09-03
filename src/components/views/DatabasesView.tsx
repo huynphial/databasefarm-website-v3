@@ -80,7 +80,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       return databaseEngines.map((e) => ({
         code: e.dbCode,
         name: e.dbName,
-        defaultPort: e.defaultPort,
+        defaultPort: e.defaultPort || 1521,
         color: e.dbColor,
       }));
     }
@@ -423,9 +423,10 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   // ----------------------------------------------------
   const parseDatabaseItem = (raw: any) => {
     const name = raw.name || raw.databaseName || 'Imported Database';
-    const dbType = (raw.dbType || raw.engine || 'POSTGRES').toUpperCase() as DbEngine;
+    const dbType = (raw.dbType || raw.engine || 'ORACLE').toUpperCase() as DbEngine;
     const host = raw.host || '127.0.0.1';
-    const port = Number(raw.port) || (dbType === 'MYSQL' ? 3306 : dbType === 'ORACLE' ? 1521 : dbType === 'MSSQL' ? 1433 : 5432);
+    const foundEng = getDbEngineConfig(dbType);
+    const port = Number(raw.port) || foundEng?.defaultPort || 1521;
     const tags = Array.isArray(raw.tags) ? raw.tags : [];
     const pollIntervalMinutes = Number(raw.pollIntervalMinutes) || 5;
     const note = raw.note || '';
@@ -587,18 +588,18 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     setEditingDb(null);
     setShowPassword(false);
     setCustomTagInput('');
-    const defaultEng = DB_ENGINES[0];
+    const defaultEng = DB_ENGINES.find((e) => e.code === 'ORACLE') || DB_ENGINES[0];
     setFormData({
       name: '',
-      dbType: defaultEng?.code || 'POSTGRES',
+      dbType: defaultEng?.code || 'ORACLE',
       host: '',
-      port: defaultEng?.defaultPort || 5432,
+      port: defaultEng?.defaultPort || 1521,
       tags: ['PRODUCTION'],
       pollIntervalMinutes: 10,
       note: '',
       username: 'dbadm',
       password: '',
-      databaseNameOrSid: 'app',
+      databaseNameOrSid: 'ORCLPDB1',
       sslMode: 'no',
       groupIds: groups.length > 0 ? [groups[0].id] : [],
       isEnabled: true,
@@ -1267,8 +1268,8 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                 value={formData.dbType}
                 onChange={(e) => {
                   const dbType = e.target.value as DbEngine;
-                  const foundEngine = availableEngines.find((eng) => eng.code === dbType);
-                  const defaultPort = foundEngine ? foundEngine.defaultPort : 5432;
+                  const foundEngine = availableEngines.find((eng) => eng.code.toUpperCase() === dbType.toUpperCase()) || getDbEngineConfig(dbType);
+                  const defaultPort = foundEngine ? foundEngine.defaultPort : 1521;
                   setFormData({ ...formData, dbType, port: defaultPort });
                 }}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
