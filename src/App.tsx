@@ -932,6 +932,8 @@ function MainAppContent() {
               showInfoTips={systemSettings.showInfoTips !== false}
               onSaveGroup={handleSaveGroup}
               onDeleteGroup={handleDeleteGroup}
+              onSaveDatabase={handleSaveDatabase}
+              onRefresh={loadData}
             />
           )}
 

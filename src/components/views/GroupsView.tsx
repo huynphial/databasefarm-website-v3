@@ -21,7 +21,12 @@ import {
   Database,
   Filter,
   ChevronDown,
-  X
+  X,
+  Download,
+  Upload,
+  FileText,
+  Check,
+  Loader2
 } from 'lucide-react';
 import { ActiveAlertEntity, DatabaseEntity, GroupEntity, TemplateEntity, AlertNotificationMethodEntity, UserRole, DatabaseEngineEntity } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
@@ -96,8 +101,10 @@ interface GroupsViewProps {
   activeAlerts?: ActiveAlertEntity[];
   userRole: UserRole;
   showInfoTips?: boolean;
-  onSaveGroup: (group: Partial<GroupEntity>, assignedDbIds?: string[]) => void;
+  onSaveGroup: (group: Partial<GroupEntity>, assignedDbIds?: string[]) => Promise<any> | void;
   onDeleteGroup: (id: string) => void;
+  onSaveDatabase?: (db: Partial<DatabaseEntity>) => Promise<any> | void;
+  onRefresh?: () => Promise<void> | void;
 }
 
 export const GroupsView: React.FC<GroupsViewProps> = ({
@@ -111,6 +118,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   showInfoTips = true,
   onSaveGroup,
   onDeleteGroup,
+  onSaveDatabase,
+  onRefresh,
 }) => {
   const { toast } = useToast();
   const { t } = useTranslation();
@@ -121,12 +130,58 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
   const dbDropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<GroupEntity | null>(null);
   const [testingNotification, setTestingNotification] = useState<string | null>(null);
+
+  // Import/Export Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
+  const [importFileError, setImportFileError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importGenerateNewIds, setImportGenerateNewIds] = useState(false);
+  const [importMatchExistingDbs, setImportMatchExistingDbs] = useState(true);
+  const [importMatchChannels, setImportMatchChannels] = useState(true);
+  const [importCreateMissingDbs, setImportCreateMissingDbs] = useState(true);
+  const [importPreview, setImportPreview] = useState<{
+    type: 'BUNDLE' | 'ARRAY' | 'SINGLE';
+    groups: Array<{
+      id?: string;
+      name: string;
+      description?: string;
+      databaseIds?: string[];
+      templateIds?: string[];
+      linkedDatabases?: Array<{
+        id?: string;
+        name: string;
+        dbType: string;
+        host: string;
+        port: number;
+        databaseNameOrSid?: string;
+        username?: string;
+        password?: string;
+        passwordEncrypted?: string;
+        tags?: string[];
+        pollIntervalMinutes?: number;
+        note?: string;
+        isEnabled?: boolean;
+      }>;
+      notificationMappings?: Array<{
+        notificationMethodId: string;
+        senderIds: string;
+        methodName?: string;
+        channelType?: string;
+      }>;
+      alertMethodIds?: string[];
+      senderIds?: string;
+    }>;
+    bundledDatabases?: any[];
+    bundledMethods?: any[];
+  } | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -280,6 +335,448 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         });
       }
     }, 850);
+  };
+
+  const handleExportAllGroups = () => {
+    if (userRole !== 'ADMIN') {
+      toast({
+        title: t('activeAlerts.permissionDenied') || 'Permission Denied',
+        description: 'Only administrators can export database group configurations.',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (groups.length === 0) {
+      toast({
+        title: t('groups.noGroupsToExport') || 'No Groups to Export',
+        description: t('groups.noGroupsToExportDesc') || 'There are no database groups available to export.',
+        type: 'warning',
+      });
+      return;
+    }
+
+    const exportedGroups = groups.map((g) => {
+      // Find all databases that belong to this group
+      const linkedDbs = databases.filter(
+        (db) => (db.groupIds && db.groupIds.includes(g.id)) || (g.databaseIds && g.databaseIds.includes(db.id))
+      );
+
+      // Find all notification mappings for this group
+      const rawMappings = extractGroupMappings(g);
+      const enrichedMappings = rawMappings.map((m) => {
+        const methodObj = alertMethods.find((am) => am.id === m.notificationMethodId);
+        return {
+          notificationMethodId: m.notificationMethodId,
+          senderIds: m.senderIds || '',
+          methodName: methodObj?.methodName || '',
+          channelType: methodObj?.channelType || '',
+          description: methodObj?.description || '',
+        };
+      });
+
+      return {
+        id: g.id,
+        name: g.name,
+        description: g.description || null,
+        databaseIds: g.databaseIds || linkedDbs.map((d) => d.id),
+        templateIds: g.templateIds || [],
+        linkedDatabases: linkedDbs.map((db) => ({
+          id: db.id,
+          name: db.name,
+          dbType: db.dbType,
+          host: db.host,
+          port: db.port,
+          databaseNameOrSid: db.connectionConfig?.databaseName || db.connectionConfig?.serviceName || '',
+          username: db.username || db.connectionConfig?.username || '',
+          tags: db.tags || [],
+          pollIntervalMinutes: db.pollIntervalMinutes ?? 5,
+          note: db.note || '',
+          isEnabled: db.isEnabled !== false,
+          status: db.status || 'UP',
+        })),
+        notificationMappings: enrichedMappings,
+        alertMethodIds: enrichedMappings.map((m) => m.notificationMethodId),
+        senderIds: enrichedMappings.map((m) => m.senderIds).filter(Boolean).join(', '),
+        createdAt: g.createdAt,
+        updatedAt: g.updatedAt,
+      };
+    });
+
+    // Top-level unique referenced databases
+    const referencedDbsMap = new Map<string, any>();
+    databases.forEach((db) => {
+      if (groups.some((g) => (db.groupIds && db.groupIds.includes(g.id)) || (g.databaseIds && g.databaseIds.includes(db.id)))) {
+        referencedDbsMap.set(db.id, {
+          id: db.id,
+          name: db.name,
+          dbType: db.dbType,
+          host: db.host,
+          port: db.port,
+          databaseNameOrSid: db.connectionConfig?.databaseName || db.connectionConfig?.serviceName || '',
+          username: db.username || db.connectionConfig?.username || '',
+          tags: db.tags || [],
+          pollIntervalMinutes: db.pollIntervalMinutes ?? 5,
+          note: db.note || '',
+          isEnabled: db.isEnabled !== false,
+          status: db.status || 'UP',
+        });
+      }
+    });
+
+    // Top-level unique referenced alert notification methods
+    const referencedMethodsMap = new Map<string, any>();
+    alertMethods.forEach((am) => {
+      if (
+        groups.some(
+          (g) =>
+            (g.notificationMappings || []).some((m) => m.notificationMethodId === am.id) ||
+            (g.alertMethodIds || []).includes(am.id)
+        )
+      ) {
+        referencedMethodsMap.set(am.id, {
+          id: am.id,
+          methodName: am.methodName,
+          channelType: am.channelType,
+          statusOnOff: am.statusOnOff,
+          description: am.description || '',
+        });
+      }
+    });
+
+    const exportBundle = {
+      $schema: 'https://database-monitoring/schema/database-groups-bundle-v1.json',
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      type: 'DATABASE_GROUPS_BUNDLE',
+      groupsCount: exportedGroups.length,
+      groups: exportedGroups,
+      databases: Array.from(referencedDbsMap.values()),
+      notificationMethods: Array.from(referencedMethodsMap.values()),
+    };
+
+    const jsonString = JSON.stringify(exportBundle, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `all_database_groups_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: t('groups.groupsExported') || 'Database Groups Exported',
+      description: t('groups.groupsExportedDesc', { count: groups.length }) || `Successfully exported ${groups.length} database group(s) with linked databases and notification methods to JSON.`,
+      type: 'success',
+    });
+  };
+
+  const parseJsonContent = (content: string) => {
+    setImportFileError(null);
+    if (!content || !content.trim()) {
+      setImportPreview(null);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(content);
+      if (!parsed) throw new Error('Empty or invalid JSON payload');
+
+      let rawGroups: any[] = [];
+      let bundledDbs: any[] = [];
+      let bundledMethods: any[] = [];
+      let bundleType: 'BUNDLE' | 'ARRAY' | 'SINGLE' = 'ARRAY';
+
+      if (parsed.type === 'DATABASE_GROUPS_BUNDLE' && Array.isArray(parsed.groups)) {
+        rawGroups = parsed.groups;
+        bundledDbs = Array.isArray(parsed.databases) ? parsed.databases : [];
+        bundledMethods = Array.isArray(parsed.notificationMethods) ? parsed.notificationMethods : [];
+        bundleType = 'BUNDLE';
+      } else if (Array.isArray(parsed.groups)) {
+        rawGroups = parsed.groups;
+        bundledDbs = Array.isArray(parsed.databases) ? parsed.databases : [];
+        bundledMethods = Array.isArray(parsed.notificationMethods) ? parsed.notificationMethods : [];
+        bundleType = 'BUNDLE';
+      } else if (Array.isArray(parsed)) {
+        rawGroups = parsed;
+        bundleType = 'ARRAY';
+      } else if (parsed && typeof parsed === 'object') {
+        if (parsed.name || parsed.groupName) {
+          rawGroups = [parsed];
+          bundleType = 'SINGLE';
+        } else {
+          throw new Error('JSON does not contain any recognizable database group definition.');
+        }
+      }
+
+      if (rawGroups.length === 0) {
+        throw new Error('No database group records found in payload.');
+      }
+
+      const normalizedGroups = rawGroups.map((g: any) => {
+        const name = g.name || g.groupName || 'Imported Group';
+        const description = g.description || '';
+        const databaseIds: string[] = Array.isArray(g.databaseIds) ? g.databaseIds : [];
+        const templateIds: string[] = Array.isArray(g.templateIds) ? g.templateIds : [];
+
+        // Linked databases
+        let linkedDatabases: any[] = [];
+        if (Array.isArray(g.linkedDatabases)) {
+          linkedDatabases = g.linkedDatabases;
+        } else if (Array.isArray(g.databases)) {
+          linkedDatabases = g.databases;
+        }
+
+        // Notification mappings
+        let notificationMappings: any[] = [];
+        if (Array.isArray(g.notificationMappings)) {
+          notificationMappings = g.notificationMappings.map((m: any) => ({
+            notificationMethodId: m.notificationMethodId || m.methodId || m.id || '',
+            senderIds: typeof m.senderIds === 'string' ? m.senderIds : (m.senderId || ''),
+            methodName: m.methodName || '',
+            channelType: m.channelType || '',
+          }));
+        } else if (Array.isArray(g.alertMethodIds)) {
+          const parsedSenders = parseGroupSenderIds(g.senderIds || '', g.alertMethodIds);
+          notificationMappings = g.alertMethodIds.map((id: string) => ({
+            notificationMethodId: id,
+            senderIds: parsedSenders[id] || '',
+          }));
+        }
+
+        return {
+          id: g.id,
+          name,
+          description,
+          databaseIds,
+          templateIds,
+          linkedDatabases,
+          notificationMappings,
+          alertMethodIds: g.alertMethodIds,
+          senderIds: g.senderIds,
+        };
+      });
+
+      setImportPreview({
+        type: bundleType,
+        groups: normalizedGroups,
+        bundledDatabases: bundledDbs,
+        bundledMethods: bundledMethods,
+      });
+    } catch (err: any) {
+      setImportFileError(err.message || 'Failed to parse JSON file');
+      setImportPreview(null);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setImportJsonText(content);
+      parseJsonContent(content);
+    };
+    reader.onerror = () => {
+      setImportFileError('Failed to read file from disk.');
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleExecuteImport = async () => {
+    if (userRole !== 'ADMIN') {
+      toast({
+        title: t('activeAlerts.permissionDenied') || 'Permission Denied',
+        description: 'Only administrators can import database groups.',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (!importPreview || importPreview.groups.length === 0) return;
+
+    setIsImporting(true);
+    try {
+      // Step 1: Auto-create any missing databases if enabled
+      const knownDbs = [...databases];
+      if (importCreateMissingDbs && onSaveDatabase) {
+        const allPotentialDbs: any[] = [];
+        (importPreview.bundledDatabases || []).forEach((db) => {
+          if (db && db.name && !allPotentialDbs.some((x) => x.name?.toLowerCase() === db.name?.toLowerCase())) {
+            allPotentialDbs.push(db);
+          }
+        });
+        importPreview.groups.forEach((g) => {
+          (g.linkedDatabases || []).forEach((db) => {
+            if (db && db.name && !allPotentialDbs.some((x) => x.name?.toLowerCase() === db.name?.toLowerCase())) {
+              allPotentialDbs.push(db);
+            }
+          });
+        });
+
+        for (const candidate of allPotentialDbs) {
+          const alreadyExists = knownDbs.some(
+            (d) =>
+              (candidate.id && d.id === candidate.id) ||
+              d.name.toLowerCase() === candidate.name?.toLowerCase() ||
+              (candidate.host && d.host.toLowerCase() === candidate.host?.toLowerCase() && Number(d.port) === Number(candidate.port))
+          );
+
+          if (!alreadyExists && candidate.name && candidate.host) {
+            try {
+              const freshDbId = candidate.id || `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
+              const createdDb = {
+                id: freshDbId,
+                name: candidate.name,
+                dbType: candidate.dbType || 'ORACLE',
+                host: candidate.host,
+                port: Number(candidate.port) || 1521,
+                tags: candidate.tags || ['PRODUCTION'],
+                pollIntervalMinutes: candidate.pollIntervalMinutes || 5,
+                note: candidate.note || '',
+                username: candidate.username || '',
+                password: candidate.password || '',
+                passwordEncrypted: candidate.passwordEncrypted,
+                isEnabled: candidate.isEnabled !== false,
+                connectionConfig: {
+                  username: candidate.username || '',
+                  ...(candidate.dbType === 'ORACLE'
+                    ? { serviceName: candidate.databaseNameOrSid || 'ORCLPDB1' }
+                    : { databaseName: candidate.databaseNameOrSid || 'app' }),
+                  sslMode: candidate.sslMode || 'require',
+                },
+                groupIds: [],
+              };
+              await onSaveDatabase(createdDb);
+              knownDbs.push(createdDb as any);
+            } catch (createErr) {
+              console.warn('Failed to auto-create missing database during group import:', createErr);
+            }
+          }
+        }
+      }
+
+      // Step 2: Import each group
+      let importedCount = 0;
+      for (const item of importPreview.groups) {
+        // Resolve database IDs
+        const assignedDbIds: string[] = [];
+        const rawDbIdentifiers = [
+          ...(item.databaseIds || []),
+          ...(item.linkedDatabases || []).map((d) => d.id || d.name),
+        ].filter(Boolean);
+
+        const uniqueIdentifiers = Array.from(new Set(rawDbIdentifiers));
+
+        uniqueIdentifiers.forEach((idOrName) => {
+          let matchedDb: DatabaseEntity | undefined;
+          if (importMatchExistingDbs) {
+            matchedDb = knownDbs.find(
+              (d) =>
+                d.id === idOrName ||
+                d.name.toLowerCase() === idOrName.toLowerCase()
+            );
+            if (!matchedDb && item.linkedDatabases) {
+              const linkedObj = item.linkedDatabases.find((d) => d.id === idOrName || d.name === idOrName);
+              if (linkedObj && linkedObj.host) {
+                matchedDb = knownDbs.find(
+                  (d) =>
+                    d.host.toLowerCase() === linkedObj.host.toLowerCase() &&
+                    Number(d.port) === Number(linkedObj.port)
+                );
+              }
+            }
+          } else {
+            matchedDb = knownDbs.find((d) => d.id === idOrName);
+          }
+
+          if (matchedDb) {
+            if (!assignedDbIds.includes(matchedDb.id)) {
+              assignedDbIds.push(matchedDb.id);
+            }
+          } else if (typeof idOrName === 'string' && idOrName.startsWith('db-')) {
+            if (!assignedDbIds.includes(idOrName)) {
+              assignedDbIds.push(idOrName);
+            }
+          }
+        });
+
+        // Resolve notification mappings
+        const resolvedMappings: { notificationMethodId: string; senderIds: string }[] = [];
+        (item.notificationMappings || []).forEach((mapping) => {
+          let targetMethodId = mapping.notificationMethodId;
+          const exactMethod = alertMethods.find((m) => m.id === mapping.notificationMethodId);
+
+          if (!exactMethod && importMatchChannels) {
+            const matchByName = mapping.methodName
+              ? alertMethods.find((m) => m.methodName.toLowerCase() === mapping.methodName?.toLowerCase())
+              : undefined;
+
+            const matchByType = mapping.channelType
+              ? alertMethods.find((m) => m.channelType.toUpperCase() === mapping.channelType?.toUpperCase())
+              : undefined;
+
+            if (matchByName) {
+              targetMethodId = matchByName.id;
+            } else if (matchByType) {
+              targetMethodId = matchByType.id;
+            }
+          }
+
+          if (targetMethodId) {
+            resolvedMappings.push({
+              notificationMethodId: targetMethodId,
+              senderIds: (mapping.senderIds || '').trim(),
+            });
+          }
+        });
+
+        // Resolve group ID
+        const existingGroup = groups.find((g) => g.name.toLowerCase() === item.name.toLowerCase());
+        const groupId = importGenerateNewIds
+          ? `grp-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`
+          : existingGroup?.id || item.id || `grp-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
+
+        const groupPayload: Partial<GroupEntity> = {
+          id: groupId,
+          name: item.name.trim(),
+          description: item.description?.trim() || null,
+          databaseIds: assignedDbIds,
+          templateIds: item.templateIds || [],
+          notificationMappings: resolvedMappings,
+          alertMethodIds: resolvedMappings.map((m) => m.notificationMethodId),
+          senderIds: resolvedMappings.map((m) => m.senderIds).filter(Boolean).join(', '),
+        };
+
+        await onSaveGroup(groupPayload, assignedDbIds);
+        importedCount++;
+      }
+
+      toast({
+        title: t('groups.groupsImported') || 'Database Groups Imported',
+        description: t('groups.groupsImportedDesc', { count: importedCount }) || `Successfully imported ${importedCount} database group(s).`,
+        type: 'success',
+      });
+
+      setIsImportModalOpen(false);
+      setImportJsonText('');
+      setImportPreview(null);
+      setImportFileError(null);
+      if (onRefresh) await onRefresh();
+    } catch (err: any) {
+      toast({
+        title: t('groups.importError') || 'Import Error',
+        description: err.message || 'An error occurred during database group import.',
+        type: 'error',
+      });
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleDelete = (group: GroupEntity) => {
@@ -560,15 +1057,43 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 shrink-0">
             {userRole === 'ADMIN' ? (
-              <button
-                onClick={openCreateDialog}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-lg font-medium transition-colors shadow-2xs cursor-pointer shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                {t('groups.newDatabaseGroup')}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportAllGroups}
+                  title={t('groups.exportAllTooltip') || 'Export all database groups with linked databases and notification methods to JSON'}
+                  className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer shrink-0 shadow-2xs"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-600" />
+                  <span>{t('groups.exportAll') || 'Export Groups JSON'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportJsonText('');
+                    setImportFileError(null);
+                    setImportPreview(null);
+                    setIsImportModalOpen(true);
+                  }}
+                  title={t('groups.importTooltip') || 'Import database groups from JSON file'}
+                  className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer shrink-0 shadow-2xs"
+                >
+                  <Upload className="w-3.5 h-3.5 text-slate-600" />
+                  <span>{t('groups.importJson') || 'Import Groups JSON'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={openCreateDialog}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-lg font-medium transition-colors shadow-2xs cursor-pointer shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  {t('groups.newDatabaseGroup')}
+                </button>
+              </>
             ) : (
               <div className="text-xs text-slate-400 italic flex items-center gap-1.5 shrink-0">
                 <Shield className="w-3.5 h-3.5 text-slate-400" />
@@ -1082,6 +1607,271 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             </button>
           </div>
         </form>
+      </Dialog>
+
+      {/* Import Database Groups Modal */}
+      <Dialog
+        isOpen={isImportModalOpen}
+        onClose={() => {
+          if (!isImporting) {
+            setIsImportModalOpen(false);
+            setImportJsonText('');
+            setImportFileError(null);
+            setImportPreview(null);
+          }
+        }}
+        title={t('groups.importModalTitle') || 'Import Database Groups from JSON'}
+        maxWidth="max-w-3xl"
+      >
+        <div className="space-y-4">
+          <div className="text-xs text-slate-600">
+            {t('groups.importModalDesc') || 'Upload a JSON file or paste raw JSON. Database groups, database relationships, and notification method mappings will be previewed and imported.'}
+          </div>
+
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept=".json,application/json"
+            className="hidden"
+          />
+
+          {/* File Upload Dropzone */}
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const file = e.dataTransfer.files?.[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                  const content = event.target?.result as string;
+                  setImportJsonText(content);
+                  parseJsonContent(content);
+                };
+                reader.readAsText(file);
+              }
+            }}
+            className="border-2 border-dashed border-slate-300 hover:border-indigo-500 bg-slate-50 hover:bg-indigo-50/40 transition-colors rounded-xl p-5 text-center cursor-pointer flex flex-col items-center justify-center gap-2"
+          >
+            <div className="p-2.5 rounded-full bg-indigo-100 text-indigo-600">
+              <Upload className="w-5 h-5" />
+            </div>
+            <div className="text-xs font-semibold text-slate-800">
+              {t('groups.uploadJsonTitle') || 'Upload JSON File'}
+            </div>
+            <div className="text-[11px] text-slate-500">
+              {t('groups.uploadJsonDesc') || 'Drag and drop or browse for a .json file'}
+            </div>
+          </div>
+
+          {/* Raw JSON Input / Editor */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-slate-500" />
+                <span>{t('groups.pasteJsonTitle') || 'Or Paste Raw JSON'}</span>
+              </label>
+              {importJsonText && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportJsonText('');
+                    setImportPreview(null);
+                    setImportFileError(null);
+                  }}
+                  className="text-[11px] text-slate-500 hover:text-red-600 transition-colors"
+                >
+                  {t('common.clear') || 'Clear'}
+                </button>
+              )}
+            </div>
+            <textarea
+              rows={5}
+              value={importJsonText}
+              onChange={(e) => {
+                const text = e.target.value;
+                setImportJsonText(text);
+                parseJsonContent(text);
+              }}
+              placeholder={t('groups.pasteJsonPlaceholder') || 'Paste database groups JSON here...'}
+              className="w-full font-mono text-xs p-3 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
+            />
+          </div>
+
+          {/* Error Message */}
+          {importFileError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-xs text-red-700">
+              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold">{t('groups.importError') || 'Import Error'}: </span>
+                <span>{importFileError}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Parsed Preview Section */}
+          {importPreview && (
+            <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>
+                    {t('groups.foundGroupsToImport', { count: importPreview.groups.length }) || `Found ${importPreview.groups.length} Group(s) to Import`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-600">
+                  <span className="bg-white border border-slate-200 px-2 py-0.5 rounded font-mono">
+                    {importPreview.groups.reduce((acc, g) => acc + ((g.databaseIds?.length || 0) + (g.linkedDatabases?.length || 0)), 0)} {t('groups.totalDbs') || 'DBs'}
+                  </span>
+                  <span className="bg-white border border-slate-200 px-2 py-0.5 rounded font-mono">
+                    {importPreview.groups.reduce((acc, g) => acc + (g.notificationMappings?.length || 0), 0)} Channels
+                  </span>
+                </div>
+              </div>
+
+              {/* Group items preview */}
+              <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                {importPreview.groups.map((group, idx) => {
+                  const dbCount = (group.databaseIds?.length || 0) + (group.linkedDatabases?.length || 0);
+                  const channelCount = group.notificationMappings?.length || 0;
+                  return (
+                    <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 text-xs shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                          <FolderKanban className="w-3.5 h-3.5 text-indigo-600" />
+                          {group.name}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-medium">
+                            {dbCount} {t('groups.totalDbs') || 'DBs'}
+                          </span>
+                          <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-medium">
+                            {channelCount} Channels
+                          </span>
+                        </div>
+                      </div>
+
+                      {group.description && (
+                        <p className="text-[11px] text-slate-500 line-clamp-1">{group.description}</p>
+                      )}
+
+                      {/* Linked Databases tags */}
+                      {group.linkedDatabases && group.linkedDatabases.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 pt-1">
+                          <span className="text-[10px] text-slate-400 font-medium">{t('groups.attachedDatabases') || 'Databases'}:</span>
+                          {group.linkedDatabases.map((db: any, dIdx: number) => (
+                            <span key={dIdx} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                              {db.name || db.id}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Notification channels preview */}
+                      {group.notificationMappings && group.notificationMappings.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          <span className="text-[10px] text-slate-400 font-medium">{t('groups.notificationRouting') || 'Notifications'}:</span>
+                          {group.notificationMappings.map((m: any, mIdx: number) => (
+                            <span key={mIdx} className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 flex items-center gap-1">
+                              <Radio className="w-2.5 h-2.5 text-indigo-500" />
+                              <span>{m.methodName || m.channelType || m.notificationMethodId}</span>
+                              {m.senderIds && <span className="font-mono text-slate-500">({m.senderIds})</span>}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Import Options Checkboxes */}
+              <div className="pt-2 border-t border-slate-200 space-y-2 text-xs text-slate-700">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={importMatchExistingDbs}
+                    onChange={(e) => setImportMatchExistingDbs(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>{t('groups.matchExistingDbs') || 'Match existing databases by name or host'}</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={importMatchChannels}
+                    onChange={(e) => setImportMatchChannels(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>{t('groups.matchExistingChannels') || 'Match notification channels by type if ID differs'}</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={importCreateMissingDbs}
+                    onChange={(e) => setImportCreateMissingDbs(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Automatically create missing database connections if details are in the JSON</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={importGenerateNewIds}
+                    onChange={(e) => setImportGenerateNewIds(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>{t('groups.generateFreshGroupIds') || 'Generate fresh unique IDs for imported groups'}</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Actions */}
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              disabled={isImporting}
+              onClick={() => {
+                setIsImportModalOpen(false);
+                setImportJsonText('');
+                setImportFileError(null);
+                setImportPreview(null);
+              }}
+              className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors text-xs font-medium cursor-pointer"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              disabled={!importPreview || importPreview.groups.length === 0 || isImporting}
+              onClick={handleExecuteImport}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors shadow-2xs cursor-pointer"
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Importing...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>
+                    {importPreview
+                      ? t('groups.importGroupsCount', { count: importPreview.groups.length }) || `Import ${importPreview.groups.length} Group(s)`
+                      : t('groups.importJson') || 'Import Groups JSON'}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

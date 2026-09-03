@@ -252,21 +252,10 @@ async function main() {
 
   // 3. Prepare System Settings Key-Value Records
   const systemSettingsData = [
-    { id: 'ss-01', name: 'apiCollectorEnabled', value: 'true', updatedBy: 'admin' },
-    { id: 'ss-02', name: 'collectorEndpoint', value: process.env.COLLECTOR_HEALTH_CHECK_URL || 'http://localhost:3000/api/collector/mock-health', updatedBy: 'admin' },
-    { id: 'ss-03', name: 'collectorApiKey', value: 'dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3', updatedBy: 'admin' },
-    { id: 'ss-04', name: 'collectorPollIntervalSeconds', value: '60', updatedBy: 'admin' },
-    { id: 'ss-05', name: 'collectorBatchSize', value: '250', updatedBy: 'admin' },
-    { id: 'ss-06', name: 'collectorTimeoutMs', value: '5000', updatedBy: 'admin' },
-    { id: 'ss-07', name: 'collectorRetryPolicy', value: 'Exponential Backoff (Max 5 retries)', updatedBy: 'admin' },
-    { id: 'ss-08', name: 'globalAlertThresholdMode', value: 'STANDARD', updatedBy: 'admin' },
-    { id: 'ss-09', name: 'maxRetryAttempts', value: '3', updatedBy: 'admin' },
-    { id: 'ss-10', name: 'notificationDispatchIntervalSeconds', value: '30', updatedBy: 'admin' },
-    { id: 'ss-11', name: 'defaultTimezone', value: process.env.DEFAULT_TIMEZONE || 'Asia/Ho_Chi_Minh (UTC+7)', updatedBy: 'admin' },
-    { id: 'ss-12', name: 'dataRetentionDays', value: '7', updatedBy: 'admin' },
-    { id: 'ss-13', name: 'autoClearResolvedAlerts', value: 'true', updatedBy: 'admin' },
-    { id: 'ss-14', name: 'showInfoTips', value: 'false', updatedBy: 'admin' },
-    { id: 'ss-15', name: 'SESSION_TIMEOUT_MINUTES', value: '2880', updatedBy: 'admin' },
+    { id: 'ss-01', name: 'autoClearResolvedAlerts', value: 'true', updatedBy: 'admin' },
+    { id: 'ss-02', name: 'showInfoTips', value: 'false', updatedBy: 'admin' },
+    { id: 'ss-03', name: 'SESSION_TIMEOUT_MINUTES', value: '2880', updatedBy: 'admin' },
+    { id: 'ss-03', name: 'annual_license_key', value: 'JPRWwsiKNfLTEBgbNsma7CQb5g+wkd3chd1jPnVn7+NRZUp4pGE6nHpOOI8roLW9Z0F/xaw7SoQIRoU6j4Cz9GnjhwRttmlDUCzVN61hnIufOBreZ01/2Kj2TF1zPHqK5cnPuwELXmR9MWe5+EDg4IPF+IifRvWXeaot+C8hAVEtoxfSB3oHxY8X8t356HkWdyScQT1EPW08rh7+ByHHEAmWiifrkV26jm5EEIhzQXDzgiDno1VUNrJ0r3rrvmHcYS67nBwERTADx97TvaMT0+RbZJlVisTJc9PiJlLvXm3pem47Wcf0tEtpUR+nghaWR6+W+Ied2p3TP3zBgF1btM8tL6S9ri8KKSkdmyvxrtflAy1TNy/HGPKBewR9DnfHDyCArBPJEeq1xbBO1k224o+V6kknRrvUEmZhMwdgw/Sd8PIXKz4L2rSpMmj62sp5UCpogke+HNOTSkCgaWmdXMmjLRP/AvAAnkjdrUf+1cYEFnjpXgXfGhTcTQ5XTa3S', updatedBy: 'admin' },
   ];
 
   // 4. Random UUID templates
