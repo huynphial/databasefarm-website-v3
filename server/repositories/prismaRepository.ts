@@ -1621,25 +1621,33 @@ export class PrismaRepository implements IStorageRepository {
   async saveAlertNotificationMethod(methodData: Partial<AlertNotificationMethodEntity>): Promise<AlertNotificationMethodEntity> {
     try {
       if (methodData.id) {
-        const updated = await (this.prisma as any).alertNotificationMethod.update({
+        const record = await (this.prisma as any).alertNotificationMethod.upsert({
           where: { id: methodData.id },
-          data: {
+          update: {
             name: methodData.name,
             type: methodData.type,
             notificationMessage: methodData.notificationMessage !== undefined ? methodData.notificationMessage : undefined,
             configJson: methodData.configJson as any,
             statusOnOff: methodData.statusOnOff,
           },
+          create: {
+            id: methodData.id,
+            name: methodData.name || 'New Alert Dispatcher',
+            type: methodData.type || 'EMAIL',
+            notificationMessage: methodData.notificationMessage || null,
+            configJson: (methodData.configJson as any) || {},
+            statusOnOff: methodData.statusOnOff || 'ACTIVE',
+          },
         });
         return {
-          id: updated.id,
-          name: updated.name,
-          type: updated.type as any,
-          notificationMessage: updated.notificationMessage || null,
-          configJson: updated.configJson as any,
-          statusOnOff: updated.statusOnOff as any,
-          createdAt: updated.createdAt.toISOString(),
-          updatedAt: updated.updatedAt.toISOString(),
+          id: record.id,
+          name: record.name,
+          type: record.type as any,
+          notificationMessage: record.notificationMessage || null,
+          configJson: record.configJson as any,
+          statusOnOff: record.statusOnOff as any,
+          createdAt: record.createdAt.toISOString(),
+          updatedAt: record.updatedAt.toISOString(),
         };
       }
       const created = await (this.prisma as any).alertNotificationMethod.create({

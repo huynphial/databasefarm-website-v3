@@ -1539,6 +1539,7 @@ FROM pg_tablespace`,
       id: methodData.id || `meth-${Date.now().toString().slice(-4)}`,
       name: methodData.name || 'New Alert Dispatcher',
       type: methodData.type || 'EMAIL',
+      notificationMessage: methodData.notificationMessage || null,
       configJson: methodData.configJson || {},
       statusOnOff: methodData.statusOnOff || 'ACTIVE',
       createdAt: new Date().toISOString(),
@@ -1852,7 +1853,17 @@ FROM pg_tablespace`,
         } as GroupEntity;
         savedGroup = this.groups[idx];
       } else {
-        savedGroup = groupData as GroupEntity;
+        savedGroup = {
+          id: groupData.id,
+          name: groupData.name || 'New Group',
+          description: groupData.description || null,
+          databaseIds: assignedDbIds || groupData.databaseIds || [],
+          templateIds: groupData.templateIds || [],
+          notificationMappings: groupData.notificationMappings || [],
+          createdAt: groupData.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        this.groups = [savedGroup, ...this.groups];
       }
     } else {
       targetGroupId = `grp-${Date.now().toString().slice(-4)}`;

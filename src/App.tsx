@@ -933,6 +933,7 @@ function MainAppContent() {
               onSaveGroup={handleSaveGroup}
               onDeleteGroup={handleDeleteGroup}
               onSaveDatabase={handleSaveDatabase}
+              onSaveAlertMethod={handleSaveAlertMethod}
               onRefresh={loadData}
             />
           )}
