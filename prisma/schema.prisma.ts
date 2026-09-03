@@ -528,6 +528,7 @@ model DatabasePollLog {
 
   database     Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
 
+  @@id([id, finishedAt])
   @@index([dbId, finishedAt], map: "idx_db_finished")
   @@map("database_poll_log")
 }

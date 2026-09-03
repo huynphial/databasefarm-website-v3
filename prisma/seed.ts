@@ -979,7 +979,7 @@ async function main() {
   ];
 
   // 10.95-1. Partition Table database_poll_log by finished_at Day (Single Partition p202601)
-  console.log('📦 Setting up partitioning on metric_data_points (single partition p202601)...');
+  console.log('📦 Setting up partitioning on database_poll_log (single partition p202601)...');
   try {
     const firstPartitionName = 'p202601';
     const nextDayStr = '2026-02-01';
