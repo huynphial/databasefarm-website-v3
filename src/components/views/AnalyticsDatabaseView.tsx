@@ -158,7 +158,7 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
           limit: 10000,
         }).catch(() => []),
         api.getMetricHistory(selectedDb.id, undefined, fromIso, toIso).catch(() => []),
-        api.getDatabasePollLogs(selectedDb.id, fromIso, toIso).catch(() => []),
+        api.getDatabasePollLogs(selectedDb.id, fromIso, toIso, 10000).catch(() => []),
       ]);
 
       setQueriedRawMeasurements(Array.isArray(raws) ? raws : []);
@@ -310,6 +310,9 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
       <DatabaseUptimePerformanceCharts
         selectedDb={selectedDb}
         pollLogs={queriedPollLogs}
+        timePreset={timePreset}
+        fromDateTime={fromDateTime}
+        toDateTime={toDateTime}
         isLoading={isLoadingTelemetry}
       />
 

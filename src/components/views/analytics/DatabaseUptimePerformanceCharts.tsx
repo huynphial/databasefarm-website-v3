@@ -6,10 +6,10 @@ import {
   Timer,
   Activity,
   Zap,
-  TrendingUp,
   Clock,
   Radio,
   BarChart2,
+  Layers,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -20,6 +20,8 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceLine,
+  Line,
+  ComposedChart,
 } from 'recharts';
 import { DatabasePollLogEntity, DatabaseEntity } from '../../../types';
 import { formatTimeVN } from '../../../lib/utils';
@@ -28,47 +30,101 @@ import { useLanguage } from '../../../i18n/LanguageContext';
 interface DatabaseUptimePerformanceChartsProps {
   selectedDb: DatabaseEntity | undefined;
   pollLogs: DatabasePollLogEntity[];
+  timePreset?: string;
+  fromDateTime?: string;
+  toDateTime?: string;
   isLoading?: boolean;
 }
 
-interface TimeBucket {
+interface PollChartPoint {
+  id: string;
   key: string;
-  timeLabel: string;
   timestamp: number;
-  total: number;
-  success: number;
-  failed: number;
-  uptimeRatio: number;
-  avgLatencyMs: number;
-  minLatencyMs: number;
-  maxLatencyMs: number;
+  timeLabel: string;
+  fullTimeLabel: string;
+  dbName: string;
+  latencyMs: number;
+  status: string;
+  isSuccess: boolean;
+  uptimeRatio: number; // 0-100%
+  errorMessage?: string | null;
 }
 
 export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformanceChartsProps> = ({
   selectedDb,
   pollLogs,
+  timePreset = '24h',
+  fromDateTime,
+  toDateTime,
   isLoading = false,
 }) => {
   const { t } = useLanguage();
 
-  // Filter logs for the selected database if a specific database is selected
+  // Compute exact filter boundary timestamps
+  const filterBounds = useMemo(() => {
+    const now = Date.now();
+    let startMs = now - 24 * 3600 * 1000;
+    let endMs = now;
+
+    if (timePreset === '1h') {
+      startMs = now - 1 * 3600 * 1000;
+      endMs = now;
+    } else if (timePreset === '6h') {
+      startMs = now - 6 * 3600 * 1000;
+      endMs = now;
+    } else if (timePreset === '24h') {
+      startMs = now - 24 * 3600 * 1000;
+      endMs = now;
+    } else if (timePreset === '7d') {
+      startMs = now - 7 * 86400 * 1000;
+      endMs = now;
+    } else if (timePreset === 'custom') {
+      if (fromDateTime) {
+        const parsedFrom = new Date(fromDateTime).getTime();
+        if (!isNaN(parsedFrom)) startMs = parsedFrom;
+      }
+      if (toDateTime) {
+        const parsedTo = new Date(toDateTime).getTime();
+        if (!isNaN(parsedTo)) endMs = parsedTo;
+      }
+    }
+
+    return { startMs, endMs };
+  }, [timePreset, fromDateTime, toDateTime]);
+
+  // Filter logs for the selected database AND strictly within the active time filter range
   const filteredLogs = useMemo(() => {
     if (!pollLogs || pollLogs.length === 0) return [];
-    if (!selectedDb || !selectedDb.id || selectedDb.id === 'ALL') {
-      return [...pollLogs];
-    }
-    const targetId = String(selectedDb.id).trim().toLowerCase();
-    const targetName = selectedDb.name ? selectedDb.name.trim().toLowerCase() : '';
-    return pollLogs.filter((log) => {
-      const logId = String(log.dbId || '').trim().toLowerCase();
-      if (logId && logId === targetId) return true;
-      const logName = String(log.dbName || '').trim().toLowerCase();
-      if (targetName && logName && logName === targetName) return true;
-      return false;
-    });
-  }, [pollLogs, selectedDb]);
+    
+    const targetId = selectedDb && selectedDb.id && selectedDb.id !== 'ALL'
+      ? String(selectedDb.id).trim().toLowerCase()
+      : null;
+    const targetName = selectedDb && selectedDb.name && selectedDb.id !== 'ALL'
+      ? selectedDb.name.trim().toLowerCase()
+      : null;
 
-  // Calculations for overall summary statistics
+    return pollLogs.filter((log) => {
+      // 1. Database matching
+      if (targetId) {
+        const logId = String(log.dbId || '').trim().toLowerCase();
+        const logName = String(log.dbName || '').trim().toLowerCase();
+        const matchId = logId === targetId;
+        const matchName = targetName && logName === targetName;
+        if (!matchId && !matchName) return false;
+      }
+
+      // 2. Time range filtering
+      const logStartMs = new Date(log.startedAt).getTime();
+      if (isNaN(logStartMs)) return false;
+      if (logStartMs < filterBounds.startMs || logStartMs > filterBounds.endMs) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [pollLogs, selectedDb, filterBounds]);
+
+  // Calculations for overall summary statistics within filtered window
   const metrics = useMemo(() => {
     if (filteredLogs.length === 0) {
       return {
@@ -135,7 +191,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
     };
   }, [filteredLogs]);
 
-  // Aggregate into time series data points for charts
+  // Generate complete time series data points corresponding directly to the filter
   const timeSeriesData = useMemo(() => {
     if (filteredLogs.length === 0) return [];
 
@@ -144,32 +200,11 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
       (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
     );
 
-    const minTime = new Date(sorted[0].startedAt).getTime();
-    const maxTime = new Date(sorted[sorted.length - 1].startedAt).getTime();
-    const timeSpanMs = maxTime - minTime;
+    let rollingSuccess = 0;
+    let rollingTotal = 0;
 
-    // Determine appropriate bucket interval
-    let bucketIntervalMs = 5 * 60 * 1000; // 5 min default
-    if (timeSpanMs > 7 * 24 * 3600 * 1000) {
-      bucketIntervalMs = 6 * 3600 * 1000; // 6 hours
-    } else if (timeSpanMs > 2 * 24 * 3600 * 1000) {
-      bucketIntervalMs = 2 * 3600 * 1000; // 2 hours
-    } else if (timeSpanMs > 24 * 3600 * 1000) {
-      bucketIntervalMs = 60 * 60 * 1000; // 1 hour
-    } else if (timeSpanMs > 6 * 3600 * 1000) {
-      bucketIntervalMs = 15 * 60 * 1000; // 15 mins
-    }
-
-    // Group logs into buckets
-    const bucketMap = new Map<number, {
-      timestamp: number;
-      total: number;
-      success: number;
-      failed: number;
-      latencies: number[];
-    }>();
-
-    sorted.forEach((log) => {
+    // Direct mapping of all poll log points to preserve high-fidelity filter representation
+    const points: PollChartPoint[] = sorted.map((log, idx) => {
       const startMs = new Date(log.startedAt).getTime();
       const finishMs = new Date(log.finishedAt).getTime();
       const latency = !isNaN(startMs) && !isNaN(finishMs) && finishMs >= startMs
@@ -177,70 +212,48 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
         : 0;
       const isSuccess = (log.status || '').toLowerCase() === 'success';
 
-      const bucketKey = Math.floor(startMs / bucketIntervalMs) * bucketIntervalMs;
-      let bucket = bucketMap.get(bucketKey);
-      if (!bucket) {
-        bucket = {
-          timestamp: bucketKey,
-          total: 0,
-          success: 0,
-          failed: 0,
-          latencies: [],
-        };
-        bucketMap.set(bucketKey, bucket);
-      }
+      rollingTotal++;
+      if (isSuccess) rollingSuccess++;
+      const currentUptime = Number(((rollingSuccess / rollingTotal) * 100).toFixed(2));
 
-      bucket.total++;
-      if (isSuccess) bucket.success++;
-      else bucket.failed++;
-      bucket.latencies.push(latency);
+      // Friendly time label depending on timePreset span
+      const d = new Date(startMs);
+      const hours = String(d.getHours()).padStart(2, '0');
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      const timeStr = `${hours}:${mins}`;
+      const isMultiDay = (filterBounds.endMs - filterBounds.startMs) > 36 * 3600 * 1000;
+      const displayLabel = isMultiDay
+        ? `${d.getMonth() + 1}/${d.getDate()} ${timeStr}`
+        : timeStr;
+
+      return {
+        id: log.id || `point-${idx}`,
+        key: `${log.id || idx}-${startMs}`,
+        timestamp: startMs,
+        timeLabel: displayLabel,
+        fullTimeLabel: formatTimeVN(log.startedAt),
+        dbName: log.dbName || selectedDb?.name || 'Database',
+        latencyMs: latency,
+        status: log.status || (isSuccess ? 'success' : 'failed'),
+        isSuccess,
+        uptimeRatio: currentUptime,
+        errorMessage: log.errorMessage,
+      };
     });
 
-    const buckets: TimeBucket[] = Array.from(bucketMap.values())
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .map((b) => {
-        const avgLat = b.latencies.length > 0
-          ? Math.round(b.latencies.reduce((x, y) => x + y, 0) / b.latencies.length)
-          : 0;
-        const minLat = b.latencies.length > 0 ? Math.min(...b.latencies) : 0;
-        const maxLat = b.latencies.length > 0 ? Math.max(...b.latencies) : 0;
-        const uptime = b.total > 0 ? Number(((b.success / b.total) * 100).toFixed(2)) : 100;
+    return points;
+  }, [filteredLogs, filterBounds, selectedDb?.name]);
 
-        return {
-          key: String(b.timestamp),
-          timeLabel: formatTimeVN(new Date(b.timestamp).toISOString()),
-          timestamp: b.timestamp,
-          total: b.total,
-          success: b.success,
-          failed: b.failed,
-          uptimeRatio: uptime,
-          avgLatencyMs: avgLat,
-          minLatencyMs: minLat,
-          maxLatencyMs: maxLat,
-        };
-      });
-
-    return buckets;
-  }, [filteredLogs]);
-
-  // Generate 40-slice visual status timeline strip for the uptime bar
+  // Generate visual status timeline strip across the entire selected time filter
   const timelineSlices = useMemo(() => {
-    if (filteredLogs.length === 0) {
-      return Array.from({ length: 40 }, (_, idx) => ({
-        id: idx,
-        status: 'UP' as const,
-        pct: 100,
-        label: 'No data',
-      }));
-    }
+    const sliceCount = 40;
+    const minTime = filterBounds.startMs;
+    const maxTime = filterBounds.endMs;
+    const sliceSpan = (maxTime - minTime) / sliceCount || 1;
 
     const sorted = [...filteredLogs].sort(
       (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
     );
-    const sliceCount = Math.min(48, Math.max(20, Math.ceil(sorted.length / 2)));
-    const minTime = new Date(sorted[0].startedAt).getTime();
-    const maxTime = new Date(sorted[sorted.length - 1].startedAt).getTime();
-    const sliceSpan = (maxTime - minTime) / sliceCount || 1;
 
     const slices = Array.from({ length: sliceCount }, (_, i) => {
       const sliceStart = minTime + i * sliceSpan;
@@ -278,7 +291,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
     });
 
     return slices;
-  }, [filteredLogs]);
+  }, [filteredLogs, filterBounds]);
 
   const uptimeClass =
     metrics.uptimePercentage >= 99
@@ -365,8 +378,8 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
             <div className="text-lg font-black text-rose-700">{metrics.failedPolls.toLocaleString()}</div>
           </div>
           <div className="bg-indigo-50/60 border border-indigo-200/60 rounded-xl p-2.5 text-center">
-            <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Total Polls</div>
-            <div className="text-lg font-black text-indigo-900">{metrics.totalPolls.toLocaleString()}</div>
+            <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Filter Data Points</div>
+            <div className="text-lg font-black text-indigo-900">{timeSeriesData.length.toLocaleString()}</div>
           </div>
         </div>
 
@@ -377,7 +390,9 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
               <Radio className="w-3 h-3 text-emerald-500 animate-pulse" />
               Status Timeline Strip
             </span>
-            <span>{timelineSlices.length} interval buckets</span>
+            <span className="text-slate-500">
+              Showing {timeSeriesData.length} records in filter
+            </span>
           </div>
           <div className="flex items-center gap-1 w-full bg-slate-100 p-1.5 rounded-lg border border-slate-200">
             {timelineSlices.map((slice) => {
@@ -402,7 +417,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
           {timeSeriesData.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 p-4 text-center">
               <Activity className="w-8 h-8 mb-1.5 text-slate-300" />
-              <p className="text-xs font-semibold text-slate-600">No poll log telemetry found</p>
+              <p className="text-xs font-semibold text-slate-600">No poll log telemetry found for selected filter</p>
               <p className="text-[11px] text-slate-400">Database poll scheduler records will populate automatically upon polling</p>
             </div>
           ) : (
@@ -420,6 +435,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                   tick={{ fontSize: 10, fill: '#64748b' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={false}
+                  minTickGap={25}
                 />
                 <YAxis
                   domain={[0, 100]}
@@ -432,27 +448,32 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
-                      const data = payload[0].payload as TimeBucket;
+                      const data = payload[0].payload as PollChartPoint;
                       return (
                         <div className="bg-slate-900/95 text-white p-2.5 rounded-xl shadow-xl text-xs backdrop-blur-xs border border-slate-800 space-y-1 z-50">
                           <div className="font-bold text-slate-200 border-b border-slate-700/60 pb-1 flex items-center justify-between gap-3">
-                            <span>{data.timeLabel}</span>
+                            <span>{data.fullTimeLabel}</span>
                             <span
                               className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
-                                data.uptimeRatio >= 99
+                                data.isSuccess
                                   ? 'bg-emerald-500/20 text-emerald-300'
-                                  : data.uptimeRatio >= 90
-                                  ? 'bg-amber-500/20 text-amber-300'
                                   : 'bg-rose-500/20 text-rose-300'
                               }`}
                             >
-                              {data.uptimeRatio}% Uptime
+                              {data.isSuccess ? 'PROBE SUCCESS' : 'PROBE FAILED'}
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-slate-300 pt-0.5">
-                            <div>Successful: <span className="font-bold text-emerald-400">{data.success}</span></div>
-                            <div>Failed: <span className="font-bold text-rose-400">{data.failed}</span></div>
-                            <div className="col-span-2">Total Polls: <span className="font-bold text-white">{data.total}</span></div>
+                            <div>Database: <span className="font-bold text-white">{data.dbName}</span></div>
+                            <div>Response Time: <span className="font-bold text-blue-400">{data.latencyMs} ms</span></div>
+                            <div className="col-span-2">
+                              Cumulative Availability: <span className="font-bold text-emerald-400">{data.uptimeRatio}%</span>
+                            </div>
+                            {data.errorMessage && (
+                              <div className="col-span-2 text-rose-300 font-mono text-[10px] break-words pt-1 border-t border-slate-800">
+                                Error: {data.errorMessage}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -569,7 +590,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
           {timeSeriesData.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 p-4 text-center">
               <Timer className="w-8 h-8 mb-1.5 text-slate-300" />
-              <p className="text-xs font-semibold text-slate-600">No response latency data recorded</p>
+              <p className="text-xs font-semibold text-slate-600">No response latency data recorded for selected filter</p>
               <p className="text-[11px] text-slate-400">Response time telemetry will be plotted automatically upon database polling</p>
             </div>
           ) : (
@@ -587,6 +608,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                   tick={{ fontSize: 10, fill: '#64748b' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={false}
+                  minTickGap={25}
                 />
                 <YAxis
                   unit="ms"
@@ -597,20 +619,28 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
-                      const data = payload[0].payload as TimeBucket;
+                      const data = payload[0].payload as PollChartPoint;
                       return (
                         <div className="bg-slate-900/95 text-white p-2.5 rounded-xl shadow-xl text-xs backdrop-blur-xs border border-slate-800 space-y-1 z-50">
                           <div className="font-bold text-slate-200 border-b border-slate-700/60 pb-1 flex items-center justify-between gap-3">
-                            <span>{data.timeLabel}</span>
-                            <span className="bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-extrabold">
-                              {data.avgLatencyMs} ms Avg
+                            <span>{data.fullTimeLabel}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
+                              data.isSuccess
+                                ? 'bg-blue-500/20 text-blue-300'
+                                : 'bg-rose-500/20 text-rose-300'
+                            }`}>
+                              {data.latencyMs} ms {data.isSuccess ? '' : '(FAILED)'}
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-slate-300 pt-0.5">
-                            <div>Min: <span className="font-bold text-emerald-400">{data.minLatencyMs} ms</span></div>
-                            <div>Max: <span className="font-bold text-amber-400">{data.maxLatencyMs} ms</span></div>
-                            <div>Avg: <span className="font-bold text-blue-400">{data.avgLatencyMs} ms</span></div>
-                            <div>Samples: <span className="font-bold text-white">{data.total}</span></div>
+                            <div>Database: <span className="font-bold text-white">{data.dbName}</span></div>
+                            <div>Status: <span className={`font-bold ${data.isSuccess ? 'text-emerald-400' : 'text-rose-400'}`}>{data.status}</span></div>
+                            <div className="col-span-2">Point Latency: <span className="font-bold text-blue-300">{data.latencyMs} ms</span></div>
+                            {data.errorMessage && (
+                              <div className="col-span-2 text-rose-300 font-mono text-[10px] break-words pt-1 border-t border-slate-800">
+                                Error: {data.errorMessage}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -633,7 +663,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                 )}
                 <Area
                   type="monotone"
-                  dataKey="avgLatencyMs"
+                  dataKey="latencyMs"
                   stroke="#3b82f6"
                   strokeWidth={2}
                   fillOpacity={1}

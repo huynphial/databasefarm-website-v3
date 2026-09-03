@@ -809,6 +809,7 @@ function MainAppContent() {
           userRole={currentUser.role}
           storageType={storageType}
           sessionTimeoutMinutes={getActiveSessionTimeoutMinutes()}
+          databasePollLogs={databasePollLogs}
         />
 
         {/* Tab View Routing */}
@@ -968,6 +969,7 @@ function MainAppContent() {
               databases={databases}
               databaseEngines={databaseEngines}
               alertMethods={alertMethods}
+              databasePollLogs={databasePollLogs}
               onSaveSettings={handleSaveSystemSettings}
               onSaveEngine={handleSaveEngine}
               onDeleteEngine={handleDeleteEngine}

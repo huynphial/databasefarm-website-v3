@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Globe,
   RefreshCw,
@@ -36,7 +36,8 @@ import {
   DatabaseEntity,
   DatabaseEngineEntity,
   AlertNotificationMethodEntity,
-  AlertMethodType
+  AlertMethodType,
+  DatabasePollLogEntity
 } from '../../types';
 import { useToast } from '../ui/Toast';
 import { api } from '../../lib/api';
@@ -50,6 +51,7 @@ interface SystemSettingsViewProps {
   databases?: DatabaseEntity[];
   databaseEngines: DatabaseEngineEntity[];
   alertMethods: AlertNotificationMethodEntity[];
+  databasePollLogs?: DatabasePollLogEntity[];
   onSaveSettings: (newSettings: SystemSettingsEntity) => void;
   onSaveEngine: (engine: Partial<DatabaseEngineEntity>) => Promise<any>;
   onDeleteEngine: (id: string) => Promise<void>;
@@ -77,6 +79,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   databases = [],
   databaseEngines,
   alertMethods,
+  databasePollLogs = [],
   onSaveSettings,
   onSaveEngine,
   onDeleteEngine,
@@ -269,13 +272,11 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
     }
   };
 
-  // Collector Endpoint Health State
-  const defaultUrl = settings.collectorEndpoint || 'http://localhost:3000/api/collector/mock-health';
-  const [collectorUrl, setCollectorUrl] = useState<string>(defaultUrl);
+  // Database Poll Logs State & Fetching for 30-min check
+  const [pollLogs, setPollLogs] = useState<DatabasePollLogEntity[]>(databasePollLogs || []);
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState<boolean>(false);
   const [showInfoTips, setShowInfoTips] = useState<boolean>(settings.showInfoTips !== false);
   const [timestampFormat, setTimestampFormat] = useState<string>(settings.timestampFormat || 'HH24:MI:SS DD/MM/YYYY');
-  const [isCheckingHealth, setIsCheckingHealth] = useState<boolean>(false);
-  const [healthResult, setHealthResult] = useState<HealthCheckResult | null>(null);
 
   // Reset All Data State
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -306,15 +307,81 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
     description: '',
   });
 
-  // Sync state when settings prop updates
+  // Sync state when settings or databasePollLogs props update
   useEffect(() => {
     if (settings.showInfoTips !== undefined) {
       setShowInfoTips(settings.showInfoTips !== false);
     }
-    if (settings.collectorEndpoint) {
-      setCollectorUrl(settings.collectorEndpoint);
+    if (settings.timestampFormat) {
+      setTimestampFormat(settings.timestampFormat);
     }
-  }, [settings.showInfoTips, settings.collectorEndpoint]);
+  }, [settings.showInfoTips, settings.timestampFormat]);
+
+  useEffect(() => {
+    if (databasePollLogs) {
+      setPollLogs(databasePollLogs);
+    }
+  }, [databasePollLogs]);
+
+  // Refresh database_poll_log records
+  const handleRefreshCollectorStatus = async () => {
+    setIsRefreshingStatus(true);
+    try {
+      if (onRefreshData) {
+        await onRefreshData();
+      }
+      const logs = await api.getDatabasePollLogs('ALL', undefined, undefined, 100);
+      setPollLogs(logs);
+      toast({
+        title: 'Status Refreshed',
+        description: 'Latest database_poll_log telemetry records loaded.',
+        type: 'info',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Refresh Failed',
+        description: err.message || 'Failed to fetch database_poll_log records',
+        type: 'error',
+      });
+    } finally {
+      setIsRefreshingStatus(false);
+    }
+  };
+
+  // 30-minute status evaluation rule based on database_poll_log.started_at
+  const now = Date.now();
+  const thirtyMinutesMs = 30 * 60 * 1000;
+
+  const sortedPollLogs = useMemo(() => {
+    return [...(pollLogs || [])]
+      .filter((log) => Boolean(log.startedAt))
+      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  }, [pollLogs]);
+
+  const latestPollLog = sortedPollLogs[0] || null;
+  const latestTimestampMs = latestPollLog ? new Date(latestPollLog.startedAt).getTime() : 0;
+  const timeDiffMs = latestTimestampMs > 0 ? now - latestTimestampMs : Infinity;
+  const isCollectorOn = latestTimestampMs > 0 && timeDiffMs >= 0 && timeDiffMs <= thirtyMinutesMs;
+
+  const pollsInLast30Min = useMemo(() => {
+    const n = Date.now();
+    return sortedPollLogs.filter((l) => {
+      const t = new Date(l.startedAt).getTime();
+      return n - t >= 0 && n - t <= thirtyMinutesMs;
+    }).length;
+  }, [sortedPollLogs]);
+
+  const timeElapsedText = useMemo(() => {
+    if (!latestTimestampMs || latestTimestampMs === 0) return 'No sweeps recorded';
+    if (timeDiffMs < 0) return 'Just now';
+    const mins = Math.floor(timeDiffMs / 60000);
+    if (mins < 1) return 'Just now (< 1 min ago)';
+    if (mins === 1) return '1 minute ago';
+    if (mins < 60) return `${mins} minutes ago`;
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    return `${hours}h ${remMins}m ago`;
+  }, [latestTimestampMs, timeDiffMs]);
 
   // Toggle Info Tips
   const handleToggleInfoTips = () => {
@@ -332,8 +399,8 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
     const updatedSettings: SystemSettingsEntity = {
       ...settings,
-      collectorEndpoint: collectorUrl,
       showInfoTips: nextVal,
+      timestampFormat: timestampFormat,
       updatedAt: new Date().toISOString(),
       updatedBy: 'admin',
     };
@@ -346,69 +413,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
     });
   };
 
-  // Run Health Check
-  const runHealthCheck = async (targetUrl?: string, silent = false) => {
-    const urlToTest = targetUrl || collectorUrl;
-    if (!urlToTest.trim()) {
-      if (!silent) {
-        toast({
-          title: 'Invalid URL',
-          description: 'Please specify a valid Collector API Target Endpoint URL.',
-          type: 'error',
-        });
-      }
-      return;
-    }
-
-    setIsCheckingHealth(true);
-    try {
-      const res = await api.checkCollectorHealth(urlToTest);
-      setHealthResult(res);
-
-      if (!silent) {
-        if (res.isHealthy) {
-          toast({
-            title: 'Collector Module Healthy',
-            description: `HTTP 200 OK response received from ${res.targetUrl} (${res.responseTimeMs}ms).`,
-            type: 'success',
-          });
-        } else {
-          toast({
-            title: 'Collector Module Unhealthy',
-            description: res.message,
-            type: 'error',
-          });
-        }
-      }
-    } catch (err: any) {
-      const fallbackResult: HealthCheckResult = {
-        targetUrl: urlToTest,
-        statusCode: 0,
-        statusText: 'Check Failed',
-        isHealthy: false,
-        responseTimeMs: 0,
-        timestamp: new Date().toISOString(),
-        error: err.message || 'Request execution error',
-        message: `Health check routine failed to reach endpoint: ${err.message}`,
-      };
-      setHealthResult(fallbackResult);
-      if (!silent) {
-        toast({
-          title: 'Health Check Failed',
-          description: fallbackResult.message,
-          type: 'error',
-        });
-      }
-    } finally {
-      setIsCheckingHealth(false);
-    }
-  };
-
-  useEffect(() => {
-    runHealthCheck(defaultUrl, true);
-  }, []);
-
-  const handleSaveEndpoint = (e: React.FormEvent) => {
+  const handleSavePreferences = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) {
       toast({
@@ -421,7 +426,6 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
     const updatedSettings: SystemSettingsEntity = {
       ...settings,
-      collectorEndpoint: collectorUrl,
       showInfoTips: showInfoTips,
       timestampFormat: timestampFormat,
       sessionTimeoutMinutes: Number(sessionTimeoutMinutes) || 30,
@@ -432,12 +436,10 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
     onSaveSettings(updatedSettings);
     toast({
-      title: 'Configuration Saved',
-      description: 'Collector API Target Endpoint URL updated in central database.',
+      title: 'Preferences Saved',
+      description: 'System-wide preferences and timestamp format saved successfully.',
       type: 'success',
     });
-
-    runHealthCheck(collectorUrl, false);
   };
 
   // --- Database Engine Handlers ---
@@ -621,125 +623,220 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
         </button>
       </div>
 
-      {/* TAB 1: Collector API & UI Preferences */}
+      {/* TAB 1: Collector Daemon Status & UI Preferences */}
       {activeTab === 'collector' && (
         <div className="space-y-6">
-          <form onSubmit={handleSaveEndpoint} className="space-y-6">
+          {/* Card 1: Background Collector Daemon Status (database_poll_log.started_at) */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-5">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2.5 font-bold text-slate-900 text-base">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
                 <Activity className="w-5 h-5 text-indigo-600" />
-                <span>Collector API Health Check Configuration</span>
-              </div>
-
-              {/* Quick Presets */}
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-500 font-medium hidden sm:inline">Presets:</span>
-                <button
-                  type="button"
-                  onClick={() => setCollectorUrl('http://localhost:3000/api/collector/mock-health')}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-mono text-[11px] transition-colors cursor-pointer"
-                >
-                  Mock Local API
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCollectorUrl('https://api-collector.dbfarm.internal/v2/health')}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-mono text-[11px] transition-colors cursor-pointer"
-                >
-                  Production Cluster
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                <Globe className="w-4 h-4 text-indigo-600" />
-                Target Endpoint URL
-              </label>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <input
-                  type="url"
-                  required
-                  disabled={!isAdmin}
-                  value={collectorUrl}
-                  onChange={(e) => setCollectorUrl(e.target.value)}
-                  placeholder="http://localhost:3000/api/collector/mock-health"
-                  className="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-slate-900 font-mono text-xs sm:text-sm focus:outline-none focus:border-indigo-500 disabled:opacity-70 shadow-2xs"
-                />
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => runHealthCheck()}
-                    disabled={isCheckingHealth}
-                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-colors shadow-2xs cursor-pointer disabled:opacity-60"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isCheckingHealth ? 'animate-spin text-indigo-400' : ''}`} />
-                    <span>{isCheckingHealth ? 'Running GET Check...' : 'Run Health Check'}</span>
-                  </button>
-
-                  {isAdmin ? (
-                    <button
-                      type="submit"
-                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-colors shadow-md shadow-indigo-600/20 cursor-pointer"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Save Endpoint</span>
-                    </button>
-                  ) : (
-                    <div className="text-xs text-slate-500 italic flex items-center gap-1">
-                      <Lock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Read-Only</span>
-                    </div>
-                  )}
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">
+                    {t('systemSettings.collectorStatusTitle')}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {t('systemSettings.collectorRuleDesc')}
+                  </p>
                 </div>
               </div>
 
-              <p className="text-[11px] text-slate-500 leading-relaxed pt-1">
-                * The health check routine issues an <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono font-semibold">HTTP GET</code> request to this URL.
-                The Collector module is considered <strong className="text-emerald-700">OPERATIONAL / HEALTHY</strong> if and only if the response returns an <code className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-1 py-0.5 rounded font-mono font-bold">HTTP 200 OK</code> status code.
-              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRefreshCollectorStatus}
+                  disabled={isRefreshingStatus}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60 shadow-2xs"
+                  title="Reload latest database_poll_log telemetry records"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingStatus ? 'animate-spin text-indigo-600' : 'text-slate-600'}`} />
+                  <span>{t('systemSettings.refreshCollectorStatus')}</span>
+                </button>
+
+                <div
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono flex items-center gap-1.5 border shadow-2xs ${
+                    isCollectorOn
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                      : 'bg-slate-100 text-slate-700 border-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      isCollectorOn ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                    }`}
+                  />
+                  <span>{isCollectorOn ? t('systemSettings.collectorStateOn') : t('systemSettings.collectorStateOff')}</span>
+                </div>
+              </div>
             </div>
 
-            {/* Health Result Banner */}
-            {healthResult && (
-              <div
-                className={`p-4 rounded-xl border flex items-start gap-3 text-xs ${
-                  healthResult.isHealthy
-                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-                    : 'bg-rose-50/70 border-rose-200 text-rose-950'
-                }`}
-              >
-                {healthResult.isHealthy ? (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                ) : (
-                  <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                )}
-                <div className="space-y-1 flex-1">
-                  <div className="font-bold flex items-center justify-between">
-                    <span>
-                      {healthResult.isHealthy ? 'Status: 200 OK — Module Operational' : 'Status: Health Check Failed'}
-                    </span>
-                    <span className="font-mono text-[10px] text-slate-500">
-                      Response: {healthResult.responseTimeMs}ms
-                    </span>
+            {/* Status Visual Banner */}
+            <div
+              className={`p-4 rounded-xl border flex items-start gap-3.5 text-xs transition-colors ${
+                isCollectorOn
+                  ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                  : 'bg-slate-50 border-slate-300 text-slate-800'
+              }`}
+            >
+              {isCollectorOn ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <Clock className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
+              )}
+              <div className="space-y-1 flex-1">
+                <div className="font-bold flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm">
+                    {isCollectorOn
+                      ? 'Collector Worker is ON (Operational)'
+                      : 'Collector Worker is OFF (Inactive / No Recent Sweeps)'}
+                  </span>
+                  <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-white/80 border border-slate-200 text-slate-700">
+                    Evaluation Window: 30 Minutes
+                  </span>
+                </div>
+                <p className="text-[12px] leading-relaxed">
+                  {isCollectorOn
+                    ? 'Active telemetry sweeps detected. Polling sweep logs were recorded in database_poll_log within the last 30 minutes.'
+                    : 'No polling sweeps recorded within the last 30 minutes in database_poll_log. The collector background worker is currently offline or idle.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Metric Tiles Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              {/* Tile 1: Status */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Collector State
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full ${
+                      isCollectorOn ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                    }`}
+                  />
+                  <span className="text-base font-extrabold text-slate-900 font-mono">
+                    {isCollectorOn ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium">
+                  {isCollectorOn ? 'Active within 30m' : 'No sweep in >30m'}
+                </div>
+              </div>
+
+              {/* Tile 2: Latest Started At */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  {t('systemSettings.latestStartedAt')}
+                </div>
+                <div className="text-xs font-bold text-slate-900 font-mono truncate" title={latestPollLog?.startedAt || 'N/A'}>
+                  {latestPollLog?.startedAt
+                    ? new Date(latestPollLog.startedAt).toLocaleString()
+                    : 'No sweeps recorded'}
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono truncate">
+                  {latestPollLog?.dbName ? `DB: ${latestPollLog.dbName}` : 'database_poll_log'}
+                </div>
+              </div>
+
+              {/* Tile 3: Elapsed Time */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  {t('systemSettings.timeElapsed')}
+                </div>
+                <div className="text-sm font-bold text-slate-900 font-mono">
+                  {timeElapsedText}
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium">
+                  {isCollectorOn ? 'Within 30m threshold' : 'Exceeds 30m window'}
+                </div>
+              </div>
+
+              {/* Tile 4: Polls in 30 Min */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  {t('systemSettings.pollsInLast30Min')}
+                </div>
+                <div className="text-base font-extrabold text-indigo-600 font-mono">
+                  {pollsInLast30Min} sweep{pollsInLast30Min !== 1 ? 's' : ''}
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium">
+                  Total poll logs: {pollLogs.length}
+                </div>
+              </div>
+            </div>
+
+            {/* Diagnostic Details of Latest Sweep */}
+            {latestPollLog && (
+              <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200 text-xs space-y-2">
+                <div className="font-bold text-slate-800 text-[11px] flex items-center justify-between">
+                  <span>Latest Probe Sweep Record (database_poll_log)</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                    latestPollLog.status === 'success'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {latestPollLog.status.toUpperCase()}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-mono text-slate-600">
+                  <div>
+                    <span className="text-slate-400 font-sans">Database:</span> {latestPollLog.dbName} ({latestPollLog.dbId})
                   </div>
-                  <div>{healthResult.message}</div>
-                  <div className="text-[10px] font-mono text-slate-600">Target: {healthResult.targetUrl}</div>
+                  <div>
+                    <span className="text-slate-400 font-sans">Started At:</span> {new Date(latestPollLog.startedAt).toLocaleTimeString()}
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-sans">Finished At:</span> {latestPollLog.finishedAt ? new Date(latestPollLog.finishedAt).toLocaleTimeString() : 'In-progress'}
+                  </div>
                 </div>
+                {latestPollLog.errorMessage && (
+                  <div className="text-[11px] text-rose-700 bg-rose-50 p-2 rounded border border-rose-200">
+                    <span className="font-bold">Error: </span>
+                    {latestPollLog.errorMessage}
+                  </div>
+                )}
               </div>
             )}
 
+            <div className="text-[11px] text-slate-500 leading-relaxed pt-1 border-t border-slate-100">
+              * The collector daemon health is evaluated strictly from table <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono font-semibold">database_poll_log</code> column <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono font-semibold">started_at</code>. If any poll sweep was started within the last 30 minutes, the status is <strong className="text-emerald-700">ON</strong>; if no new data exists in 30 minutes, the status is <strong className="text-slate-700">OFF</strong>.
+            </div>
+          </div>
+
+          {/* Card 2: Application Preferences Form */}
+          <form onSubmit={handleSavePreferences} className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-5">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5 font-bold text-slate-900 text-base">
+                <Sliders className="w-5 h-5 text-indigo-600" />
+                <span>Interface & Global Preferences</span>
+              </div>
+
+              {isAdmin ? (
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{t('systemSettings.savePreferences')}</span>
+                </button>
+              ) : (
+                <div className="text-xs text-slate-500 italic flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Read-Only</span>
+                </div>
+              )}
+            </div>
+
             {/* Interface Preferences Card */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+            <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                   <Info className="w-4 h-4 text-indigo-600" />
-                  <span>Info & Guidance Tips Visibility</span>
+                  <span>{t('systemSettings.infoTipsTitle')}</span>
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  Toggle the display of explanatory architecture banners and help tips across all views (default: Visible).
+                  {t('systemSettings.infoTipsDesc')}
                 </div>
               </div>
 
@@ -765,7 +862,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
               <div className="space-y-0.5">
                 <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-indigo-600" />
-                  <span>Global Timestamp Format</span>
+                  <span>{t('systemSettings.timestampFormatTitle')}</span>
                 </div>
                 <div className="text-[11px] text-slate-500">
                   Select system-wide default datetime display format strictly (e.g. HH24:MI:SS DD/MM/YYYY).
@@ -777,7 +874,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                   disabled={!isAdmin}
                   value={timestampFormat}
                   onChange={(e) => setTimestampFormat(e.target.value)}
-                  className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:border-indigo-500 disabled:opacity-60 shadow-2xs"
+                  className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:border-indigo-500 disabled:opacity-60 shadow-2xs cursor-pointer"
                 >
                   <option value="HH24:MI:SS DD/MM/YYYY">HH24:MI:SS DD/MM/YYYY (14:30:15 22/08/2026)</option>
                   <option value="DD/MM/YYYY HH24:MI:SS">DD/MM/YYYY HH24:MI:SS (22/08/2026 14:30:15)</option>
@@ -785,9 +882,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
                 </select>
               </div>
             </div>
-
-          </div>
-        </form>
+          </form>
 
         {/* Danger Zone Section */}
         <div id="danger-zone-settings" className="bg-red-50/40 border border-red-200 rounded-xl p-6 shadow-2xs space-y-6">

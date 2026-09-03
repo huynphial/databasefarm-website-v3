@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Shield, Eye, Timer, Globe } from 'lucide-react';
 import { NavigationTab } from './Sidebar';
-import { UserRole } from '../../types';
+import { UserRole, DatabasePollLogEntity } from '../../types';
 import { storage } from '../../lib/storage';
 import { useTranslation } from '../../i18n';
 
@@ -10,6 +10,7 @@ interface HeaderProps {
   userRole: UserRole;
   storageType?: 'prisma' | 'memory';
   sessionTimeoutMinutes?: number;
+  databasePollLogs?: DatabasePollLogEntity[];
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,8 +18,21 @@ export const Header: React.FC<HeaderProps> = ({
   userRole,
   storageType = 'memory',
   sessionTimeoutMinutes,
+  databasePollLogs = [],
 }) => {
   const { t, language, setLanguage } = useTranslation();
+
+  // 30-minute status evaluation rule based on database_poll_log.started_at
+  const isCollectorOn = useMemo(() => {
+    if (!databasePollLogs || databasePollLogs.length === 0) return false;
+    const now = Date.now();
+    const thirtyMinutesMs = 30 * 60 * 1000;
+    return databasePollLogs.some((log) => {
+      if (!log.startedAt) return false;
+      const t = new Date(log.startedAt).getTime();
+      return !isNaN(t) && now - t >= 0 && now - t <= thirtyMinutesMs;
+    });
+  }, [databasePollLogs]);
 
   const getTabTitleInfo = (tab: NavigationTab) => {
     switch (tab) {
@@ -180,9 +194,22 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 font-semibold text-slate-600">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span>{t('header.collectorActive')}</span>
+            <div
+              title={
+                isCollectorOn
+                  ? 'Collector is ON: Telemetry sweep recorded in database_poll_log within the last 30 minutes'
+                  : 'Collector is OFF: No telemetry sweep recorded in database_poll_log in the last 30 minutes'
+              }
+              className={`flex items-center gap-1.5 font-semibold ${
+                isCollectorOn ? 'text-emerald-700' : 'text-slate-500'
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  isCollectorOn ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                }`}
+              />
+              <span>{isCollectorOn ? t('header.collectorOn') : t('header.collectorOff')}</span>
             </div>
           </div>
 
