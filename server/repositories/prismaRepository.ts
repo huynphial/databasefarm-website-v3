@@ -1278,18 +1278,6 @@ export class PrismaRepository implements IStorageRepository {
     const updatedBy = settingsData.updatedBy || 'admin';
     const entriesToSave: Array<{ name: string; value: string }> = [];
 
-    if (settingsData.apiCollectorEnabled !== undefined) entriesToSave.push({ name: 'apiCollectorEnabled', value: String(settingsData.apiCollectorEnabled) });
-    if (settingsData.collectorEndpoint !== undefined) entriesToSave.push({ name: 'collectorEndpoint', value: settingsData.collectorEndpoint });
-    if (settingsData.collectorApiKey !== undefined) entriesToSave.push({ name: 'collectorApiKey', value: settingsData.collectorApiKey });
-    if (settingsData.collectorPollIntervalSeconds !== undefined) entriesToSave.push({ name: 'collectorPollIntervalSeconds', value: String(settingsData.collectorPollIntervalSeconds) });
-    if (settingsData.collectorBatchSize !== undefined) entriesToSave.push({ name: 'collectorBatchSize', value: String(settingsData.collectorBatchSize) });
-    if (settingsData.collectorTimeoutMs !== undefined) entriesToSave.push({ name: 'collectorTimeoutMs', value: String(settingsData.collectorTimeoutMs) });
-    if (settingsData.collectorRetryPolicy !== undefined) entriesToSave.push({ name: 'collectorRetryPolicy', value: settingsData.collectorRetryPolicy });
-    if (settingsData.globalAlertThresholdMode !== undefined) entriesToSave.push({ name: 'globalAlertThresholdMode', value: settingsData.globalAlertThresholdMode });
-    if (settingsData.maxRetryAttempts !== undefined) entriesToSave.push({ name: 'maxRetryAttempts', value: String(settingsData.maxRetryAttempts) });
-    if (settingsData.notificationDispatchIntervalSeconds !== undefined) entriesToSave.push({ name: 'notificationDispatchIntervalSeconds', value: String(settingsData.notificationDispatchIntervalSeconds) });
-    if (settingsData.defaultTimezone !== undefined) entriesToSave.push({ name: 'defaultTimezone', value: settingsData.defaultTimezone });
-    if (settingsData.dataRetentionDays !== undefined) entriesToSave.push({ name: 'dataRetentionDays', value: String(settingsData.dataRetentionDays) });
     if (settingsData.autoClearResolvedAlerts !== undefined) entriesToSave.push({ name: 'autoClearResolvedAlerts', value: String(settingsData.autoClearResolvedAlerts) });
     if (settingsData.showInfoTips !== undefined) entriesToSave.push({ name: 'showInfoTips', value: String(settingsData.showInfoTips) });
     if (settingsData.sessionTimeoutMinutes !== undefined) entriesToSave.push({ name: 'SESSION_TIMEOUT_MINUTES', value: String(settingsData.sessionTimeoutMinutes) });
@@ -1315,18 +1303,35 @@ export class PrismaRepository implements IStorageRepository {
       { id: 'ss-04', name: 'annual_license_key', value: '', updatedBy: 'admin' },
     ];
 
+    const allowedKeys = ['autoClearResolvedAlerts', 'showInfoTips', 'SESSION_TIMEOUT_MINUTES', 'annual_license_key'];
+
     try {
       const records = await (this.prisma as any).systemSettings.findMany({
+        where: { name: { in: allowedKeys } },
         orderBy: { id: 'asc' },
       });
       if (records && records.length > 0) {
-        return records.map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          value: r.value ?? '',
-          updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString(),
-          updatedBy: r.updatedBy || 'admin',
-        }));
+        // Map database records and fill any missing items from systemSettingsData
+        const recordMap = new Map(records.map((r: any) => [r.name, r]));
+        return systemSettingsData.map((d) => {
+          const found = recordMap.get(d.name);
+          if (found) {
+            return {
+              id: (found as any).id || d.id,
+              name: (found as any).name,
+              value: (found as any).value ?? d.value,
+              updatedAt: (found as any).updatedAt ? new Date((found as any).updatedAt).toISOString() : new Date().toISOString(),
+              updatedBy: (found as any).updatedBy || d.updatedBy,
+            };
+          }
+          return {
+            id: d.id,
+            name: d.name,
+            value: d.value,
+            updatedAt: new Date().toISOString(),
+            updatedBy: d.updatedBy,
+          };
+        });
       }
     } catch (e) {
       console.warn('Prisma getSystemSettingsList failed, returning defaults:', e);
