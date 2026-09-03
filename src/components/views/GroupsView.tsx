@@ -29,6 +29,7 @@ import {
   Loader2,
   KeyRound,
   ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { ActiveAlertEntity, DatabaseEntity, GroupEntity, TemplateEntity, AlertNotificationMethodEntity, UserRole, DatabaseEngineEntity, DbEngine, AlertMethodType } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
@@ -149,6 +150,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   const [importFileError, setImportFileError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importGenerateNewIds, setImportGenerateNewIds] = useState(false);
+  const [importReplaceAlertMethods, setImportReplaceAlertMethods] = useState(true);
   const [importPreviewTab, setImportPreviewTab] = useState<'groups' | 'databases' | 'methods'>('groups');
   const [importPreview, setImportPreview] = useState<{
     type: 'BUNDLE' | 'ARRAY' | 'SINGLE';
@@ -186,6 +188,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     }>;
     bundledMethods: Array<{
       id?: string;
+      existingMethodId?: string;
+      existingMethodName?: string;
       name?: string;
       methodName?: string;
       type?: string;
@@ -194,10 +198,12 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       configJson?: any;
       statusOnOff?: string;
       isDuplicateId?: boolean;
+      isExistingMethod?: boolean;
     }>;
     duplicateGroupsCount: number;
     duplicateDatabasesCount: number;
     duplicateMethodsCount: number;
+    existingMethodsCount: number;
   } | null>(null);
 
   useEffect(() => {
@@ -711,11 +717,20 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         };
       });
 
-      // 5. Normalize Notification Methods and check for duplicate IDs
+      // 5. Normalize Notification Methods and check for existing methods to replace
       const normalizedMethods = Array.from(uniqueMethodsMap.values()).map((m: any) => {
+        const mName = (m.name || m.methodName || '').trim().toLowerCase();
+        const mType = (m.type || m.channelType || '').toUpperCase();
+        const existingMethod = alertMethods.find(
+          (em) => (m.id && em.id === m.id) || (mType && em.type === mType) || (mName && em.name?.trim().toLowerCase() === mName)
+        );
         const isDuplicateId = Boolean(m.id && alertMethods.some((em) => em.id === m.id));
+        const isExistingMethod = Boolean(existingMethod);
+
         return {
           id: m.id,
+          existingMethodId: existingMethod?.id,
+          existingMethodName: existingMethod?.name,
           name: m.name || m.methodName || 'Alert Dispatcher',
           methodName: m.methodName || m.name || 'Alert Dispatcher',
           type: m.type || m.channelType || 'EMAIL',
@@ -724,12 +739,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           configJson: m.configJson || {},
           statusOnOff: m.statusOnOff || 'ACTIVE',
           isDuplicateId,
+          isExistingMethod,
         };
       });
 
       const duplicateGroupsCount = normalizedGroups.filter((g) => g.isDuplicateId).length;
       const duplicateDatabasesCount = normalizedDbs.filter((d) => d.isDuplicateId).length;
       const duplicateMethodsCount = normalizedMethods.filter((m) => m.isDuplicateId).length;
+      const existingMethodsCount = normalizedMethods.filter((m) => m.isExistingMethod).length;
 
       setImportPreview({
         type: bundleType,
@@ -739,6 +756,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         duplicateGroupsCount,
         duplicateDatabasesCount,
         duplicateMethodsCount,
+        existingMethodsCount,
       });
     } catch (err: any) {
       setImportFileError(err.message || 'Failed to parse JSON file');
@@ -777,41 +795,84 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
     setIsImporting(true);
     try {
-      let importedAlertMethodsCount = 0;
+      let replacedAlertMethodsCount = 0;
+      let createdAlertMethodsCount = 0;
       let skippedAlertMethodsCount = 0;
       let importedDatabasesCount = 0;
       let skippedDatabasesCount = 0;
       let importedGroupsCount = 0;
       let skippedGroupsCount = 0;
 
-      // STEP 1: Import all Alert Notification Methods (with full configJson, skip if id duplicate)
+      // Method ID remap table so group notificationMappings point to the correct method ID
+      const methodIdRemap = new Map<string, string>();
+
+      // STEP 1: Import all Alert Notification Methods (replace existing by default)
       const currentMethodIds = new Set(alertMethods.map((m) => m.id));
       for (const candidate of importPreview.bundledMethods) {
-        if (candidate.id && currentMethodIds.has(candidate.id) && !importGenerateNewIds) {
-          skippedAlertMethodsCount++;
-          continue;
-        }
+        const cName = (candidate.name || candidate.methodName || '').trim().toLowerCase();
+        const cType = (candidate.type || candidate.channelType || '').toUpperCase();
 
-        const methodId = importGenerateNewIds
-          ? `meth-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`
-          : candidate.id || `meth-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
+        const existingMethod = alertMethods.find(
+          (em) => (candidate.id && em.id === candidate.id) || (cType && em.type === cType) || (cName && em.name?.trim().toLowerCase() === cName)
+        );
 
-        const methodPayload: Partial<AlertNotificationMethodEntity> = {
-          id: methodId,
-          name: candidate.name || candidate.methodName || 'Imported Alert Method',
-          type: (candidate.type || candidate.channelType || 'EMAIL').toUpperCase() as AlertMethodType,
-          notificationMessage: candidate.notificationMessage !== undefined ? candidate.notificationMessage : null,
-          configJson: candidate.configJson || {},
-          statusOnOff: (candidate.statusOnOff as any) || 'ACTIVE',
-        };
+        if (existingMethod) {
+          if (importReplaceAlertMethods) {
+            // REPLACE / UPDATE the existing alert notification method with imported configuration
+            const methodPayload: Partial<AlertNotificationMethodEntity> = {
+              id: existingMethod.id,
+              name: candidate.name || candidate.methodName || existingMethod.name,
+              type: ((candidate.type || candidate.channelType || existingMethod.type) as string).toUpperCase() as AlertMethodType,
+              notificationMessage: candidate.notificationMessage !== undefined ? candidate.notificationMessage : existingMethod.notificationMessage,
+              configJson: candidate.configJson || existingMethod.configJson || {},
+              statusOnOff: (candidate.statusOnOff as any) || existingMethod.statusOnOff || 'ACTIVE',
+            };
 
-        if (onSaveAlertMethod) {
-          await onSaveAlertMethod(methodPayload);
+            if (onSaveAlertMethod) {
+              await onSaveAlertMethod(methodPayload);
+            } else {
+              await api.saveAlertNotificationMethod(methodPayload);
+            }
+
+            if (candidate.id) {
+              methodIdRemap.set(candidate.id, existingMethod.id);
+            }
+            currentMethodIds.add(existingMethod.id);
+            replacedAlertMethodsCount++;
+          } else {
+            // Replace disabled: skip duplicate/existing
+            if (candidate.id) {
+              methodIdRemap.set(candidate.id, existingMethod.id);
+            }
+            skippedAlertMethodsCount++;
+          }
         } else {
-          await api.saveAlertNotificationMethod(methodPayload);
+          // CREATE new alert notification method
+          const methodId = importGenerateNewIds
+            ? `meth-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`
+            : candidate.id || `meth-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
+
+          const methodPayload: Partial<AlertNotificationMethodEntity> = {
+            id: methodId,
+            name: candidate.name || candidate.methodName || 'Imported Alert Method',
+            type: (candidate.type || candidate.channelType || 'EMAIL').toUpperCase() as AlertMethodType,
+            notificationMessage: candidate.notificationMessage !== undefined ? candidate.notificationMessage : null,
+            configJson: candidate.configJson || {},
+            statusOnOff: (candidate.statusOnOff as any) || 'ACTIVE',
+          };
+
+          if (onSaveAlertMethod) {
+            await onSaveAlertMethod(methodPayload);
+          } else {
+            await api.saveAlertNotificationMethod(methodPayload);
+          }
+
+          if (candidate.id) {
+            methodIdRemap.set(candidate.id, methodId);
+          }
+          currentMethodIds.add(methodId);
+          createdAlertMethodsCount++;
         }
-        currentMethodIds.add(methodId);
-        importedAlertMethodsCount++;
       }
 
       // STEP 2: Import all Databases (with encrypted passwords, skip if id duplicate)
@@ -894,12 +955,16 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           }
         });
 
-        // Resolve notification mappings
+        // Resolve notification mappings (remapped to replaced alert methods if applicable)
         const resolvedMappings = (item.notificationMappings || [])
-          .map((mapping: any) => ({
-            notificationMethodId: mapping.notificationMethodId || mapping.id || '',
-            senderIds: (mapping.senderIds || '').trim(),
-          }))
+          .map((mapping: any) => {
+            const rawId = mapping.notificationMethodId || mapping.id || '';
+            const mappedId = methodIdRemap.get(rawId) || rawId;
+            return {
+              notificationMethodId: mappedId,
+              senderIds: (mapping.senderIds || '').trim(),
+            };
+          })
           .filter((m: any) => Boolean(m.notificationMethodId));
 
         const groupId = importGenerateNewIds
@@ -922,9 +987,13 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         importedGroupsCount++;
       }
 
+      const alertMethodsSummary = importReplaceAlertMethods
+        ? `${replacedAlertMethodsCount} replaced/updated, ${createdAlertMethodsCount} created`
+        : `${createdAlertMethodsCount} created, ${skippedAlertMethodsCount} skipped`;
+
       toast({
         title: t('groups.groupsImported') || 'Import Complete',
-        description: `Groups: ${importedGroupsCount} imported (${skippedGroupsCount} skipped - duplicate ID) | Databases: ${importedDatabasesCount} imported (${skippedDatabasesCount} skipped - duplicate ID) | Alert Methods: ${importedAlertMethodsCount} imported (${skippedAlertMethodsCount} skipped - duplicate ID).`,
+        description: `Groups: ${importedGroupsCount} imported (${skippedGroupsCount} skipped - duplicate ID) | Databases: ${importedDatabasesCount} imported (${skippedDatabasesCount} skipped - duplicate ID) | Alert Methods: ${alertMethodsSummary}.`,
         type: 'success',
       });
 
@@ -1884,12 +1953,18 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>
-                    Ready to Import: {importPreview.groups.length} Group(s), {importPreview.bundledDatabases.length} DB(s), {importPreview.bundledMethods.length} Channel(s)
+                    Ready to Import: {importPreview.groups.length} Group(s), {importPreview.bundledDatabases.length} DB(s), {importPreview.bundledMethods.length} Alert Method(s)
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px]">
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  {importReplaceAlertMethods && importPreview.existingMethodsCount > 0 && (
+                    <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-mono text-[10px] flex items-center gap-1">
+                      <RefreshCw className="w-2.5 h-2.5 text-blue-600" />
+                      {importPreview.existingMethodsCount} Alert Method(s) will replace existing (default)
+                    </span>
+                  )}
                   <span className="bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded font-mono text-[10px]">
-                    {importPreview.duplicateGroupsCount + importPreview.duplicateDatabasesCount + importPreview.duplicateMethodsCount} Duplicate IDs will be skipped
+                    {importPreview.duplicateGroupsCount + importPreview.duplicateDatabasesCount} Duplicate Group/DB IDs will be skipped
                   </span>
                 </div>
               </div>
@@ -1899,7 +1974,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-semibold">Import Rule: </span>
-                  All databases, database groups, and alert notification methods will be imported to the database (including passwords (enc) and notification channel configs). Items with an existing ID in the database will be safely skipped.
+                  All databases, database groups, and alert notification methods will be imported to the database (including passwords (enc) and notification channel configs). Existing Alert Notification Methods are <strong>replaced and updated with the imported configuration by default</strong>. Duplicate Database and Group IDs are skipped.
                 </div>
               </div>
 
@@ -1952,9 +2027,9 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 >
                   <Radio className="w-3.5 h-3.5" />
                   <span>Alert Methods ({importPreview.bundledMethods.length})</span>
-                  {importPreview.duplicateMethodsCount > 0 && (
-                    <span className={`text-[10px] px-1 rounded ${importPreviewTab === 'methods' ? 'bg-indigo-700 text-indigo-100' : 'bg-amber-100 text-amber-800'}`}>
-                      {importPreview.duplicateMethodsCount} skip
+                  {importPreview.existingMethodsCount > 0 && (
+                    <span className={`text-[10px] px-1 rounded flex items-center gap-0.5 ${importPreviewTab === 'methods' ? 'bg-indigo-700 text-indigo-100' : 'bg-blue-100 text-blue-800'}`}>
+                      {importReplaceAlertMethods ? `${importPreview.existingMethodsCount} replace` : `${importPreview.existingMethodsCount} skip`}
                     </span>
                   )}
                 </button>
@@ -2090,13 +2165,21 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                             <span className="font-mono text-[10px] text-slate-400">({method.id || 'no-id'})</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {method.isDuplicateId && !importGenerateNewIds ? (
-                              <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
-                                Duplicate ID (Will skip)
-                              </span>
+                            {method.isExistingMethod ? (
+                              importReplaceAlertMethods ? (
+                                <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                                  <RefreshCw className="w-2.5 h-2.5" />
+                                  Replaces Existing {method.existingMethodName ? `("${method.existingMethodName}")` : ''}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                                  Duplicate (Will skip)
+                                </span>
+                              )
                             ) : (
-                              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">
-                                Will Import
+                              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                                <Check className="w-2.5 h-2.5" />
+                                Will Create
                               </span>
                             )}
                             <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-medium">
@@ -2124,12 +2207,25 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
+                    checked={importReplaceAlertMethods}
+                    onChange={(e) => setImportReplaceAlertMethods(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="font-semibold text-slate-900 flex items-center gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    Replace existing alert notification methods with imported configuration (Default)
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
                     checked={!importGenerateNewIds}
                     onChange={(e) => setImportGenerateNewIds(!e.target.checked)}
                     className="rounded text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span className="font-medium text-slate-800">
-                    Skip items if ID already exists in the database (recommended)
+                  <span className="text-slate-700 font-medium">
+                    Skip Databases and Groups if ID already exists in the database
                   </span>
                 </label>
 
@@ -2140,7 +2236,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                     onChange={(e) => setImportGenerateNewIds(e.target.checked)}
                     className="rounded text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span>Generate fresh unique IDs for all imported items instead of skipping duplicates</span>
+                  <span className="text-slate-500">Generate fresh unique IDs for all imported items instead of skipping duplicates</span>
                 </label>
               </div>
             </div>

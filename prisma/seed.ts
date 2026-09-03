@@ -255,7 +255,7 @@ async function main() {
     { id: 'ss-01', name: 'autoClearResolvedAlerts', value: 'true', updatedBy: 'admin' },
     { id: 'ss-02', name: 'showInfoTips', value: 'false', updatedBy: 'admin' },
     { id: 'ss-03', name: 'SESSION_TIMEOUT_MINUTES', value: '2880', updatedBy: 'admin' },
-    { id: 'ss-03', name: 'annual_license_key', value: 'JPRWwsiKNfLTEBgbNsma7CQb5g+wkd3chd1jPnVn7+NRZUp4pGE6nHpOOI8roLW9Z0F/xaw7SoQIRoU6j4Cz9GnjhwRttmlDUCzVN61hnIufOBreZ01/2Kj2TF1zPHqK5cnPuwELXmR9MWe5+EDg4IPF+IifRvWXeaot+C8hAVEtoxfSB3oHxY8X8t356HkWdyScQT1EPW08rh7+ByHHEAmWiifrkV26jm5EEIhzQXDzgiDno1VUNrJ0r3rrvmHcYS67nBwERTADx97TvaMT0+RbZJlVisTJc9PiJlLvXm3pem47Wcf0tEtpUR+nghaWR6+W+Ied2p3TP3zBgF1btM8tL6S9ri8KKSkdmyvxrtflAy1TNy/HGPKBewR9DnfHDyCArBPJEeq1xbBO1k224o+V6kknRrvUEmZhMwdgw/Sd8PIXKz4L2rSpMmj62sp5UCpogke+HNOTSkCgaWmdXMmjLRP/AvAAnkjdrUf+1cYEFnjpXgXfGhTcTQ5XTa3S', updatedBy: 'admin' },
+    { id: 'ss-04', name: 'annual_license_key', value: 'JPRWwsiKNfLTEBgbNsma7CQb5g+wkd3chd1jPnVn7+NRZUp4pGE6nHpOOI8roLW9Z0F/xaw7SoQIRoU6j4Cz9GnjhwRttmlDUCzVN61hnIufOBreZ01/2Kj2TF1zPHqK5cnPuwELXmR9MWe5+EDg4IPF+IifRvWXeaot+C8hAVEtoxfSB3oHxY8X8t356HkWdyScQT1EPW08rh7+ByHHEAmWiifrkV26jm5EEIhzQXDzgiDno1VUNrJ0r3rrvmHcYS67nBwERTADx97TvaMT0+RbZJlVisTJc9PiJlLvXm3pem47Wcf0tEtpUR+nghaWR6+W+Ied2p3TP3zBgF1btM8tL6S9ri8KKSkdmyvxrtflAy1TNy/HGPKBewR9DnfHDyCArBPJEeq1xbBO1k224o+V6kknRrvUEmZhMwdgw/Sd8PIXKz4L2rSpMmj62sp5UCpogke+HNOTSkCgaWmdXMmjLRP/AvAAnkjdrUf+1cYEFnjpXgXfGhTcTQ5XTa3S', updatedBy: 'admin' },
   ];
 
   // 4. Random UUID templates
@@ -978,6 +978,74 @@ async function main() {
     },
   ];
 
+  // 10.95-1. Partition Table database_poll_log by finished_at Day (Single Partition p202601)
+  console.log('📦 Setting up partitioning on metric_data_points (single partition p202601)...');
+  try {
+    const firstPartitionName = 'p202601';
+    const nextDayStr = '2026-02-01';
+
+    // 1. Drop foreign keys if MySQL InnoDB constraints exist (MySQL disallows FKs on partitioned tables)
+    try {
+      const fks: any = await p.$queryRawUnsafe(`
+        SELECT CONSTRAINT_NAME 
+        FROM information_schema.KEY_COLUMN_USAGE 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'database_poll_log' 
+          AND REFERENCED_TABLE_NAME IS NOT NULL;
+      `);
+      if (Array.isArray(fks)) {
+        for (const fk of fks) {
+          if (fk.CONSTRAINT_NAME) {
+            await p.$executeRawUnsafe(
+              `ALTER TABLE \`database_poll_log\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\`;`
+            );
+          }
+        }
+      }
+    } catch (fkErr: any) {
+      // Ignored if not MySQL or no FKs present
+    }
+
+    // 2. Check if table is already partitioned
+    const existingPartitions: any = await p.$queryRawUnsafe(`
+      SELECT PARTITION_NAME 
+      FROM information_schema.PARTITIONS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'database_poll_log' 
+        AND PARTITION_NAME IS NOT NULL;
+    `);
+
+    if (Array.isArray(existingPartitions) && existingPartitions.length > 0) {
+      console.log(`ℹ️ database_poll_log is already partitioned. Existing partitions: ${existingPartitions.map((ep: any) => ep.PARTITION_NAME).join(', ')}`);
+      const hasFirstPartition = existingPartitions.some((ep: any) => ep.PARTITION_NAME === firstPartitionName);
+
+      if (!hasFirstPartition) {
+        try {
+          await p.$executeRawUnsafe(`
+            ALTER TABLE \`database_poll_log\` 
+            ADD PARTITION (
+              PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
+            );
+          `);
+          console.log(`✅ Added partition ${firstPartitionName}.`);
+        } catch {
+          // Already covered by range
+        }
+      }
+    } else {
+      // 3. Alter table to partition by range of TO_DAYS(finished_at) with only partition p202601
+      await p.$executeRawUnsafe(`
+        ALTER TABLE \`database_poll_log\` 
+        PARTITION BY RANGE (TO_DAYS(\`finished_at\`)) (
+          PARTITION \`${firstPartitionName}\` VALUES LESS THAN (TO_DAYS('${nextDayStr}'))
+        );
+      `);
+      console.log(`✅ Successfully created single partition "${firstPartitionName}" on database_poll_log table.`);
+    }
+  } catch (partErr: any) {
+    console.warn('⚠️ Partition configuration note (will proceed with data insertion):', partErr.message);
+  }
+
   // 10.95. Partition Table metric_data_points by measured_at Day (Single Partition p20260101)
   console.log('📦 Setting up partitioning on metric_data_points (single partition p20260101)...');
   try {
@@ -1045,6 +1113,7 @@ async function main() {
   } catch (partErr: any) {
     console.warn('⚠️ Partition configuration note (will proceed with data insertion):', partErr.message);
   }
+
 
   // 11. Execute High-Performance Batched Inserters (Atomic Transaction)
   console.log('⚡ Executing optimized batch insertions...');
