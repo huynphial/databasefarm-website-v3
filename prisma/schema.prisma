@@ -20,16 +20,27 @@ enum Role {
   VIEWER
 }
 
-/// DbType Enum: Supported relational database engines.
-/// - ORACLE: Oracle Database Server (11g/12c/19c/21c).
-/// - MYSQL: MySQL Server & MariaDB.
-/// - POSTGRES: PostgreSQL Database.
-/// - MSSQL: Microsoft SQL Server.
+/// DbType Enum: Supported relational and NoSQL database engines matching database_engines catalog.
+/// Supports all engines configured in databaseEnginesData (Oracle, MySQL, Postgres, MSSQL, MariaDB, DB2, MongoDB, Redis, SingleStore, ClickHouse, Elasticsearch, OpenSearch, Cassandra, SAP HANA, Snowflake, BigQuery, Redshift, Databricks).
 enum DbType {
   ORACLE
   MYSQL
   POSTGRES
   MSSQL
+  MARIADB
+  DB2
+  MONGODB
+  REDIS
+  SINGLESTORE
+  CLICKHOUSE
+  ELASTICSEARCH
+  OPENSEARCH
+  CASSANDRA
+  SAPHANA
+  SNOWFLAKE
+  BIGQUERY
+  REDSHIFT
+  DATABRICKS
 }
 
 /// ValueType Enum: Metric execution result evaluation types.
@@ -109,7 +120,7 @@ model Database {
   id     String @id @default(uuid())
   /// User-friendly name identifier (e.g., "ERP_PROD_ORA", "CRM_PORTAL_MY").
   name   String
-  /// Database engine architecture (ORACLE | MYSQL | POSTGRES | MSSQL).
+  /// Database engine architecture (supported in DbType enum matching database_engines).
   dbType DbType
   /// Hostname or IP address of database server.
   host   String
@@ -124,6 +135,10 @@ model Database {
   pollIntervalMinutes Int       @default(5) @map("poll_interval_minutes")
   /// Operational notes and comments long text.
   note                String?   @db.Text
+
+  /// Optional foreign key referencing the dynamic DatabaseEngine catalog.
+  databaseEngineId    String?         @map("database_engine_id")
+  databaseEngine      DatabaseEngine? @relation("EngineDatabases", fields: [databaseEngineId], references: [id], onDelete: SetNull)
 
   /// DB account username.
   username          String?
@@ -439,6 +454,7 @@ model DatabaseEngine {
 
   metrics     Metric[]   @relation("EngineMetrics")
   templates   Template[] @relation("EngineTemplates")
+  databases   Database[] @relation("EngineDatabases")
 
   @@map("database_engines")
 }

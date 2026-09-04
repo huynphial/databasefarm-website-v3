@@ -263,31 +263,75 @@ async function main() {
   const tplPostgresId = '8b1968e0-40db-4fdf-9730-8a1a3848b11a';
   const tplMysqlId = '3182b820-2092-49af-bf20-56291a8ea8d3';
   const tplMssqlId = 'e528b809-f308-412f-b4fb-f4955b9e07fb';
+  const tplMariaId = '7c21f92e-33bb-4521-88aa-32bb192e44aa';
+  const tplMongoId = '4a88f11d-22aa-4921-99bb-55cc281e33bb';
+  const tplRedisId = '9b33e22c-11dd-4411-88cc-77dd392f22cc';
+  const tplChId = '6d55c33b-44ee-4822-77dd-88ee403a11dd';
+  const tplSsId = '5e66b44a-55ff-4733-66ee-99ff514b00ee';
 
   const templatesData = [
     {
       id: tplOracleId,
       name: 'Oracle Enterprise Standard',
       targetDbType: DbType.ORACLE,
+      databaseEngineId: 'eng-01',
       description: 'Standard health checks for Oracle Database instances (Tablespace, Active Sessions, Buffer Cache Hit Ratio).',
     },
     {
       id: tplPostgresId,
       name: 'PostgreSQL Core Health',
       targetDbType: DbType.POSTGRES,
+      databaseEngineId: 'eng-03',
       description: 'Connection saturation, cache hit ratio, and replication lag metrics for PostgreSQL.',
     },
     {
       id: tplMysqlId,
       name: 'MySQL Server Metrics',
       targetDbType: DbType.MYSQL,
+      databaseEngineId: 'eng-02',
       description: 'Thread concurrency, InnoDB buffer pool, and slow queries.',
     },
     {
       id: tplMssqlId,
       name: 'SQL Server Enterprise Baseline',
       targetDbType: DbType.MSSQL,
+      databaseEngineId: 'eng-04',
       description: 'Page Life Expectancy, buffer cache ratio, and batch requests per second.',
+    },
+    {
+      id: tplMariaId,
+      name: 'MariaDB Performance Pack',
+      targetDbType: DbType.MARIADB,
+      databaseEngineId: 'eng-05',
+      description: 'Galera replication cluster health, Aria engine status, and query cache performance.',
+    },
+    {
+      id: tplMongoId,
+      name: 'MongoDB NoSQL Sentinel',
+      targetDbType: DbType.MONGODB,
+      databaseEngineId: 'eng-07',
+      description: 'Replica set lag, memory working set, document operations/sec, and connection pool.',
+    },
+    {
+      id: tplRedisId,
+      name: 'Redis In-Memory Diagnostics',
+      targetDbType: DbType.REDIS,
+      databaseEngineId: 'eng-08',
+      description: 'Memory fragmentation ratio, connected clients, eviction rate, and ops/sec.',
+    },
+    {
+      id: tplChId,
+      name: 'ClickHouse Columnar Analytics',
+      targetDbType: DbType.CLICKHOUSE,
+      databaseEngineId: 'eng-10',
+      description: 'MergeTree parts, uncompressed cache hit rate, query execution latency, and insertion rates.',
+    },
+    {
+      id: tplSsId,
+      name: 'SingleStore Realtime SQL',
+      targetDbType: DbType.SINGLESTORE,
+      databaseEngineId: 'eng-09',
+      description: 'Distributed leaf node memory, pipeline ingestion rate, and query latency.',
     },
   ];
 
@@ -437,12 +481,18 @@ async function main() {
   const dbMyId = 'e3f4ab22-09ac-40fe-8fbc-df99824fcc2a';
   const dbMsId = '9cb8d712-4fb3-48ee-b883-fa4c2d3cb501';
   const dbStgMyId = '5526cb09-3ab3-46ea-9a88-77cb2d2c2d44';
+  const dbMariaId = '6618db11-5bc4-47fb-89ab-88dc3e3d3e55';
+  const dbMongoId = '7729ec22-6cd5-48ac-90bc-99ed4f4e4f66';
+  const dbRedisId = '8830fd33-7de6-49bd-01cd-00fe5a5f5a77';
+  const dbChId = '9941ae44-8ef7-4ace-12de-11af6b6a6b88';
+  const dbSsId = 'aa52bf55-9fa8-4bdf-23ef-22ba7c7b7c99';
 
   const databasesData = [
     {
       id: dbOraId,
       name: 'ERP_PROD_ORA',
       dbType: DbType.ORACLE,
+      databaseEngineId: 'eng-01',
       host: '192.168.12.44',
       port: 1521,
       pollId: 0,
@@ -457,6 +507,7 @@ async function main() {
       id: dbPgId,
       name: 'PAYMENT_API_PG',
       dbType: DbType.POSTGRES,
+      databaseEngineId: 'eng-03',
       host: '192.168.14.88',
       port: 5432,
       pollId: 0,
@@ -471,6 +522,7 @@ async function main() {
       id: dbMyId,
       name: 'CRM_PORTAL_MY',
       dbType: DbType.MYSQL,
+      databaseEngineId: 'eng-02',
       host: '192.168.20.102',
       port: 3306,
       pollId: 0,
@@ -485,6 +537,7 @@ async function main() {
       id: dbMsId,
       name: 'DWH_REPORT_MS',
       dbType: DbType.MSSQL,
+      databaseEngineId: 'eng-04',
       host: '192.168.30.15',
       port: 1433,
       pollId: 0,
@@ -499,6 +552,7 @@ async function main() {
       id: dbStgMyId,
       name: 'INVENTORY_STG_MY',
       dbType: DbType.MYSQL,
+      databaseEngineId: 'eng-02',
       host: '192.168.40.72',
       port: 3306,
       pollId: 0,
@@ -508,6 +562,81 @@ async function main() {
       status: 'DOWN',
       lastCheckAt: new Date(Date.now() - 2 * 60000),
       isEnabled: false,
+    },
+    {
+      id: dbMariaId,
+      name: 'BILLING_PORTAL_MARIA',
+      dbType: DbType.MARIADB,
+      databaseEngineId: 'eng-05',
+      host: '192.168.22.45',
+      port: 3306,
+      pollId: 0,
+      username: 'billing_mon',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
+      connectionConfig: { databaseName: 'billing_service' },
+      status: 'UP',
+      lastCheckAt: new Date(Date.now() - 4 * 60000),
+      isEnabled: true,
+    },
+    {
+      id: dbMongoId,
+      name: 'CATALOG_NOSQL_MONGO',
+      dbType: DbType.MONGODB,
+      databaseEngineId: 'eng-07',
+      host: '192.168.50.110',
+      port: 27017,
+      pollId: 0,
+      username: 'catalog_reader',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
+      connectionConfig: { authSource: 'admin', replicaSet: 'rs0' },
+      status: 'UP',
+      lastCheckAt: new Date(Date.now() - 6 * 60000),
+      isEnabled: true,
+    },
+    {
+      id: dbRedisId,
+      name: 'SESSION_CACHE_REDIS',
+      dbType: DbType.REDIS,
+      databaseEngineId: 'eng-08',
+      host: '192.168.55.80',
+      port: 6379,
+      pollId: 0,
+      username: 'default',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
+      connectionConfig: { dbIndex: 0 },
+      status: 'UP',
+      lastCheckAt: new Date(Date.now() - 1 * 60000),
+      isEnabled: true,
+    },
+    {
+      id: dbChId,
+      name: 'ANALYTICS_EVENT_CH',
+      dbType: DbType.CLICKHOUSE,
+      databaseEngineId: 'eng-10',
+      host: '192.168.60.200',
+      port: 8123,
+      pollId: 0,
+      username: 'ch_reporter',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
+      connectionConfig: { databaseName: 'telemetry_dw' },
+      status: 'UP',
+      lastCheckAt: new Date(Date.now() - 8 * 60000),
+      isEnabled: true,
+    },
+    {
+      id: dbSsId,
+      name: 'HTAP_TRADING_SSTORE',
+      dbType: DbType.SINGLESTORE,
+      databaseEngineId: 'eng-09',
+      host: '192.168.70.150',
+      port: 3306,
+      pollId: 0,
+      username: 'sstore_analyst',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
+      connectionConfig: { databaseName: 'trading_realtime' },
+      status: 'UP',
+      lastCheckAt: new Date(Date.now() - 7 * 60000),
+      isEnabled: true,
     },
   ];
 
@@ -519,6 +648,11 @@ async function main() {
     { databaseId: dbMyId, groupId: grpProdId },
     { databaseId: dbMsId, groupId: grpAnalyticsId },
     { databaseId: dbStgMyId, groupId: grpProdId },
+    { databaseId: dbMariaId, groupId: grpFinanceId },
+    { databaseId: dbMongoId, groupId: grpProdId },
+    { databaseId: dbRedisId, groupId: grpProdId },
+    { databaseId: dbChId, groupId: grpAnalyticsId },
+    { databaseId: dbSsId, groupId: grpAnalyticsId },
   ];
 
   const dbMetricMappings = [

@@ -31,6 +31,8 @@ import { DataTable, Column } from '../tables/DataTable';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { useTranslation } from '../../i18n';
+import { TemplateFormModal } from './templates/TemplateFormModal';
+import { TemplateMetricsModal } from './templates/TemplateMetricsModal';
 
 interface TemplatesViewProps {
   templates: TemplateEntity[];
@@ -95,21 +97,6 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
   // Manage Metrics Modal State
   const [metricManagerTemplate, setMetricManagerTemplate] = useState<TemplateEntity | null>(null);
-  const [metricSearchQuery, setMetricSearchQuery] = useState('');
-  const [selectedMetricIdsToAdd, setSelectedMetricIdsToAdd] = useState<Set<string>>(new Set());
-
-  const [formData, setFormData] = useState<{
-    id?: string;
-    name: string;
-    description: string;
-    databaseEngineId: string;
-    targetDbType: DbEngine | 'ALL' | string;
-  }>({
-    name: '',
-    description: '',
-    databaseEngineId: '',
-    targetDbType: 'POSTGRES',
-  });
 
   // ----------------------------------------------------
   // EXPORT TEMPLATE TO JSON
@@ -411,55 +398,12 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
   const openCreateDialog = () => {
     setEditingTemplate(null);
-    const activeEngine = databaseEngines.find((e) => e.statusOnOff === 'ACTIVE') || databaseEngines[0];
-    setFormData({
-      name: '',
-      description: '',
-      databaseEngineId: activeEngine ? activeEngine.id : '',
-      targetDbType: activeEngine ? (activeEngine.dbCode as any) : 'POSTGRES',
-    });
     setIsDialogOpen(true);
   };
 
   const openEditDialog = (tpl: TemplateEntity) => {
     setEditingTemplate(tpl);
-    const matchedEngine = tpl.databaseEngineId
-      ? databaseEngines.find((e) => e.id === tpl.databaseEngineId)
-      : (tpl.targetDbType ? databaseEngines.find((e) => e.dbCode.toUpperCase() === tpl.targetDbType?.toUpperCase()) : null);
-
-    setFormData({
-      id: tpl.id,
-      name: tpl.name,
-      description: tpl.description || '',
-      databaseEngineId: matchedEngine ? matchedEngine.id : (tpl.databaseEngineId || (tpl.targetDbType === 'ALL' ? 'ALL' : '')),
-      targetDbType: matchedEngine ? (matchedEngine.dbCode as any) : (tpl.targetDbType || 'ALL'),
-    });
     setIsDialogOpen(true);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) {
-      toast({ title: 'Validation Error', description: 'Template name is required.', type: 'error' });
-      return;
-    }
-
-    const selectedEng = databaseEngines.find((e) => e.id === formData.databaseEngineId);
-    const resolvedDbType = selectedEng ? selectedEng.dbCode : (formData.databaseEngineId === 'ALL' ? 'ALL' : (formData.targetDbType || 'ALL'));
-
-    onSaveTemplate({
-      id: formData.id,
-      name: formData.name.trim(),
-      description: formData.description.trim() || null,
-      databaseEngineId: selectedEng ? selectedEng.id : (formData.databaseEngineId !== 'ALL' ? formData.databaseEngineId || null : null),
-      targetDbType: resolvedDbType,
-    });
-    setIsDialogOpen(false);
-    toast({
-      title: formData.id ? 'Template Updated' : 'Template Created',
-      description: `Monitoring template "${formData.name}" [${selectedEng ? selectedEng.dbName : resolvedDbType}] saved successfully.`,
-      type: 'success',
-    });
   };
 
   const handleDelete = (tpl: TemplateEntity) => {
@@ -467,97 +411,6 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       onDeleteTemplate(tpl.id);
       toast({ title: 'Template Deleted', description: `Template "${tpl.name}" was removed.`, type: 'info' });
     }
-  };
-
-  // Toggle metric active state within template
-  const handleToggleMetricState = (metric: MetricEntity) => {
-    const nextState = !metric.isEnabled;
-    onSaveMetric({
-      ...metric,
-      isEnabled: nextState,
-    });
-    toast({
-      title: nextState ? 'Metric Monitoring Activated' : 'Metric Monitoring Paused',
-      description: `"${metric.name}" active monitoring state set to ${nextState ? 'ON' : 'OFF'}.`,
-      type: 'info',
-    });
-  };
-
-  // Remove metric from template
-  const handleRemoveMetricFromTemplate = (metric: MetricEntity) => {
-    const nextIds = (metric.templateIds || (metric.templateId ? [metric.templateId] : [])).filter((id) => id !== metricManagerTemplate?.id);
-    onSaveMetric({
-      ...metric,
-      templateIds: nextIds,
-      templateId: nextIds[0] || null,
-      templateName: nextIds.length > 0 ? metric.templateName : null,
-    });
-    toast({
-      title: 'Metric Removed from Template',
-      description: `Metric "${metric.name}" has been unbundled from template.`,
-      type: 'info',
-    });
-  };
-
-  // Filter available metrics for multi-select
-  const filteredAvailableMetrics = useMemo(() => {
-    if (!metricManagerTemplate) return [];
-    const templateDbType = metricManagerTemplate.targetDbType; // e.g. "POSTGRES", "MYSQL", "ALL", etc.
-    const templateEngineId = metricManagerTemplate.databaseEngineId;
-
-    const unassignedAndCompatible = metrics.filter((m) => {
-      // 1. Must not be already assigned to this template
-      const isAssigned = m.templateIds?.includes(metricManagerTemplate.id) || m.templateId === metricManagerTemplate.id;
-      if (isAssigned) return false;
-
-      // 2. Compatibility check:
-      // If template is universal ('ALL' or empty)
-      if (!templateDbType || templateDbType === 'ALL') return true;
-
-      // If metric matches exact databaseEngineId
-      if (templateEngineId && m.databaseEngineId && templateEngineId === m.databaseEngineId) {
-        return true;
-      }
-
-      // If metric is universal (no engine assigned, or engine id is null, or engine code is universal)
-      const metricDbCode = m.databaseEngine?.dbCode || (databaseEngines.find((e) => e.id === m.databaseEngineId)?.dbCode);
-      if (!m.databaseEngineId || !metricDbCode || metricDbCode === 'ALL') return true;
-
-      // Otherwise, database engine codes must match
-      return metricDbCode.toUpperCase() === templateDbType.toUpperCase();
-    });
-
-    if (!metricSearchQuery.trim()) return unassignedAndCompatible;
-    const q = metricSearchQuery.toLowerCase().trim();
-    return unassignedAndCompatible.filter((m) => m.name.toLowerCase().includes(q) || m.sqlQuery.toLowerCase().includes(q));
-  }, [metrics, metricManagerTemplate, metricSearchQuery, databaseEngines]);
-
-  // Add selected metrics to template
-  const handleAddSelectedMetricsToTemplate = () => {
-    if (!metricManagerTemplate || selectedMetricIdsToAdd.size === 0) return;
-    selectedMetricIdsToAdd.forEach((metricId) => {
-      const targetMetric = metrics.find((m) => m.id === metricId);
-      if (targetMetric) {
-        const currentIds = targetMetric.templateIds || (targetMetric.templateId ? [targetMetric.templateId] : []);
-        const nextIds = Array.from(new Set([...currentIds, metricManagerTemplate.id]));
-        onSaveMetric({
-          ...targetMetric,
-          templateIds: nextIds,
-          templateId: nextIds[0] || null,
-          templateName: metricManagerTemplate.name,
-          isEnabled: true,
-        });
-      }
-    });
-
-    const count = selectedMetricIdsToAdd.size;
-    setSelectedMetricIdsToAdd(new Set());
-    setMetricSearchQuery('');
-    toast({
-      title: 'Metrics Attached',
-      description: `${count} metrics attached to template "${metricManagerTemplate.name}".`,
-      type: 'success',
-    });
   };
 
   const columns: Column<TemplateEntity>[] = [
@@ -911,300 +764,27 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
         />
       </div>
 
-      {/* Metric Management Dialog */}
-      <Dialog
+      {/* Refactored Template Metrics Modal (Search, Auto-Filter by DB engine, Easy Add/Remove, Create/Edit Metric) */}
+      <TemplateMetricsModal
         isOpen={!!metricManagerTemplate}
         onClose={() => setMetricManagerTemplate(null)}
-        title={metricManagerTemplate ? `Template Metrics: ${metricManagerTemplate.name}` : 'Manage Template Metrics'}
-        description="Add/remove metrics and toggle active monitoring state (On/Off) for each metric."
-        maxWidth="2xl"
-      >
-        {metricManagerTemplate && (
-          <div className="space-y-5 text-xs">
-            {/* Header info */}
-            <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-indigo-600" />
-                <span className="font-bold text-slate-900">{metricManagerTemplate.name}</span>
-              </div>
-              {(() => {
-                const engine = metricManagerTemplate.databaseEngine || databaseEngines.find((e) => e.id === metricManagerTemplate.databaseEngineId || e.dbCode.toUpperCase() === metricManagerTemplate.targetDbType?.toUpperCase());
-                const dbName = engine ? engine.dbName : (metricManagerTemplate.targetDbType === 'ALL' ? 'Universal / All' : (metricManagerTemplate.targetDbType || 'Universal / All'));
-                const dbColor = engine?.dbColor || '#64748B';
+        template={metricManagerTemplate}
+        metrics={metrics}
+        databaseEngines={databaseEngines}
+        userRole={userRole}
+        onSaveMetric={onSaveMetric}
+      />
 
-                return (
-                  <span
-                    className="px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5"
-                    style={{
-                      backgroundColor: dbColor + '15',
-                      color: dbColor,
-                      border: `1px solid ${dbColor}30`,
-                    }}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dbColor }} />
-                    {dbName}
-                  </span>
-                );
-              })()}
-            </div>
-
-            {/* Searchable Multi-Select Checkbox Attach Section */}
-            {userRole === 'ADMIN' && (
-              <div className="p-3 bg-indigo-50/50 border border-indigo-200/70 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-xs">Attach Metrics to This Template</span>
-                  <span className="text-[10px] text-indigo-700 font-mono font-bold">
-                    {selectedMetricIdsToAdd.size} selected
-                  </span>
-                </div>
-
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search available metrics to attach..."
-                    value={metricSearchQuery}
-                    onChange={(e) => setMetricSearchQuery(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-xs pl-8 pr-3 py-2 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-2xs"
-                  />
-                </div>
-
-                <div className="max-h-48 overflow-y-auto space-y-1 pr-1 bg-white border border-slate-200 rounded-lg p-2">
-                  {filteredAvailableMetrics.length > 0 ? (
-                    filteredAvailableMetrics.map((m) => {
-                      const isChecked = selectedMetricIdsToAdd.has(m.id);
-                      return (
-                        <label
-                          key={m.id}
-                          className={`flex items-center justify-between p-2 rounded-md hover:bg-slate-50 transition-colors cursor-pointer text-xs ${
-                            isChecked ? 'bg-indigo-50/70 border border-indigo-200' : 'border border-transparent'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={(e) => {
-                                const next = new Set(selectedMetricIdsToAdd);
-                                if (e.target.checked) {
-                                  next.add(m.id);
-                                } else {
-                                  next.delete(m.id);
-                                }
-                                setSelectedMetricIdsToAdd(next);
-                              }}
-                              className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
-                            />
-                            <div className="truncate">
-                              <div className="font-bold text-slate-900 truncate">{m.name}</div>
-                              <div className="text-[10px] text-slate-500 font-mono truncate">{m.sqlQuery}</div>
-                            </div>
-                          </div>
-                          <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-2">
-                            {m.templateName ? `In: ${m.templateName}` : 'Standalone'}
-                          </span>
-                        </label>
-                      );
-                    })
-                  ) : (
-                    <div className="py-4 text-center text-slate-400 text-xs italic">
-                      No available metrics match your search.
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleAddSelectedMetricsToTemplate}
-                    disabled={selectedMetricIdsToAdd.size === 0}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Attach Selected ({selectedMetricIdsToAdd.size}) Metrics</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* List of Bundled Metrics with Toggle Switches */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-slate-700 font-bold text-xs">
-                <span>Bundled Metrics ({activeTemplateMetrics.length})</span>
-                <span className="text-[11px] text-slate-500 font-normal">Active monitoring state controls execution</span>
-              </div>
-
-              {activeTemplateMetrics.length > 0 ? (
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {activeTemplateMetrics.map((m) => {
-                    const isActive = m.isEnabled !== false;
-                    return (
-                      <div
-                        key={m.id}
-                        className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-4 ${
-                          isActive
-                            ? 'bg-white border-slate-200 shadow-2xs'
-                            : 'bg-slate-50 border-slate-200/60 opacity-75'
-                        }`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900 text-xs">{m.name}</span>
-                            <span
-                              className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider ${
-                                isActive
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                  : 'bg-slate-200 text-slate-600 border border-slate-300'
-                              }`}
-                            >
-                              {isActive ? 'Active' : 'Disabled'}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              Cycle {m.cycle ?? 1}
-                            </span>
-                          </div>
-                          <div className="text-[11px] font-mono text-slate-500 truncate mt-0.5 max-w-md">
-                            {m.sqlQuery}
-                          </div>
-                        </div>
-
-                        {/* Controls: On/Off Toggle and Remove button */}
-                        <div className="flex items-center gap-3 shrink-0">
-                          {/* Toggle Switch */}
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-semibold text-slate-600">
-                              {isActive ? 'ON' : 'OFF'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleMetricState(m)}
-                              disabled={userRole !== 'ADMIN'}
-                              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                                isActive ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
-                              } ${userRole !== 'ADMIN' ? 'cursor-not-allowed opacity-60' : ''}`}
-                              title={isActive ? 'Click to disable metric' : 'Click to enable metric'}
-                            >
-                              <span className="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform" />
-                            </button>
-                          </div>
-
-                          {/* Remove from template button */}
-                          {userRole === 'ADMIN' && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMetricFromTemplate(m)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                              title="Remove metric from template"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="p-6 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-center text-slate-500">
-                  <Gauge className="w-6 h-6 mx-auto mb-2 text-slate-400" />
-                  <p className="font-semibold text-slate-700">No metrics bundled in this template yet.</p>
-                  <p className="text-[11px] mt-0.5">Use the selector above to attach existing metrics.</p>
-                </div>
-              )}
-            </div>
-
-            <div className="pt-3 border-t border-slate-200 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setMetricManagerTemplate(null)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg font-medium transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-      </Dialog>
-
-      {/* Dialog for Create/Edit Template */}
-      <Dialog
+      {/* Refactored Template Form Modal (Search, Auto-Filter by DB engine, Easy Add/Remove) */}
+      <TemplateFormModal
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        title={editingTemplate ? `Edit Template: ${editingTemplate.name}` : 'Create Monitoring Template'}
-        description="Configure template engine compatibility and metadata."
-      >
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          <div>
-            <label className="block text-slate-700 font-semibold mb-1">Template Name *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. PostgreSQL Core Health"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-700 font-semibold mb-1">
-              Database Engine (from Database Engines Table) *
-            </label>
-            <select
-              value={formData.databaseEngineId || (formData.targetDbType === 'ALL' ? 'ALL' : '')}
-              onChange={(e) => {
-                const val = e.target.value;
-                const eng = databaseEngines.find((item) => item.id === val);
-                setFormData({
-                  ...formData,
-                  databaseEngineId: val,
-                  targetDbType: eng ? eng.dbCode : (val === 'ALL' ? 'ALL' : 'POSTGRES'),
-                });
-              }}
-              required
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
-            >
-              <option value="" disabled>-- Select Database Engine from database_engine --</option>
-              {databaseEngines.map((eng) => (
-                <option key={eng.id} value={eng.id}>
-                  {eng.dbName} ({eng.dbCode}) {eng.statusOnOff === 'INACTIVE' ? '— [Inactive]' : ''}
-                </option>
-              ))}
-              <option value="ALL">Universal (Compatible with all engines)</option>
-            </select>
-            <p className="text-[10px] text-slate-400 mt-1">
-              Selected engine is bound to the registered database engine in the database_engine catalog.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-slate-700 font-semibold mb-1">Description</label>
-            <textarea
-              rows={3}
-              placeholder="Summary of monitoring probes bundled in this template..."
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full bg-white border border-slate-300 rounded-lg p-3 text-slate-900 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setIsDialogOpen(false)}
-              className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors shadow-2xs cursor-pointer"
-            >
-              {editingTemplate ? 'Save Template' : 'Create Template'}
-            </button>
-          </div>
-        </form>
-      </Dialog>
+        editingTemplate={editingTemplate}
+        metrics={metrics}
+        databaseEngines={databaseEngines}
+        onSaveTemplate={onSaveTemplate}
+        onSaveMetric={onSaveMetric}
+      />
 
       {/* Dialog for Import Template from JSON */}
       <Dialog

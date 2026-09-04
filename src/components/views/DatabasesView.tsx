@@ -968,29 +968,6 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       },
     },
     {
-      header: t('databases.assignedGroups'),
-      width: '170px',
-      cell: (row) => {
-        const assignedGroups = groups.filter((g) => row.groupIds?.includes(g.id));
-        if (assignedGroups.length === 0) {
-          return <span className="text-slate-400 text-xs italic">{t('databases.ungrouped')}</span>;
-        }
-        return (
-          <div className="flex flex-wrap gap-1">
-            {assignedGroups.map((g) => (
-              <span
-                key={g.id}
-                className="text-[10px] font-medium text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1 max-w-[130px] truncate"
-              >
-                <FolderKanban className="w-2.5 h-2.5 text-indigo-500 shrink-0" />
-                <span className="truncate">{g.name}</span>
-              </span>
-            ))}
-          </div>
-        );
-      },
-    },
-    {
       header: t('databases.assignedMetrics'),
       accessorKey: 'probeCount',
       width: '120px',

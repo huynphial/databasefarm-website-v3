@@ -225,13 +225,15 @@ export class PrismaRepository implements IStorageRepository {
       include: {
         groups: true,
         metrics: true,
+        databaseEngine: true,
       },
     });
 
     return dbs.map((d) => ({
       id: d.id,
       name: d.name,
-      dbType: d.dbType as any,
+      dbType: (d.dbType as any) || ((d as any).databaseEngine ? (d as any).databaseEngine.dbCode : 'POSTGRES'),
+      databaseEngineId: (d as any).databaseEngineId || undefined,
       host: d.host,
       port: d.port,
       pollId: (d as any).pollId ?? 0,
@@ -255,13 +257,14 @@ export class PrismaRepository implements IStorageRepository {
   async getDatabaseById(id: string): Promise<DatabaseEntity | null> {
     const d = await this.prisma.database.findUnique({
       where: { id },
-      include: { groups: true, metrics: true },
+      include: { groups: true, metrics: true, databaseEngine: true },
     });
     if (!d) return null;
     return {
       id: d.id,
       name: d.name,
-      dbType: d.dbType as any,
+      dbType: (d.dbType as any) || ((d as any).databaseEngine ? (d as any).databaseEngine.dbCode : 'POSTGRES'),
+      databaseEngineId: (d as any).databaseEngineId || undefined,
       host: d.host,
       port: d.port,
       pollId: (d as any).pollId ?? 0,
@@ -284,7 +287,23 @@ export class PrismaRepository implements IStorageRepository {
 
   async saveDatabase(dbData: Partial<DatabaseEntity>): Promise<DatabaseEntity> {
     const id = dbData.id;
-    const dbType = (dbData.dbType || 'POSTGRES') as DbType;
+    const rawType = (dbData.dbType || 'POSTGRES').toUpperCase();
+    const validDbTypes = Object.values(DbType) as string[];
+    const dbType = (validDbTypes.includes(rawType) ? rawType : 'POSTGRES') as DbType;
+
+    let databaseEngineId: string | null = dbData.databaseEngineId || null;
+    if (!databaseEngineId) {
+      try {
+        const eng = await (this.prisma as any).databaseEngine.findFirst({
+          where: { dbCode: { equals: rawType } },
+        });
+        if (eng) {
+          databaseEngineId = eng.id;
+        }
+      } catch {
+        // Non-blocking query safe notice
+      }
+    }
 
     const encryptedPassword = encryptPassword(dbData.passwordEncrypted || dbData.password);
     const tagsJson = Array.isArray(dbData.tags) ? dbData.tags : [];
@@ -298,6 +317,7 @@ export class PrismaRepository implements IStorageRepository {
         update: {
           name: dbData.name,
           dbType,
+          databaseEngineId: databaseEngineId || undefined,
           host: dbData.host,
           port: dbData.port,
           tags: tagsJson,
@@ -314,6 +334,7 @@ export class PrismaRepository implements IStorageRepository {
           id,
           name: dbData.name || 'NEW_DB',
           dbType,
+          databaseEngineId: databaseEngineId || undefined,
           host: dbData.host || '127.0.0.1',
           port: dbData.port || 5432,
           tags: tagsJson,
@@ -333,6 +354,7 @@ export class PrismaRepository implements IStorageRepository {
         data: {
           name: dbData.name || 'NEW_DB',
           dbType,
+          databaseEngineId: databaseEngineId || undefined,
           host: dbData.host || '127.0.0.1',
           port: dbData.port || 5432,
           tags: tagsJson,
@@ -637,8 +659,12 @@ export class PrismaRepository implements IStorageRepository {
   async saveTemplate(tplData: Partial<TemplateEntity>): Promise<TemplateEntity> {
     const id = tplData.id;
     let targetDbType: DbType | null = null;
-    if (tplData.targetDbType && ['ORACLE', 'MYSQL', 'POSTGRES', 'MSSQL'].includes(tplData.targetDbType.toUpperCase())) {
-      targetDbType = tplData.targetDbType.toUpperCase() as DbType;
+    if (tplData.targetDbType) {
+      const rawTarget = tplData.targetDbType.toUpperCase();
+      const validDbTypes = Object.values(DbType) as string[];
+      if (validDbTypes.includes(rawTarget)) {
+        targetDbType = rawTarget as DbType;
+      }
     }
     const databaseEngineId = tplData.databaseEngineId !== undefined ? tplData.databaseEngineId : null;
 
@@ -1486,15 +1512,26 @@ export class PrismaRepository implements IStorageRepository {
     } catch (err) {
       console.warn('Prisma getDatabaseEngines query notice:', err);
     }
-    // Fallback default seeded engines
+    // Fallback default seeded engines matching databaseEnginesData
     return [
       { id: 'eng-01', dbCode: 'ORACLE', dbName: 'Oracle', dbColor: '#EA580C', defaultPort: 1521, statusOnOff: 'ACTIVE', description: 'Enterprise relational database management system by Oracle.' },
       { id: 'eng-02', dbCode: 'MYSQL', dbName: 'MySQL', dbColor: '#16A34A', defaultPort: 3306, statusOnOff: 'ACTIVE', description: 'Open-source relational database management system powered by Oracle.' },
       { id: 'eng-03', dbCode: 'POSTGRES', dbName: 'PostgreSQL', dbColor: '#2563EB', defaultPort: 5432, statusOnOff: 'ACTIVE', description: 'Powerful object-relational database with strong standard compliance.' },
       { id: 'eng-04', dbCode: 'MSSQL', dbName: 'Microsoft SQL Server', dbColor: '#0F172A', defaultPort: 1433, statusOnOff: 'ACTIVE', description: 'Enterprise relational database management system developed by Microsoft.' },
-      { id: 'eng-05', dbCode: 'SINGLESTORE', dbName: 'SingleStore', dbColor: '#9333EA', defaultPort: 3306, statusOnOff: 'ACTIVE', description: 'Real-time distributed SQL database for transactions and analytics.' },
-      { id: 'eng-06', dbCode: 'MONGODB', dbName: 'MongoDB', dbColor: '#059669', defaultPort: 27017, statusOnOff: 'ACTIVE', description: 'Document-oriented NoSQL database for modern apps.' },
-      { id: 'eng-07', dbCode: 'REDIS', dbName: 'Redis', dbColor: '#D97706', defaultPort: 6379, statusOnOff: 'ACTIVE', description: 'In-memory key-value data structure store.' },
+      { id: 'eng-05', dbCode: 'MARIADB', dbName: 'MariaDB', dbColor: '#C05621', defaultPort: 3306, statusOnOff: 'ACTIVE', description: 'Community-developed, commercially supported fork of the MySQL relational database.' },
+      { id: 'eng-06', dbCode: 'DB2', dbName: 'IBM Db2', dbColor: '#0062FF', defaultPort: 50000, statusOnOff: 'ACTIVE', description: 'Family of data management products developed by IBM for enterprise workloads.' },
+      { id: 'eng-07', dbCode: 'MONGODB', dbName: 'MongoDB', dbColor: '#059669', defaultPort: 27017, statusOnOff: 'ACTIVE', description: 'Document-oriented NoSQL database for flexible data modeling and clustering.' },
+      { id: 'eng-08', dbCode: 'REDIS', dbName: 'Redis', dbColor: '#DC2626', defaultPort: 6379, statusOnOff: 'ACTIVE', description: 'In-memory data structure store used as a database, cache, message broker, and streaming engine.' },
+      { id: 'eng-09', dbCode: 'SINGLESTORE', dbName: 'SingleStore', dbColor: '#9333EA', defaultPort: 3306, statusOnOff: 'ACTIVE', description: 'Cloud-native, real-time distributed SQL database for transactions and analytics.' },
+      { id: 'eng-10', dbCode: 'CLICKHOUSE', dbName: 'ClickHouse', dbColor: '#F59E0B', defaultPort: 8123, statusOnOff: 'ACTIVE', description: 'Fast open-source column-oriented database management system for real-time analytical reporting.' },
+      { id: 'eng-11', dbCode: 'ELASTICSEARCH', dbName: 'Elasticsearch', dbColor: '#005571', defaultPort: 9200, statusOnOff: 'ACTIVE', description: 'Distributed, JSON-based search and analytics engine designed for horizontal scalability.' },
+      { id: 'eng-12', dbCode: 'OPENSEARCH', dbName: 'OpenSearch', dbColor: '#005FB8', defaultPort: 9200, statusOnOff: 'ACTIVE', description: 'Community-driven, open-source search and analytics suite derived from Elasticsearch.' },
+      { id: 'eng-13', dbCode: 'CASSANDRA', dbName: 'Cassandra', dbColor: '#1287A5', defaultPort: 9042, statusOnOff: 'ACTIVE', description: 'Highly-scalable, distributed NoSQL database designed to handle large amounts of data across commodity servers.' },
+      { id: 'eng-14', dbCode: 'SAPHANA', dbName: 'SAP HANA', dbColor: '#008FD3', defaultPort: 39015, statusOnOff: 'ACTIVE', description: 'High-performance in-memory database and application platform from SAP.' },
+      { id: 'eng-15', dbCode: 'SNOWFLAKE', dbName: 'Snowflake', dbColor: '#29B5E8', defaultPort: 443, statusOnOff: 'ACTIVE', description: 'Cloud computing-based data warehousing and analytics service.' },
+      { id: 'eng-16', dbCode: 'BIGQUERY', dbName: 'BigQuery', dbColor: '#4285F4', defaultPort: 443, statusOnOff: 'ACTIVE', description: 'Fully-managed, serverless enterprise data warehouse for analytics by Google Cloud.' },
+      { id: 'eng-17', dbCode: 'REDSHIFT', dbName: 'Redshift', dbColor: '#8C4FFF', defaultPort: 5439, statusOnOff: 'ACTIVE', description: 'Fast, fully managed, petabyte-scale data warehouse service in the cloud by AWS.' },
+      { id: 'eng-18', dbCode: 'DATABRICKS', dbName: 'Databricks', dbColor: '#FF3621', defaultPort: 443, statusOnOff: 'ACTIVE', description: 'Unified analytics and Lakehouse data intelligence platform built on Apache Spark.' },
     ];
   }
 

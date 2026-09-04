@@ -9,6 +9,20 @@ declare module '@prisma/client' {
     MYSQL = 'MYSQL',
     POSTGRES = 'POSTGRES',
     MSSQL = 'MSSQL',
+    MARIADB = 'MARIADB',
+    DB2 = 'DB2',
+    MONGODB = 'MONGODB',
+    REDIS = 'REDIS',
+    SINGLESTORE = 'SINGLESTORE',
+    CLICKHOUSE = 'CLICKHOUSE',
+    ELASTICSEARCH = 'ELASTICSEARCH',
+    OPENSEARCH = 'OPENSEARCH',
+    CASSANDRA = 'CASSANDRA',
+    SAPHANA = 'SAPHANA',
+    SNOWFLAKE = 'SNOWFLAKE',
+    BIGQUERY = 'BIGQUERY',
+    REDSHIFT = 'REDSHIFT',
+    DATABRICKS = 'DATABRICKS',
   }
 
   export enum ValueType {

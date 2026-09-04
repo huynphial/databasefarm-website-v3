@@ -70,6 +70,7 @@ export interface DatabaseEntity {
   id: string;
   name: string;
   dbType: DbEngine;
+  databaseEngineId?: string; // Optional foreign key to registered database engine
   host: string;
   port: number;
   pollId?: number; // Auto-created poll sequence identifier (default: 0), view-only in UI
