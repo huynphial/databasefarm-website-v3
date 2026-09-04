@@ -59,11 +59,11 @@ export function validateMetricSqlQuery(query: string, queryType: 1 | 2 | 3 = 1):
   }
 
   // 3. Query should start with standard read queries (SELECT, SHOW, WITH, EXPLAIN)
-  const startsWithRead = /^(SELECT|SHOW|WITH|EXPLAIN|\/\*)/i.test(cleanQuery);
+  const startsWithRead = /^(SELECT|SHOW|WITH|EXPLAIN|INFO|{|\/\*)/i.test(cleanQuery);
   if (!startsWithRead) {
     return {
       isValid: false,
-      error: 'Metric queries must begin with a valid read operation (e.g. SELECT, SHOW, or WITH).',
+      error: 'Metric queries should begin with a valid read operation.',
     };
   }
 
