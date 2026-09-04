@@ -697,6 +697,27 @@ export class PrismaRepository implements IStorageRepository {
       });
     }
 
+    if (tplData.metricIds !== undefined) {
+      await (this.prisma as any).metricTemplateMapping.deleteMany({
+        where: { templateId: tRecord.id },
+      });
+      if (tplData.metricIds.length > 0) {
+        const metrics = await this.prisma.metric.findMany({
+          where: { id: { in: tplData.metricIds } },
+        });
+        await (this.prisma as any).metricTemplateMapping.createMany({
+          data: metrics.map((m) => ({
+            metricId: m.id,
+            metricName: m.name,
+            templateId: tRecord.id,
+            templateName: tRecord.name,
+            targetDbType: tRecord.targetDbType,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
     const reloaded = await this.getTemplateById(tRecord.id);
     return reloaded!;
   }

@@ -1795,6 +1795,7 @@ FROM pg_tablespace`,
           ...tplData,
           targetDbType,
           databaseEngineId,
+          metricIds: tplData.metricIds !== undefined ? tplData.metricIds : this.templates[idx].metricIds,
           updatedAt: new Date().toISOString(),
         } as TemplateEntity;
         savedTemplate = {
@@ -1821,6 +1822,34 @@ FROM pg_tablespace`,
         databaseEngine: matchedEngine || null,
       };
     }
+
+    if (tplData.metricIds !== undefined) {
+      const selectedMetricIds = new Set(tplData.metricIds);
+      this.metrics = this.metrics.map((m) => {
+        const currentIds = m.templateIds || (m.templateId ? [m.templateId] : []);
+        const isAssigned = currentIds.includes(savedTemplate.id);
+        const shouldBeAssigned = selectedMetricIds.has(m.id);
+        if (shouldBeAssigned && !isAssigned) {
+          const nextIds = [...currentIds, savedTemplate.id];
+          return {
+            ...m,
+            templateIds: nextIds,
+            templateId: nextIds[0] || null,
+            templateName: savedTemplate.name,
+          };
+        } else if (!shouldBeAssigned && isAssigned) {
+          const nextIds = currentIds.filter((tid) => tid !== savedTemplate.id);
+          return {
+            ...m,
+            templateIds: nextIds,
+            templateId: nextIds[0] || null,
+            templateName: nextIds.length > 0 ? (m.templateId === savedTemplate.id ? (this.templates.find(t => t.id === nextIds[0])?.name || null) : m.templateName) : null,
+          };
+        }
+        return m;
+      });
+    }
+
     this.syncDatabaseMetrics();
     return savedTemplate;
   }

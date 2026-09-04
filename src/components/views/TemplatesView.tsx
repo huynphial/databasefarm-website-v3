@@ -40,7 +40,7 @@ interface TemplatesViewProps {
   databaseEngines?: DatabaseEngineEntity[];
   userRole: UserRole;
   showInfoTips?: boolean;
-  onSaveTemplate: (template: Partial<TemplateEntity>) => void;
+  onSaveTemplate: (template: Partial<TemplateEntity>, selectedMetricIds?: string[]) => Promise<any> | void;
   onDeleteTemplate: (id: string) => void;
   onSaveMetric: (metric: Partial<MetricEntity>) => void;
 }

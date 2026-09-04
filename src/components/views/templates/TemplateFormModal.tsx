@@ -246,39 +246,37 @@ export const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
     };
 
     try {
-      await onSaveTemplate(templatePayload, formData.selectedMetricIds);
+      const savedResult = await onSaveTemplate(templatePayload, formData.selectedMetricIds);
+      const targetTplId = formData.id || templatePayload.id || (savedResult && (savedResult.id || (savedResult as any)?.data?.id));
 
       // Sync metric elements
-      if (onSaveMetric) {
-        const targetTplId = formData.id || templatePayload.id;
-        if (targetTplId) {
-          const selectedSet = new Set(formData.selectedMetricIds);
+      if (onSaveMetric && targetTplId) {
+        const selectedSet = new Set(formData.selectedMetricIds);
 
-          metrics.forEach((m) => {
-            const currentIds = m.templateIds || (m.templateId ? [m.templateId] : []);
-            const isAssigned = currentIds.includes(targetTplId);
-            const shouldBeAssigned = selectedSet.has(m.id);
+        metrics.forEach((m) => {
+          const currentIds = m.templateIds || (m.templateId ? [m.templateId] : []);
+          const isAssigned = currentIds.includes(targetTplId);
+          const shouldBeAssigned = selectedSet.has(m.id);
 
-            if (shouldBeAssigned && !isAssigned) {
-              const nextIds = [...currentIds, targetTplId];
-              onSaveMetric({
-                ...m,
-                templateIds: nextIds,
-                templateId: nextIds[0] || null,
-                templateName: formData.name.trim(),
-                isEnabled: true,
-              });
-            } else if (!shouldBeAssigned && isAssigned) {
-              const nextIds = currentIds.filter((id) => id !== targetTplId);
-              onSaveMetric({
-                ...m,
-                templateIds: nextIds,
-                templateId: nextIds[0] || null,
-                templateName: nextIds.length > 0 ? m.templateName : null,
-              });
-            }
-          });
-        }
+          if (shouldBeAssigned && !isAssigned) {
+            const nextIds = [...currentIds, targetTplId];
+            onSaveMetric({
+              ...m,
+              templateIds: nextIds,
+              templateId: nextIds[0] || null,
+              templateName: formData.name.trim(),
+              isEnabled: true,
+            });
+          } else if (!shouldBeAssigned && isAssigned) {
+            const nextIds = currentIds.filter((id) => id !== targetTplId);
+            onSaveMetric({
+              ...m,
+              templateIds: nextIds,
+              templateId: nextIds[0] || null,
+              templateName: nextIds.length > 0 ? m.templateName : null,
+            });
+          }
+        });
       }
 
       toast({

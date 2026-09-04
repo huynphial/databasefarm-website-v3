@@ -626,45 +626,92 @@ function MainAppContent() {
   };
 
   // Templates CRUD
-  const handleSaveTemplate = async (tplData: Partial<TemplateEntity>) => {
+  const handleSaveTemplate = async (tplData: Partial<TemplateEntity>, selectedMetricIds?: string[]) => {
+    const payload: Partial<TemplateEntity> = {
+      ...tplData,
+      metricIds: selectedMetricIds !== undefined ? selectedMetricIds : tplData.metricIds,
+    };
     try {
-      if (tplData.id) {
-        await api.updateTemplate(tplData.id, tplData);
+      let savedTpl: TemplateEntity;
+      if (payload.id) {
+        savedTpl = await api.updateTemplate(payload.id, payload);
       } else {
-        await api.createTemplate(tplData);
+        savedTpl = await api.createTemplate(payload);
       }
-      const [refreshedTpls, refreshedDbs] = await Promise.all([
+      const [refreshedTpls, refreshedDbs, refreshedMets] = await Promise.all([
         api.getTemplates(),
         api.getDatabases(),
+        api.getMetrics(),
       ]);
-      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(refreshedDbs, groups, refreshedTpls, metrics);
+      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(refreshedDbs, groups, refreshedTpls, refreshedMets);
       setTemplates(refreshedTpls);
       setDatabases(syncedDatabases);
+      setMetrics(refreshedMets);
       storage.setTemplates(refreshedTpls);
       storage.setDatabases(syncedDatabases);
+      storage.setMetrics(refreshedMets);
       toast({ title: 'Template Saved', description: `${tplData.name || 'Template'} saved successfully.`, type: 'success' });
+      return savedTpl;
     } catch (e) {
+      const effectiveMetricIds = selectedMetricIds !== undefined ? selectedMetricIds : (tplData.metricIds || []);
+      let savedTpl: TemplateEntity;
       let updated: TemplateEntity[];
       if (tplData.id) {
-        updated = templates.map((t) =>
-          t.id === tplData.id ? ({ ...t, ...tplData, updatedAt: new Date().toISOString() } as TemplateEntity) : t
-        );
+        savedTpl = {
+          ...templates.find((t) => t.id === tplData.id),
+          ...tplData,
+          metricIds: effectiveMetricIds,
+          updatedAt: new Date().toISOString(),
+        } as TemplateEntity;
+        updated = templates.map((t) => (t.id === tplData.id ? savedTpl : t));
       } else {
-        const newTpl: TemplateEntity = {
+        savedTpl = {
           id: `tpl-${Date.now().toString().slice(-4)}`,
           name: tplData.name || 'New Template',
           description: tplData.description || null,
           targetDbType: tplData.targetDbType || 'POSTGRES',
+          metricIds: effectiveMetricIds,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        updated = [newTpl, ...templates];
+        updated = [savedTpl, ...templates];
       }
-      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(databases, groups, updated, metrics);
+
+      // Sync metrics locally as fallback
+      const targetId = savedTpl.id;
+      const selectedSet = new Set(effectiveMetricIds);
+      const updatedMetrics = metrics.map((m) => {
+        const currentIds = m.templateIds || (m.templateId ? [m.templateId] : []);
+        const isAssigned = currentIds.includes(targetId);
+        const shouldBeAssigned = selectedSet.has(m.id);
+        if (shouldBeAssigned && !isAssigned) {
+          const nextIds = [...currentIds, targetId];
+          return {
+            ...m,
+            templateIds: nextIds,
+            templateId: nextIds[0] || null,
+            templateName: savedTpl.name,
+          };
+        } else if (!shouldBeAssigned && isAssigned) {
+          const nextIds = currentIds.filter((tid) => tid !== targetId);
+          return {
+            ...m,
+            templateIds: nextIds,
+            templateId: nextIds[0] || null,
+            templateName: nextIds.length > 0 ? (m.templateId === targetId ? (templates.find((t) => t.id === nextIds[0])?.name || null) : m.templateName) : null,
+          };
+        }
+        return m;
+      });
+
+      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(databases, groups, updated, updatedMetrics);
       setTemplates(updated);
       setDatabases(syncedDatabases);
+      setMetrics(updatedMetrics);
       storage.setTemplates(updated);
       storage.setDatabases(syncedDatabases);
+      storage.setMetrics(updatedMetrics);
+      return savedTpl;
     }
   };
 
