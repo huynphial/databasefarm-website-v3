@@ -9,6 +9,8 @@ import {
   SystemSettingsEntity,
   UserRole,
   DatabasePollLogEntity,
+  GroupEntity,
+  TemplateEntity,
 } from '../../types';
 import { api } from '../../lib/api';
 import { combineTelemetryDataPoints } from './analytics/analyticsUtils';
@@ -24,6 +26,8 @@ import { DatabaseAlertsList } from './analytics/DatabaseAlertsList';
 interface AnalyticsDatabaseViewProps {
   databases: DatabaseEntity[];
   metrics: MetricEntity[];
+  templates?: TemplateEntity[];
+  groups?: GroupEntity[];
   rawMeasurements: RawMeasurementEntity[];
   metricHistory?: MetricHistoryEntity[];
   activeAlerts: ActiveAlertEntity[];
@@ -40,6 +44,8 @@ interface AnalyticsDatabaseViewProps {
 export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
   databases,
   metrics,
+  templates = [],
+  groups = [],
   rawMeasurements,
   metricHistory = [],
   activeAlerts,
@@ -222,19 +228,59 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
     });
   }, [selectedDb, hasFetchedOnce, queriedRawMeasurements, queriedMetricHistory, rawMeasurements, metricHistory, timePreset, fromDateTime, toDateTime]);
 
-  // Filter metrics applicable to selected DB (matching dbType or inherited from metricIds)
+  // Filter active metrics that link to the selected DB (matching view_active_database_active_metrics)
   const applicableMetrics = useMemo(() => {
     if (!selectedDb) return [];
-    const dbEngineUpper = selectedDb.dbType.toUpperCase();
+    const dbEngineUpper = (selectedDb.dbType || '').toUpperCase();
+
+    // 1. Build lookup maps for groups & templates
+    const groupMap = new Map((groups || []).map((g) => [g.id, g]));
+    const templateMap = new Map((templates || []).map((t) => [t.id, t]));
+
+    // 2. Identify all templates linked to this database via its assigned groups
+    const attachedGroupIds = selectedDb.groupIds || [];
+    const compatibleTemplateIds = new Set<string>();
+
+    attachedGroupIds.forEach((gid) => {
+      const group = groupMap.get(gid);
+      if (group && group.templateIds) {
+        group.templateIds.forEach((tid) => {
+          const tpl = templateMap.get(tid);
+          if (tpl) {
+            const tType = (tpl.targetDbType || 'ALL').toUpperCase();
+            if (tType === 'ALL' || !tType || tType === dbEngineUpper) {
+              compatibleTemplateIds.add(tid);
+            }
+          }
+        });
+      }
+    });
+
+    // 3. Build set of linked metric IDs (direct metric mappings + metrics belonging to compatible templates)
+    const linkedMetricIdSet = new Set<string>(selectedDb.metricIds || []);
+
+    (templates || []).forEach((tpl) => {
+      if (compatibleTemplateIds.has(tpl.id) && tpl.metricIds) {
+        tpl.metricIds.forEach((mid) => linkedMetricIdSet.add(mid));
+      }
+    });
+
+    // 4. Return ONLY active metrics (isEnabled !== false) that link to this database
     return metrics.filter((m) => {
-      // Direct metric ID assignment
-      if (selectedDb.metricIds && selectedDb.metricIds.includes(m.id)) return true;
-      // Database Engine Type match
-      const mEngineUpper = (m.databaseEngine?.dbCode || '').toUpperCase();
-      if (!mEngineUpper || mEngineUpper === dbEngineUpper || mEngineUpper === 'ALL') return true;
+      // Must be active / enabled (matching view_active_database_active_metrics: m.isEnabled = true)
+      if (m.isEnabled === false) return false;
+
+      // Must be linked directly to the database or to a compatible template of the database's group
+      if (linkedMetricIdSet.has(m.id)) return true;
+
+      const mTemplateIds = m.templateIds || (m.templateId ? [m.templateId] : []);
+      if (mTemplateIds.some((tid) => compatibleTemplateIds.has(tid))) {
+        return true;
+      }
+
       return false;
     });
-  }, [selectedDb, metrics]);
+  }, [selectedDb, metrics, groups, templates]);
 
   // Categorize metrics into Types 1, 2, and 3
   const type1Metrics = useMemo(() => {

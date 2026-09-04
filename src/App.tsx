@@ -951,6 +951,8 @@ function MainAppContent() {
             <AnalyticsDatabaseView
               databases={databases}
               metrics={metrics}
+              groups={groups}
+              templates={templates}
               rawMeasurements={rawMeasurements}
               metricHistory={metricHistory}
               activeAlerts={activeAlerts}
