@@ -231,7 +231,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 6 Summary Metric Cards with Hover Tooltips & Dynamic Highlighting */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
         {/* Monitored Databases */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative">
+        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative group cursor-help">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
             {t('dashboard.monitoredDbs')} {selectedDbType !== 'ALL' && `(${selectedDbType})`}
           </div>
@@ -244,6 +244,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 : 'text-amber-700 bg-amber-50 border-amber-200'
             )}>
               {upPercentage}% {t('dashboard.healthy')}
+            </div>
+          </div>
+
+          {/* Hover Tooltip - Drop Down */}
+          <div className="hidden group-hover:block absolute left-0 sm:left-1/2 sm:-translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+            <div className="font-bold text-indigo-300 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
+              {t('dashboard.monitoredDbs')} ({filteredDatabases.length})
+            </div>
+            <div className="space-y-1 text-slate-200">
+              <div className="flex justify-between items-center">
+                <span className="text-emerald-400 font-medium">● Healthy / Up</span>
+                <span className="font-bold">{dbStatuses.filter((d) => d.derivedStatus === 'UP').length}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-medium">▲ Warning Level</span>
+                <span className="font-bold">{dbStatuses.filter((d) => d.derivedStatus === 'WARN').length}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-rose-400 font-medium">▼ Offline / Down</span>
+                <span className="font-bold">{downCount}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -275,8 +296,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Hover Tooltip */}
-          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+          {/* Hover Tooltip - Drop Down */}
+          <div className="hidden group-hover:block absolute left-0 sm:left-1/2 sm:-translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-rose-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
               {t('dashboard.downDatabasesTooltip')} ({affectedDownDbs.length})
             </div>
@@ -312,8 +333,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Hover Tooltip */}
-          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+          {/* Hover Tooltip - Drop Down */}
+          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-rose-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
               {t('dashboard.criticalAlertsTooltip')}
             </div>
@@ -349,8 +370,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Hover Tooltip */}
-          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+          {/* Hover Tooltip - Drop Down */}
+          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-orange-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
               {t('dashboard.highAlertsTooltip')}
             </div>
@@ -386,8 +407,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Hover Tooltip */}
-          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+          {/* Hover Tooltip - Drop Down */}
+          <div className="hidden group-hover:block absolute right-0 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 lg:right-0 lg:left-auto lg:translate-x-0 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
             <div className="font-bold text-amber-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
               {t('dashboard.warningAlertsTooltip')}
             </div>
@@ -407,7 +428,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* System Collector */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative">
+        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative group cursor-help">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
             {t('dashboard.collectorService')}
           </div>
@@ -415,6 +436,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-2xl font-bold text-indigo-600 tracking-tight">{t('dashboard.online')}</div>
             <div className="text-indigo-700 text-[9px] font-bold tracking-wider bg-indigo-50 px-2 py-0.5 rounded">
               {t('dashboard.syncedUtc')}
+            </div>
+          </div>
+
+          {/* Hover Tooltip - Drop Down */}
+          <div className="hidden group-hover:block absolute right-0 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 lg:right-0 lg:left-auto lg:translate-x-0 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+            <div className="font-bold text-indigo-300 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
+              {t('dashboard.collectorService')}
+            </div>
+            <div className="text-slate-300 text-[10px] space-y-1">
+              <div>Status: <span className="text-emerald-400 font-bold">ACTIVE (Online)</span></div>
+              <div>Periodic polling: <span className="font-mono text-slate-200">10s Health Probes</span></div>
+              <div>Telemetry: <span className="font-mono text-slate-200">System metrics synced</span></div>
             </div>
           </div>
         </div>
@@ -455,8 +488,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div
                   key={db.id}
                   onClick={() => onNavigateToAnalytics(db.id)}
-                  title={`Open ${db.name} (${db.host}:${db.port}) in Analytics Database`}
-                  className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/20 transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm"
+                  className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/20 transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative"
                 >
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
@@ -465,7 +497,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {db.name}
                         </div>
                         {/* Host/IP:Port connection */}
-                        <div className="text-[11px] text-slate-500 font-mono truncate mt-0.5" title={`${db.host}:${db.port}`}>
+                        <div className="text-[11px] text-slate-500 font-mono truncate mt-0.5">
                           {db.host}:{db.port}
                         </div>
                       </div>
@@ -476,7 +508,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           db.derivedStatus === 'WARN' && 'bg-amber-500 shadow-2xs shadow-amber-500/50 animate-pulse',
                           db.derivedStatus === 'DOWN' && 'bg-rose-500 shadow-2xs shadow-rose-500/50 animate-pulse'
                         )}
-                        title={`Status: ${db.derivedStatus}`}
                       />
                     </div>
 
@@ -510,6 +541,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <span className="text-slate-300 mx-1">/</span>
                       <span className={cn(wCount > 0 ? 'text-amber-500 font-extrabold' : 'text-slate-400')}>{wCount}</span>
                     </span>
+                  </div>
+
+                  {/* Hover Dropdown Tooltip - drops down below the card, never above */}
+                  <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-64 max-w-[calc(100vw-32px)] p-3 bg-slate-900 text-white text-[11px] rounded-xl shadow-2xl border border-slate-700 pointer-events-none leading-relaxed text-left">
+                    <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800">
+                      <span className="font-bold text-slate-100 truncate max-w-[150px]">{db.name}</span>
+                      <span className={cn(
+                        'px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase',
+                        db.derivedStatus === 'UP' && 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
+                        db.derivedStatus === 'WARN' && 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+                        db.derivedStatus === 'DOWN' && 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      )}>
+                        {db.derivedStatus}
+                      </span>
+                    </div>
+                    <div className="space-y-1.5 text-slate-300 text-[10px]">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Engine / Env:</span>
+                        <span className="font-semibold text-slate-200">{db.dbType} {db.environment ? `(${db.environment})` : ''}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Connection:</span>
+                        <span className="font-mono text-slate-200">{db.host}:{db.port}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-slate-800/80">
+                        <span className="text-slate-400">Active Alerts:</span>
+                        <span className="font-bold text-slate-200">
+                          {cCount > 0 && <span className="text-rose-400 mr-1">{cCount} Crit</span>}
+                          {hCount > 0 && <span className="text-orange-400 mr-1">{hCount} High</span>}
+                          {wCount > 0 && <span className="text-amber-400 mr-1">{wCount} Warn</span>}
+                          {cCount === 0 && hCount === 0 && wCount === 0 && <span className="text-emerald-400">Nominal (0)</span>}
+                        </span>
+                      </div>
+                      <div className="pt-1 text-[9px] text-indigo-400 font-semibold flex items-center justify-end gap-1">
+                        Click card to open Analytics ↗
+                      </div>
+                    </div>
                   </div>
                 </div>
               );

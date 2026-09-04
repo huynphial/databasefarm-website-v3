@@ -912,7 +912,6 @@ export const AccountView: React.FC<AccountViewProps> = ({ currentUser, sessionTi
                     <th className="px-4 py-3 font-semibold">{t('account.colAccount')}</th>
                     <th className="px-4 py-3 font-semibold">{t('account.colRole')}</th>
                     <th className="px-4 py-3 font-semibold">{t('account.colStatus')}</th>
-                    <th className="px-4 py-3 font-semibold">{t('account.colLastLogin')}</th>
                     <th className="px-4 py-3 font-semibold">{t('account.colCreatedDate')}</th>
                     <th className="px-4 py-3 text-right font-semibold">{t('account.colActions')}</th>
                   </tr>
@@ -1022,20 +1021,6 @@ export const AccountView: React.FC<AccountViewProps> = ({ currentUser, sessionTi
                             </button>
                           </td>
 
-                          {/* Last Login */}
-                          <td className="px-4 py-3.5">
-                            <div className="flex flex-col text-[11px]">
-                              <div className="font-mono text-slate-800 flex items-center gap-1.5">
-                                <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span>{lastLoginInfo.text}</span>
-                              </div>
-                              {lastLoginInfo.relative && (
-                                <span className={`text-[10px] pl-4 font-medium ${isOnlineRecently ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
-                                  {lastLoginInfo.relative}
-                                </span>
-                              )}
-                            </div>
-                          </td>
 
                           {/* Created Date */}
                           <td className="px-4 py-3.5 text-slate-500 font-mono text-[11px]">

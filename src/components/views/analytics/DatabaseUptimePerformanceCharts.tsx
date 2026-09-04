@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -21,6 +21,7 @@ import {
   Tooltip,
   ReferenceLine,
   Line,
+  LineChart,
   ComposedChart,
 } from 'recharts';
 import { DatabasePollLogEntity, DatabaseEntity } from '../../../types';
@@ -46,6 +47,7 @@ interface PollChartPoint {
   latencyMs: number;
   status: string;
   isSuccess: boolean;
+  uptimeStatus: number; // 100 for UP, 0 for DOWN
   uptimeRatio: number; // 0-100%
   errorMessage?: string | null;
 }
@@ -59,6 +61,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
   isLoading = false,
 }) => {
   const { t } = useLanguage();
+  const [uptimeViewMode, setUptimeViewMode] = useState<'status' | 'ratio' | 'both'>('status');
 
   // Compute exact filter boundary timestamps
   const filterBounds = useMemo(() => {
@@ -236,6 +239,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
         latencyMs: latency,
         status: log.status || (isSuccess ? 'success' : 'failed'),
         isSuccess,
+        uptimeStatus: isSuccess ? 100 : 0,
         uptimeRatio: currentUptime,
         errorMessage: log.errorMessage,
       };
@@ -356,6 +360,46 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
           </div>
 
           <div className="flex items-center gap-2">
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setUptimeViewMode('status')}
+                className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                  uptimeViewMode === 'status'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+                title="Show sharp UP (100%) vs DOWN (0%) status line"
+              >
+                UP / DOWN
+              </button>
+              <button
+                type="button"
+                onClick={() => setUptimeViewMode('ratio')}
+                className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                  uptimeViewMode === 'ratio'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+                title="Show cumulative availability percentage ratio"
+              >
+                Availability %
+              </button>
+              <button
+                type="button"
+                onClick={() => setUptimeViewMode('both')}
+                className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                  uptimeViewMode === 'both'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+                title="Show both status and availability ratio"
+              >
+                Both
+              </button>
+            </div>
+
             <div className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${uptimeClass}`}>
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>{metrics.uptimePercentage.toFixed(2)}% Uptime</span>
@@ -412,7 +456,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
           </div>
         </div>
 
-        {/* Interactive Uptime Ratio Area Chart */}
+        {/* Interactive Uptime Ratio Line Chart (Linear Up/Down, not smooth) */}
         <div className="mt-2 h-44 w-full">
           {timeSeriesData.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 p-4 text-center">
@@ -422,13 +466,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={timeSeriesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="uptimeGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
+              <LineChart data={timeSeriesData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis
                   dataKey="timeLabel"
@@ -438,12 +476,16 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                   minTickGap={25}
                 />
                 <YAxis
-                  domain={[0, 100]}
-                  unit="%"
+                  domain={[-5, 105]}
                   tick={{ fontSize: 10, fill: '#64748b' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={false}
-                  ticks={[0, 25, 50, 75, 100]}
+                  ticks={[0, 50, 100]}
+                  tickFormatter={(val) => {
+                    if (val === 100) return 'UP (100%)';
+                    if (val === 0) return 'DOWN (0%)';
+                    return `${val}%`;
+                  }}
                 />
                 <Tooltip
                   content={({ active, payload }) => {
@@ -460,15 +502,14 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                                   : 'bg-rose-500/20 text-rose-300'
                               }`}
                             >
-                              {data.isSuccess ? 'PROBE SUCCESS' : 'PROBE FAILED'}
+                              {data.isSuccess ? '● UP (100%)' : '▼ DOWN (0%)'}
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-slate-300 pt-0.5">
                             <div>Database: <span className="font-bold text-white">{data.dbName}</span></div>
                             <div>Response Time: <span className="font-bold text-blue-400">{data.latencyMs} ms</span></div>
-                            <div className="col-span-2">
-                              Cumulative Availability: <span className="font-bold text-emerald-400">{data.uptimeRatio}%</span>
-                            </div>
+                            <div>Status: <span className={`font-bold ${data.isSuccess ? 'text-emerald-400' : 'text-rose-400'}`}>{data.isSuccess ? 'UP (Online)' : 'DOWN (Offline)'}</span></div>
+                            <div>Cumulative: <span className="font-bold text-indigo-300">{data.uptimeRatio}%</span></div>
                             {data.errorMessage && (
                               <div className="col-span-2 text-rose-300 font-mono text-[10px] break-words pt-1 border-t border-slate-800">
                                 Error: {data.errorMessage}
@@ -481,16 +522,53 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                     return null;
                   }}
                 />
-                <ReferenceLine y={100} stroke="#10b981" strokeDasharray="3 3" opacity={0.6} />
-                <Area
-                  type="monotone"
-                  dataKey="uptimeRatio"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#uptimeGradient)"
-                />
-              </AreaChart>
+                <ReferenceLine y={100} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.6} />
+                <ReferenceLine y={0} stroke="#f43f5e" strokeDasharray="3 3" strokeOpacity={0.4} />
+
+                {/* Primary Uptime Status Line: Sharp linear transitions showing UP (100%) or DOWN (0%) without smooth curves */}
+                {(uptimeViewMode === 'status' || uptimeViewMode === 'both') && (
+                  <Line
+                    type="linear"
+                    dataKey="uptimeStatus"
+                    name="Uptime Status"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={(props: any) => {
+                      const { cx, cy, payload } = props;
+                      if (cx == null || cy == null) return null;
+                      const isDown = !payload.isSuccess;
+                      return (
+                        <circle
+                          key={`uptime-dot-${payload.id || props.index}`}
+                          cx={cx}
+                          cy={cy}
+                          r={isDown ? 4.5 : 2.5}
+                          fill={isDown ? '#f43f5e' : '#10b981'}
+                          stroke="#ffffff"
+                          strokeWidth={1.5}
+                        />
+                      );
+                    }}
+                    activeDot={{ r: 5, stroke: '#ffffff', strokeWidth: 2 }}
+                    isAnimationActive={false}
+                  />
+                )}
+
+                {/* Secondary Availability Ratio Line: Linear ratio progression */}
+                {(uptimeViewMode === 'ratio' || uptimeViewMode === 'both') && (
+                  <Line
+                    type="linear"
+                    dataKey="uptimeRatio"
+                    name="Availability Ratio"
+                    stroke="#6366f1"
+                    strokeWidth={1.5}
+                    strokeDasharray={uptimeViewMode === 'both' ? '4 4' : undefined}
+                    dot={uptimeViewMode === 'ratio' ? { r: 2, fill: '#6366f1' } : false}
+                    activeDot={{ r: 4, stroke: '#ffffff', strokeWidth: 1.5 }}
+                    isAnimationActive={false}
+                  />
+                )}
+              </LineChart>
             </ResponsiveContainer>
           )}
         </div>
