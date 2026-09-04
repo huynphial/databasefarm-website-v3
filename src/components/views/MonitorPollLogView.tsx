@@ -22,6 +22,8 @@ import {
   Check,
   RotateCcw,
   Zap,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   DatabasePollQueueEntity,
@@ -33,6 +35,7 @@ import {
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { useTranslation } from '../../i18n';
+import { api } from '../../lib/api';
 
 // Utility helper for classnames
 function cn(...classes: (string | boolean | undefined | null)[]) {
@@ -147,8 +150,39 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
+  // Clear Queue Modal & Loading State
+  const [isClearingQueue, setIsClearingQueue] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [clearTargetStatus, setClearTargetStatus] = useState<'processing' | 'all'>('processing');
+
   // Detail Modal
   const [selectedLog, setSelectedLog] = useState<DatabasePollLogEntity | null>(null);
+
+  // Clear Queue Handler
+  const handleClearQueue = async () => {
+    setIsClearingQueue(true);
+    try {
+      const res = await api.clearDatabasePollQueue({
+        status: clearTargetStatus,
+        dbId: selectedDbId !== 'ALL' ? selectedDbId : undefined,
+      });
+      toast({
+        type: 'success',
+        title: 'Database Poll Queue Cleared',
+        message: `Successfully cleared ${res.clearedCount} ${clearTargetStatus === 'processing' ? 'processing/in-flight' : ''} task(s) from database_poll_queue.`,
+      });
+      setIsClearModalOpen(false);
+      onRefresh();
+    } catch (err: any) {
+      toast({
+        type: 'error',
+        title: 'Failed to Clear Queue',
+        message: err.message || 'Could not clear database poll queue items.',
+      });
+    } finally {
+      setIsClearingQueue(false);
+    }
+  };
 
   // Click outside to close Target Database dropdown
   useEffect(() => {
@@ -919,14 +953,36 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-400"></span> Pending: {filteredQueue.filter(q => q.status === 'pending').length}
-            </span>
-            <span>•</span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span> Processing: {filteredQueue.filter(q => q.status === 'processing').length}
-            </span>
+          <div className="flex items-center flex-wrap gap-2.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span> Pending: {filteredQueue.filter(q => q.status === 'pending').length}
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span> Processing: {filteredQueue.filter(q => q.status === 'processing').length}
+              </span>
+            </div>
+
+            {/* Clear Processing Queue Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setClearTargetStatus('processing');
+                setIsClearModalOpen(true);
+              }}
+              disabled={isClearingQueue}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 hover:border-rose-300 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+              title="Clear in-flight worker locks and reset processing items in database_poll_queue"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>Clear Processing Queue</span>
+              {filteredQueue.filter(q => q.status === 'processing').length > 0 && (
+                <span className="px-1.5 py-0.2 text-[10px] font-bold bg-rose-200/80 text-rose-900 rounded-full font-mono">
+                  {filteredQueue.filter(q => q.status === 'processing').length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -1387,6 +1443,127 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
           </div>
         </Dialog>
       )}
+
+      {/* Clear Database Poll Queue Confirmation Dialog */}
+      <Dialog
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        title="Clear Scheduled Database Poll Queue"
+        description="Release stuck worker locks or purge jobs from the database_poll_queue table"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900 text-xs flex gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold">Caution: Active Worker Queue Operation</p>
+              <p className="text-amber-800 leading-relaxed">
+                Clearing processing queue tasks will unlock hung workers and release in-flight locks in the <code className="font-mono bg-amber-100/80 px-1 py-0.5 rounded font-bold">database_poll_queue</code> table.
+                {selectedDbId !== 'ALL' && (
+                  <span className="block mt-1 font-semibold text-amber-900">
+                    Active DB Filter: "{selectedDbId}" ({selectedDb?.name || selectedDbId}). Only matching queue tasks will be purged.
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-700">Select Queue Purge Scope:</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setClearTargetStatus('processing')}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  clearTargetStatus === 'processing'
+                    ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/20'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-900">Processing Only</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-mono">
+                    {filteredQueue.filter((q) => q.status === 'processing').length} jobs
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-tight">
+                  Clear hung workers & in-flight locks only.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setClearTargetStatus('all')}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  clearTargetStatus === 'all'
+                    ? 'border-rose-500 bg-rose-50/60 ring-2 ring-rose-500/20'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-900">All Queue Items</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-mono">
+                    {filteredQueue.length} jobs
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-tight">
+                  Purge both pending and processing tasks.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1.5">
+            <div className="flex justify-between font-mono text-[11px]">
+              <span>Target Table:</span>
+              <span className="font-semibold text-slate-900">database_poll_queue</span>
+            </div>
+            <div className="flex justify-between font-mono text-[11px]">
+              <span>Database Scope:</span>
+              <span className="font-semibold text-slate-900">{selectedDbId === 'ALL' ? 'ALL DATABASES' : selectedDbId}</span>
+            </div>
+            <div className="flex justify-between font-mono text-[11px]">
+              <span>Jobs to Remove:</span>
+              <span className="font-bold text-rose-700">
+                {clearTargetStatus === 'processing'
+                  ? filteredQueue.filter((q) => q.status === 'processing').length
+                  : filteredQueue.length}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsClearModalOpen(false)}
+              disabled={isClearingQueue}
+              className="px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleClearQueue}
+              disabled={isClearingQueue}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+            >
+              {isClearingQueue ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Clearing Queue...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>
+                    Confirm Clear {clearTargetStatus === 'processing' ? 'Processing Queue' : 'All Queue'}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 };

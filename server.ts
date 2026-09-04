@@ -771,6 +771,26 @@ async function startServer() {
     }
   });
 
+  app.post('/api/database-poll-queue/clear', async (req, res) => {
+    try {
+      const { status = 'processing', dbId = 'ALL' } = req.body || {};
+      const result = await repo.clearDatabasePollQueue(status, dbId);
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req, 'admin');
+      await repo.addAuditLog({
+        userId,
+        clientIp,
+        actionType: 'DELETE',
+        targetEntity: 'DATABASE_POLL_QUEUE',
+        targetId: status,
+        details: `Cleared ${result.clearedCount} item(s) from database poll queue (status: ${status}, dbId: ${dbId})`,
+      });
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/database-poll-logs', async (req, res) => {
     try {
       const dbId = req.query.dbId as string | undefined;

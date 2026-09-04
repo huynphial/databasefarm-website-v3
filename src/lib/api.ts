@@ -167,6 +167,13 @@ export const api = {
     }
   },
 
+  async clearDatabasePollQueue(options?: { status?: 'processing' | 'pending' | 'all'; dbId?: string }): Promise<{ success: boolean; clearedCount: number }> {
+    return fetchJson('/api/database-poll-queue/clear', {
+      method: 'POST',
+      body: JSON.stringify(options || { status: 'processing' }),
+    });
+  },
+
   async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]> {
     try {
       const params = new URLSearchParams();

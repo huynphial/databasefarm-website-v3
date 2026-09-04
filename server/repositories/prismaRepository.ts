@@ -2194,6 +2194,48 @@ export class PrismaRepository implements IStorageRepository {
     return [];
   }
 
+  async clearDatabasePollQueue(statusFilter: 'processing' | 'pending' | 'all' = 'processing', dbId?: string): Promise<{ clearedCount: number }> {
+    let clearedCount = 0;
+    try {
+      const where: any = {};
+      if (statusFilter === 'processing') {
+        where.status = 'processing';
+      } else if (statusFilter === 'pending') {
+        where.status = 'pending';
+      }
+      if (dbId && dbId !== 'ALL') {
+        where.dbId = dbId;
+      }
+
+      try {
+        if ((this.prisma as any).databasePollQueue) {
+          const res = await (this.prisma as any).databasePollQueue.deleteMany({ where });
+          clearedCount = res.count || 0;
+        }
+      } catch (e1) {
+        console.warn('Prisma databasePollQueue.deleteMany error:', e1);
+      }
+
+      if (clearedCount === 0) {
+        try {
+          let sql = 'DELETE FROM database_poll_queue';
+          const conds: string[] = [];
+          if (statusFilter === 'processing') conds.push("status = 'processing'");
+          else if (statusFilter === 'pending') conds.push("status = 'pending'");
+          if (dbId && dbId !== 'ALL') conds.push(`db_id = '${dbId.replace(/'/g, "''")}'`);
+          if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
+          const rawRes = await (this.prisma as any).$executeRawUnsafe(sql);
+          clearedCount = typeof rawRes === 'number' ? rawRes : 0;
+        } catch (rawErr) {
+          console.warn('Raw SQL database_poll_queue deletion error:', rawErr);
+        }
+      }
+    } catch (e) {
+      console.warn('clearDatabasePollQueue failed:', e);
+    }
+    return { clearedCount };
+  }
+
   async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]> {
     try {
       const effectiveLimit = limit !== undefined && limit > 0 ? limit : (dbId && dbId !== 'ALL' ? 5000 : 2000);

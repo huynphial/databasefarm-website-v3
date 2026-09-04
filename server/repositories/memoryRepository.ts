@@ -25,7 +25,48 @@ import { IStorageRepository } from './types';
 export class MemoryRepository implements IStorageRepository {
   private userPasswords: Record<string, string> = {};
   private users: User[] = [];
-  private databasePollQueue: DatabasePollQueueEntity[] = [];
+  private databasePollQueue: DatabasePollQueueEntity[] = [
+    {
+      id: '1',
+      dbId: 'db-01',
+      dbName: 'ERP_PROD_ORA',
+      status: 'processing',
+      lockedBy: 'worker-node-01',
+      lockedAt: new Date(Date.now() - 45000).toISOString(),
+      scheduledAt: new Date(Date.now() - 30000).toISOString(),
+      createdAt: new Date(Date.now() - 60000).toISOString(),
+    },
+    {
+      id: '2',
+      dbId: 'db-03',
+      dbName: 'CRM_PORTAL_MY',
+      status: 'processing',
+      lockedBy: 'worker-node-02',
+      lockedAt: new Date(Date.now() - 120000).toISOString(),
+      scheduledAt: new Date(Date.now() - 90000).toISOString(),
+      createdAt: new Date(Date.now() - 150000).toISOString(),
+    },
+    {
+      id: '3',
+      dbId: 'db-02',
+      dbName: 'PAYMENT_API_PG',
+      status: 'pending',
+      lockedBy: null,
+      lockedAt: null,
+      scheduledAt: new Date(Date.now() + 30000).toISOString(),
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: '4',
+      dbId: 'db-04',
+      dbName: 'DW_REPORTS_MS',
+      status: 'pending',
+      lockedBy: null,
+      lockedAt: null,
+      scheduledAt: new Date(Date.now() + 60000).toISOString(),
+      createdAt: new Date().toISOString(),
+    },
+  ];
   private databasePollLogs: DatabasePollLogEntity[] = [];
   private alertNotificationQueue: AlertNotificationQueueEntity[] = [
     {
@@ -2154,6 +2195,17 @@ FROM pg_tablespace`,
 
   async getDatabasePollQueue(): Promise<DatabasePollQueueEntity[]> {
     return this.databasePollQueue;
+  }
+
+  async clearDatabasePollQueue(statusFilter: 'processing' | 'pending' | 'all' = 'processing', dbId?: string): Promise<{ clearedCount: number }> {
+    const initialLen = this.databasePollQueue.length;
+    this.databasePollQueue = this.databasePollQueue.filter((item) => {
+      const matchStatus = statusFilter === 'all' || item.status === statusFilter;
+      const matchDb = !dbId || dbId === 'ALL' || item.dbId === dbId;
+      return !(matchStatus && matchDb);
+    });
+    const clearedCount = initialLen - this.databasePollQueue.length;
+    return { clearedCount };
   }
 
   async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]> {

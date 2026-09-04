@@ -82,6 +82,7 @@ export interface IStorageRepository {
   getAlertNotificationLogs(): Promise<AlertNotificationLogEntity[]>;
   getAlertNotificationQueue(): Promise<AlertNotificationQueueEntity[]>;
   getDatabasePollQueue(): Promise<DatabasePollQueueEntity[]>;
+  clearDatabasePollQueue(statusFilter?: 'processing' | 'pending' | 'all', dbId?: string): Promise<{ clearedCount: number }>;
   getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]>;
 
   // System Settings
