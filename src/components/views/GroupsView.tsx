@@ -38,6 +38,7 @@ import { useToast } from '../ui/Toast';
 import { getDbEngineBadgeClass } from '../../config/dbEngines';
 import { useTranslation } from '../../i18n/LanguageContext';
 import { api } from '../../lib/api';
+import { GroupFormModal } from './groups/GroupFormModal';
 
 export function parseGroupSenderIds(senderIdsStr: string, activeMethodIds: string[]): { [key: string]: string } {
   const mapping: { [key: string]: string } = {};
@@ -252,82 +253,15 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     });
   }, [databases, selectedEngineType, dbSearchQuery]);
 
-  // Form State with Dynamic Alert Dispatchers
-  const [formData, setFormData] = useState<{
-    id?: string;
-    name: string;
-    description: string;
-    databaseIds: string[];
-    templateIds: string[];
-    notificationMappings: { notificationMethodId: string; senderIds: string }[];
-  }>({
-    name: '',
-    description: '',
-    databaseIds: [],
-    templateIds: [],
-    notificationMappings: [],
-  });
-
+  // Form Dialog State
   const openCreateDialog = () => {
     setEditingGroup(null);
-    const defaultMethodIds = alertMethods.filter(m => m.statusOnOff === 'ACTIVE').map(m => m.id);
-    setFormData({
-      name: '',
-      description: '',
-      databaseIds: [],
-      templateIds: [],
-      notificationMappings: defaultMethodIds.map(id => ({ notificationMethodId: id, senderIds: '' })),
-    });
     setIsDialogOpen(true);
   };
 
   const openEditDialog = (group: GroupEntity) => {
     setEditingGroup(group);
-    const initialMappings = extractGroupMappings(group);
-
-    setFormData({
-      id: group.id,
-      name: group.name,
-      description: group.description || '',
-      databaseIds: group.databaseIds || [],
-      templateIds: group.templateIds || [],
-      notificationMappings: initialMappings,
-    });
     setIsDialogOpen(true);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) {
-      toast({ title: 'Validation Error', description: 'Group name is required.', type: 'error' });
-      return;
-    }
-
-    const cleanMappings = formData.notificationMappings.map((m) => ({
-      notificationMethodId: m.notificationMethodId,
-      senderIds: m.senderIds.trim(),
-    }));
-
-    onSaveGroup(
-      {
-        id: formData.id,
-        name: formData.name.trim(),
-        description: formData.description.trim() || null,
-        databaseIds: formData.databaseIds,
-        templateIds: formData.templateIds,
-        notificationMappings: cleanMappings,
-        alertMethodIds: cleanMappings.map((m) => m.notificationMethodId),
-        senderIds: cleanMappings.map((m) => m.senderIds).filter(Boolean).join(', '),
-      },
-      formData.databaseIds
-    );
-
-    setIsDialogOpen(false);
-    toast({
-      title: formData.id ? 'Group Updated' : 'Group Created',
-      description: `Database group "${formData.name}" saved with updated notification channel mappings.`,
-      type: 'success',
-    });
   };
 
   const handleTestAlertRouting = (group: GroupEntity) => {
@@ -1545,303 +1479,17 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         />
       </div>
 
-      {/* Dialog for Create/Edit Group */}
-      <Dialog
+      {/* Refactored Dialog for Create/Edit Group with Engine Search & Filters */}
+      <GroupFormModal
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        title={editingGroup ? `${t('groups.editGroupTitle')}: ${editingGroup.name}` : t('groups.createGroupTitle')}
-        description={t('groups.dialogDesc')}
-        maxWidth="2xl"
-      >
-        <form onSubmit={handleSubmit} className="space-y-5 text-xs">
-          {/* General Metadata */}
-          <div className="space-y-3">
-            <div>
-              <label className="block text-slate-700 font-semibold mb-1">{t('groups.groupNameLabel')}</label>
-              <input
-                type="text"
-                required
-                placeholder={t('groups.groupNamePlaceholder')}
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-semibold mb-1">{t('groups.description')}</label>
-              <textarea
-                rows={2}
-                placeholder={t('groups.descriptionPlaceholder')}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg p-3 text-slate-900 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-          </div>
-
-          {/* Database Mapping (Many-to-Many) */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-slate-800 font-bold flex items-center gap-1.5">
-                <Server className="w-3.5 h-3.5 text-indigo-500" />
-                {t('groups.managedDatabases')}
-              </label>
-              <span className="text-[11px] text-slate-500 font-mono">
-                {formData.databaseIds.length} {t('groups.of')} {databases.length} {t('groups.selected')}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              {t('groups.managedDatabasesDesc')}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-white border border-slate-200 rounded-lg">
-              {databases.map((db) => {
-                const isSelected = formData.databaseIds.includes(db.id);
-                return (
-                  <label
-                    key={db.id}
-                    className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-semibold'
-                        : 'border-transparent hover:bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setFormData({ ...formData, databaseIds: [...formData.databaseIds, db.id] });
-                        } else {
-                          setFormData({
-                            ...formData,
-                            databaseIds: formData.databaseIds.filter((id) => id !== db.id),
-                          });
-                        }
-                      }}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <div className="truncate flex-1">
-                      <span className="font-semibold">{db.name}</span>
-                      <span className="ml-1.5 text-[10px] px-1 py-0.2 rounded bg-slate-200 font-mono">
-                        {db.dbType}
-                      </span>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Applied Templates (Template Compatibility) */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-slate-800 font-bold flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                {t('groups.appliedMonitoringTemplates')}
-              </label>
-              <span className="text-[11px] text-slate-500 font-mono">
-                {formData.templateIds.length} {t('groups.of')} {templates.length} {t('groups.selected')}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              {t('groups.appliedMonitoringTemplatesDesc')}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-white border border-slate-200 rounded-lg">
-              {templates.map((tpl) => {
-                const isSelected = formData.templateIds.includes(tpl.id);
-                return (
-                  <label
-                    key={tpl.id}
-                    className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-semibold'
-                        : 'border-transparent hover:bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setFormData({ ...formData, templateIds: [...formData.templateIds, tpl.id] });
-                        } else {
-                          setFormData({
-                            ...formData,
-                            templateIds: formData.templateIds.filter((id) => id !== tpl.id),
-                          });
-                        }
-                      }}
-                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <div className="truncate flex-1">
-                      <div className="font-semibold truncate">{tpl.name}</div>
-                      <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
-                        <span>{t('groups.compatibility')}:</span>
-                        <span className="font-bold text-indigo-600 font-mono">
-                          {tpl.targetDbType || t('groups.universal')}
-                        </span>
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Notification Rules: Dynamic Alert Dispatchers */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-slate-900 font-bold flex items-center gap-1.5 text-xs">
-                <BellRing className="w-3.5 h-3.5 text-indigo-600" />
-                {t('groups.alertNotificationDispatchers')}
-              </h4>
-              <span className="text-[10px] text-slate-500">
-                {t('groups.boundFromSystemSettings')}
-              </span>
-            </div>
-
-            {/* Dynamic Dispatchers Selector */}
-            <div className="space-y-1.5">
-              <label className="block text-[11px] font-semibold text-slate-700">
-                {t('groups.selectActiveDispatchChannels')}
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {alertMethods.map((method) => {
-                  const isChecked = formData.notificationMappings.some((m) => m.notificationMethodId === method.id);
-                  return (
-                    <label
-                      key={method.id}
-                      className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                        isChecked
-                          ? 'bg-white border-indigo-400 shadow-2xs text-indigo-950 font-medium'
-                          : 'bg-slate-100/70 border-slate-200 text-slate-600 hover:bg-white'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setFormData({
-                              ...formData,
-                              notificationMappings: [
-                                ...formData.notificationMappings,
-                                { notificationMethodId: method.id, senderIds: '' },
-                              ],
-                            });
-                          } else {
-                            setFormData({
-                              ...formData,
-                              notificationMappings: formData.notificationMappings.filter(
-                                (m) => m.notificationMethodId !== method.id
-                              ),
-                            });
-                          }
-                        }}
-                        className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-xs font-bold truncate">{method.name}</span>
-                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 bg-slate-100 text-slate-700 rounded border border-slate-200">
-                            {method.type}
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-slate-400 truncate mt-0.5">
-                          {method.configJson?.smtpHost || method.configJson?.endpoint || method.configJson?.botUsername || 'Active Routing'}
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-              {alertMethods.length === 0 && (
-                <p className="text-xs text-slate-400 italic">
-                  {t('groups.noDispatchersConfigured')}
-                </p>
-              )}
-            </div>
-
-            {/* Sender IDs Input Field - PER DISPATCHER */}
-            <div className="space-y-3 pt-3 border-t border-slate-200">
-              <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider">
-                {t('groups.targetSendersTitle')}
-              </label>
-              
-              {formData.notificationMappings.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">
-                  {t('groups.selectAtLeastOneChannel')}
-                </p>
-              ) : (
-                <div className="space-y-3 shadow-2xs">
-                  {formData.notificationMappings.map((mapItem) => {
-                    const method = alertMethods.find((m) => m.id === mapItem.notificationMethodId);
-                    if (!method) return null;
-                    
-                    let placeholder = "e.g. dba-team@company.internal";
-                    if (method.type === 'TELEGRAM') {
-                      placeholder = "e.g. -1001234567890 (Telegram Chat ID)";
-                    } else if (method.type === 'EMAIL') {
-                      placeholder = "e.g. dba-team@company.internal, oncall@company.com";
-                    } else if (method.type === 'WEBHOOK') {
-                      placeholder = "e.g. https://api.company.internal/alerts";
-                    }
-
-                    return (
-                      <div key={mapItem.notificationMethodId} className="space-y-1 bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                            <Radio className="w-3 h-3 text-indigo-500" />
-                            {method.name} ({method.type})
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-400">
-                            {mapItem.notificationMethodId}
-                          </span>
-                        </div>
-                        <input
-                          type="text"
-                          placeholder={placeholder}
-                          value={mapItem.senderIds}
-                          onChange={(e) => {
-                            const nextVal = e.target.value;
-                            setFormData({
-                              ...formData,
-                              notificationMappings: formData.notificationMappings.map((m) =>
-                                m.notificationMethodId === mapItem.notificationMethodId
-                                  ? { ...m, senderIds: nextVal }
-                                  : m
-                              ),
-                            });
-                          }}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-mono text-xs text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Form Actions */}
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setIsDialogOpen(false)}
-              className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors shadow-2xs cursor-pointer"
-            >
-              {editingGroup ? t('groups.saveGroupConfiguration') : t('groups.createGroup')}
-            </button>
-          </div>
-        </form>
-      </Dialog>
+        editingGroup={editingGroup}
+        databases={databases}
+        templates={templates}
+        databaseEngines={databaseEngines}
+        alertMethods={alertMethods}
+        onSaveGroup={onSaveGroup}
+      />
 
       {/* Import Database Groups Modal */}
       <Dialog
