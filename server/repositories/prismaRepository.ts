@@ -159,42 +159,48 @@ export class PrismaRepository implements IStorageRepository {
   async verifyUserPassword(username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> {
     const trimmedUsername = (username || '').trim();
     const trimmedPassword = (password || '').trim();
-    const u = await this.prisma.user.findUnique({ where: { username: trimmedUsername } });
+
+    // Look up user strictly in the database `users` table
+    let u = await this.prisma.user.findUnique({ where: { username: trimmedUsername } });
     if (!u) {
-      return { success: false, message: 'Invalid username. No matching account found.' };
+      // Case-insensitive fallback if database collation requires it
+      u = await this.prisma.user.findFirst({
+        where: {
+          username: {
+            equals: trimmedUsername,
+          },
+        },
+      });
+    }
+
+    if (!u) {
+      return { success: false, message: 'Invalid username. No matching account found in database.' };
     }
     if ((u as any).isLocked) {
       return { success: false, message: 'This account is locked. Please contact your system administrator.' };
     }
 
-    const normUser = u.username.toLowerCase();
-    const isDefaultAdmin = normUser === 'admin' && (
-      trimmedPassword === 'AdminPassword#2026' ||
-      trimmedPassword === 'admin' ||
-      trimmedPassword === 'admin123' ||
-      trimmedPassword === 'Admin@123' ||
-      trimmedPassword === 'AdminPassword2026'
-    );
+    if (!u.passwordHash) {
+      return { success: false, message: 'No password configured in database for this account.' };
+    }
 
-    const isDefaultViewer = normUser === 'viewer' && (
-      trimmedPassword === 'ViewerPassword#2026' ||
-      trimmedPassword === 'viewer' ||
-      trimmedPassword === 'viewer123' ||
-      trimmedPassword === 'Viewer@123' ||
-      trimmedPassword === 'ViewerPassword2026'
-    );
-
-    let isMatch = isDefaultAdmin || isDefaultViewer;
-    if (!isMatch && u.passwordHash) {
-      try {
-        if (u.passwordHash.startsWith('$2') || u.passwordHash.startsWith('$2a$') || u.passwordHash.startsWith('$2b$')) {
-          isMatch = await bcrypt.compare(trimmedPassword, u.passwordHash);
-        } else {
-          isMatch = u.passwordHash === trimmedPassword;
-        }
-      } catch {
+    // STRICT: Only the password on the database table `users` is allowed (no hardcoded bypasses)
+    let isMatch = false;
+    try {
+      if (
+        u.passwordHash.startsWith('$2') ||
+        u.passwordHash.startsWith('$2a$') ||
+        u.passwordHash.startsWith('$2b$') ||
+        u.passwordHash.startsWith('$2y$')
+      ) {
+        isMatch = await bcrypt.compare(trimmedPassword, u.passwordHash);
+      } else {
+        // Direct comparison if password is stored as plain text in the database
         isMatch = u.passwordHash === trimmedPassword;
       }
+    } catch (err) {
+      console.warn('Database user password verification error:', err);
+      isMatch = u.passwordHash === trimmedPassword;
     }
 
     if (!isMatch) {
