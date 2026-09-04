@@ -309,7 +309,7 @@ export class PrismaRepository implements IStorageRepository {
     const tagsJson = Array.isArray(dbData.tags) ? dbData.tags : [];
     const pollInterval = dbData.pollIntervalMinutes ? Math.max(1, Number(dbData.pollIntervalMinutes)) : 5;
     const noteText = dbData.note !== undefined ? dbData.note : null;
-
+    const defaultLastCheckAt = new Date('2026-01-01T00:00:00Z');
     let dbRecord;
     if (id) {
       dbRecord = await this.prisma.database.upsert({
@@ -327,7 +327,7 @@ export class PrismaRepository implements IStorageRepository {
           passwordEncrypted: encryptedPassword,
           connectionConfig: (dbData.connectionConfig as any) || {},
           status: dbData.status || 'UP',
-          lastCheckAt: dbData.lastCheckAt ? new Date(dbData.lastCheckAt) : undefined,
+          lastCheckAt: defaultLastCheckAt,
           isEnabled: dbData.isEnabled !== false,
         },
         create: {
@@ -344,7 +344,7 @@ export class PrismaRepository implements IStorageRepository {
           passwordEncrypted: encryptedPassword || '',
           connectionConfig: (dbData.connectionConfig as any) || {},
           status: dbData.status || 'UP',
-          lastCheckAt: dbData.lastCheckAt ? new Date(dbData.lastCheckAt) : new Date(),
+          lastCheckAt: defaultLastCheckAt,
           isEnabled: dbData.isEnabled !== false,
         },
         include: { groups: true, metrics: true },
@@ -364,7 +364,7 @@ export class PrismaRepository implements IStorageRepository {
           passwordEncrypted: encryptedPassword || '',
           connectionConfig: (dbData.connectionConfig as any) || {},
           status: dbData.status || 'UP',
-          lastCheckAt: dbData.lastCheckAt ? new Date(dbData.lastCheckAt) : new Date(),
+          lastCheckAt: defaultLastCheckAt,
           isEnabled: dbData.isEnabled !== false,
         },
         include: { groups: true, metrics: true },
