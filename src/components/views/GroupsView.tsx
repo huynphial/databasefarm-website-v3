@@ -232,11 +232,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   const selectedDb = databases.find((d) => d.id === selectedDbId);
 
   const availableEngineCodes = useMemo(() => {
+    if (databaseEngines && databaseEngines.length > 0) {
+      const activeList = databaseEngines.filter((e) => e.statusOnOff === 'ACTIVE');
+      if (activeList.length > 0) {
+        return activeList.map((e) => e.dbCode.toUpperCase());
+      }
+    }
     return Array.from(
-      new Set([
-        ...databaseEngines.map((e) => e.dbCode.toUpperCase()),
-        ...databases.map((d) => d.dbType.toUpperCase()),
-      ])
+      new Set(databases.map((d) => d.dbType.toUpperCase()))
     ).filter(Boolean);
   }, [databaseEngines, databases]);
 

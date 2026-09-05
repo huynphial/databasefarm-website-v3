@@ -29,6 +29,7 @@ import { useToast } from '../../ui/Toast';
 import { getDbEngineBadgeClass } from '../../../config/dbEngines';
 import { useTranslation } from '../../../i18n/LanguageContext';
 import { extractGroupMappings } from '../GroupsView';
+import { DatabaseEngineFilter } from '../../common/DatabaseEngineFilter';
 
 interface GroupFormModalProps {
   isOpen: boolean;
@@ -99,13 +100,12 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
           notificationMappings: initialMappings,
         });
       } else {
-        const defaultMethodIds = alertMethods.filter((m) => m.statusOnOff === 'ACTIVE').map((m) => m.id);
         setFormData({
           name: '',
           description: '',
           databaseIds: [],
           templateIds: [],
-          notificationMappings: defaultMethodIds.map((id) => ({ notificationMethodId: id, senderIds: '' })),
+          notificationMappings: [],
         });
       }
       // Reset filter states
@@ -126,12 +126,16 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
   // -------------------------------------------------------------
   const availableDbEngines = useMemo(() => {
     const engines = new Set<string>();
-    databases.forEach((db) => {
-      if (db.dbType) engines.add(db.dbType.toUpperCase());
-    });
-    databaseEngines.forEach((eng) => {
-      if (eng.dbCode) engines.add(eng.dbCode.toUpperCase());
-    });
+    const activeEngines = databaseEngines.filter((eng) => eng.statusOnOff === 'ACTIVE');
+    if (activeEngines.length > 0) {
+      activeEngines.forEach((eng) => {
+        if (eng.dbCode) engines.add(eng.dbCode.toUpperCase());
+      });
+    } else {
+      databases.forEach((db) => {
+        if (db.dbType) engines.add(db.dbType.toUpperCase());
+      });
+    }
     return Array.from(engines).sort();
   }, [databases, databaseEngines]);
 
@@ -179,13 +183,21 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
   // -------------------------------------------------------------
   const availableTemplateEngines = useMemo(() => {
     const engines = new Set<string>();
+    const activeEngineCodes = new Set(
+      databaseEngines
+        .filter((e) => e.statusOnOff === 'ACTIVE')
+        .map((e) => e.dbCode.toUpperCase())
+    );
     templates.forEach((t) => {
       if (t.targetDbType && t.targetDbType.toUpperCase() !== 'ALL') {
-        engines.add(t.targetDbType.toUpperCase());
+        const codeUpper = t.targetDbType.toUpperCase();
+        if (activeEngineCodes.size === 0 || activeEngineCodes.has(codeUpper)) {
+          engines.add(codeUpper);
+        }
       }
     });
     return Array.from(engines).sort();
-  }, [templates]);
+  }, [templates, databaseEngines]);
 
   const filteredTemplates = useMemo(() => {
     return templates.filter((tpl) => {
@@ -470,21 +482,14 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
 
             {/* Filter by DB Engine */}
             <div className="sm:col-span-4 relative">
-              <select
+              <DatabaseEngineFilter
                 value={dbEngineFilter}
-                onChange={(e) => setDbEngineFilter(e.target.value)}
-                className="w-full py-1.5 px-2.5 bg-white border border-slate-300 rounded-md text-slate-800 text-xs font-medium focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                <option value="ALL">All DB Engines ({databases.length})</option>
-                {availableDbEngines.map((engine) => {
-                  const count = databases.filter((d) => d.dbType.toUpperCase() === engine).length;
-                  return (
-                    <option key={engine} value={engine}>
-                      {engine} ({count})
-                    </option>
-                  );
-                })}
-              </select>
+                onChange={(val) => setDbEngineFilter(val)}
+                databases={databases}
+                databaseEngines={databaseEngines}
+                allLabel={`All DB Engines (${databases.length})`}
+                className="w-full text-xs font-medium"
+              />
             </div>
 
             {/* Only Selected Toggle */}
@@ -742,9 +747,6 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                             {tpl.description}
                           </div>
                         )}
-                        <div className="flex items-center gap-1.5 text-[9px] text-slate-400 mt-0.5">
-                          <span>Rules/Metrics: {tpl.metricRules?.length || 0}</span>
-                        </div>
                       </div>
                     </label>
                   );

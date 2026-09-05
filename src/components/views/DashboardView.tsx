@@ -19,15 +19,20 @@ import {
   Pause,
   AlertOctagon
 } from 'lucide-react';
-import { ActiveAlertEntity, DatabaseEntity, DbEngine, UserRole } from '../../types';
+import { ActiveAlertEntity, DatabaseEntity, DatabaseEngineEntity, DbEngine, UserRole } from '../../types';
 import { DB_ENGINES, getDbEngineBadgeClass, getDbEngineConfig, getDbEngineTagStyle } from '../../config/dbEngines';
 import { DataTable, Column } from '../tables/DataTable';
 import { formatTimeVN, cn } from '../../lib/utils';
 import { useToast } from '../ui/Toast';
 import { useTranslation } from '../../i18n/LanguageContext';
+import { AutoRefreshControl } from '../common/AutoRefreshControl';
+import { SummaryMetricCards } from '../common/SummaryMetricCards';
+import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
+import { DatabaseEngineSummaryGrid } from '../common/DatabaseEngineSummaryGrid';
 
 interface DashboardViewProps {
   databases: DatabaseEntity[];
+  databaseEngines?: DatabaseEngineEntity[];
   activeAlerts: ActiveAlertEntity[];
   onClearAlert: (alertId: string) => Promise<any> | void;
   onRefresh: () => void;
@@ -39,6 +44,7 @@ interface DashboardViewProps {
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   databases,
+  databaseEngines = [],
   activeAlerts,
   onClearAlert,
   onRefresh,
@@ -54,32 +60,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-
-  // Auto Refresh State (1-Minute Timer = 60 Seconds)
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState<boolean>(true);
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(60);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (!autoRefreshEnabled) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      return;
-    }
-
-    timerRef.current = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          onRefresh();
-          return 60;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [autoRefreshEnabled, onRefresh]);
 
   // Filter databases by engine type
   const filteredDatabases = databases.filter((db) => {
@@ -159,299 +139,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="flex items-center gap-2">
           <Filter className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
           <span className="font-bold text-slate-900 tracking-tight whitespace-nowrap">{t('dashboard.engineScope')}:</span>
-          <select
+          <DatabaseEngineFilter
             id="dbTypeFilter"
             value={selectedDbType}
-            onChange={(e) => {
-              setSelectedDbType(e.target.value);
+            onChange={(val) => {
+              setSelectedDbType(val);
               setCurrentPage(1);
             }}
-            className="bg-slate-50 border border-slate-300 text-xs px-2.5 py-1 rounded-lg text-slate-800 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
-          >
-            <option value="ALL">{t('dashboard.allDatabaseEngines')} ({databases.length})</option>
-            {DB_ENGINES.map((engine) => {
-              const count = databases.filter((d) => d.dbType === engine.code).length;
-              return (
-                <option key={engine.code} value={engine.code}>
-                  {engine.name} ({engine.code}) - {count}
-                </option>
-              );
-            })}
-          </select>
+            databases={databases}
+            databaseEngines={databaseEngines}
+            allLabel={t('dashboard.allDatabaseEngines')}
+          />
         </div>
 
-        <div className="flex items-center gap-2 justify-end">
-          {/* Auto-Refresh Toggle */}
-          <button
-            onClick={() => {
-              const nextVal = !autoRefreshEnabled;
-              setAutoRefreshEnabled(nextVal);
-              if (nextVal) setSecondsRemaining(60);
-              toast({
-                title: nextVal ? t('activeAlerts.autoRefreshEnabled') : t('activeAlerts.autoRefreshPaused'),
-                description: nextVal ? 'Overview metrics will auto-update every 60s.' : 'Auto-refresh paused.',
-                type: 'info',
-              });
-            }}
-            className={cn(
-              'px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer text-xs',
-              autoRefreshEnabled
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
-            )}
-            title={autoRefreshEnabled ? 'Pause 60s Auto-Refresh' : 'Enable 60s Auto-Refresh'}
-          >
-            {autoRefreshEnabled ? (
-              <>
-                <Pause className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{t('common.auto')} ({secondsRemaining}s)</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5 text-slate-500" />
-                <span>{t('common.autoOff')}</span>
-              </>
-            )}
-          </button>
-
-          <button
-            onClick={() => {
-              onRefresh();
-              setSecondsRemaining(60);
-              toast({ title: 'Dashboard Refreshed', description: 'Real-time overview metrics updated.', type: 'info' });
-            }}
-            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1 rounded-lg font-bold transition-colors shadow-2xs cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>{t('common.refreshNow')}</span>
-          </button>
-        </div>
+        <AutoRefreshControl
+          onRefresh={onRefresh}
+          toastTitle="Dashboard Refreshed"
+          toastDescription="Real-time overview metrics updated."
+        />
       </div>
 
       {/* 6 Summary Metric Cards with Hover Tooltips & Dynamic Highlighting */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
-        {/* Monitored Databases */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative group cursor-help">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-            {t('dashboard.monitoredDbs')} {selectedDbType !== 'ALL' && `(${selectedDbType})`}
-          </div>
-          <div className="flex items-end justify-between">
-            <div className="text-2xl font-bold text-slate-900 tracking-tight">{filteredDatabases.length}</div>
-            <div className={cn(
-              'text-[10px] font-bold px-1.5 py-0.5 rounded border',
-              upPercentage === 100
-                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                : 'text-amber-700 bg-amber-50 border-amber-200'
-            )}>
-              {upPercentage}% {t('dashboard.healthy')}
-            </div>
-          </div>
+      <SummaryMetricCards
+        databases={databases}
+        activeAlerts={activeAlerts}
+        selectedDbType={selectedDbType}
+      />
 
-          {/* Hover Tooltip - Drop Down */}
-          <div className="hidden group-hover:block absolute left-0 sm:left-1/2 sm:-translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
-            <div className="font-bold text-indigo-300 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-              {t('dashboard.monitoredDbs')} ({filteredDatabases.length})
-            </div>
-            <div className="space-y-1 text-slate-200">
-              <div className="flex justify-between items-center">
-                <span className="text-emerald-400 font-medium">● Healthy / Up</span>
-                <span className="font-bold">{dbStatuses.filter((d) => d.derivedStatus === 'UP').length}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-amber-400 font-medium">▲ Warning Level</span>
-                <span className="font-bold">{dbStatuses.filter((d) => d.derivedStatus === 'WARN').length}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-rose-400 font-medium">▼ Offline / Down</span>
-                <span className="font-bold">{downCount}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Databases Down Summary Card with Dynamic Red / Green Highlighting + Rich Tooltip */}
-        <div className={cn(
-          'p-4 rounded-xl border shadow-2xs transition-all relative group cursor-help',
-          downCount > 0
-            ? 'bg-rose-600 text-white border-rose-700 shadow-rose-200 shadow-sm'
-            : 'bg-emerald-50/90 text-emerald-950 border-emerald-300'
-        )}>
-          <div className={cn(
-            'text-[10px] font-bold uppercase tracking-wider mb-1',
-            downCount > 0 ? 'text-rose-100' : 'text-emerald-800'
-          )}>
-            {t('dashboard.databasesDown')}
-          </div>
-          <div className="flex items-end justify-between">
-            <div className={cn('text-2xl font-extrabold tracking-tight', downCount > 0 ? 'text-white' : 'text-emerald-700')}>
-              {downCount}
-            </div>
-            <div className={cn(
-              'text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border',
-              downCount > 0
-                ? 'bg-rose-700/80 text-white border-rose-500 animate-pulse'
-                : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-            )}>
-              {downCount > 0 ? t('common.attentionRequired') : t('common.allInstancesUp')}
-            </div>
-          </div>
-
-          {/* Hover Tooltip - Drop Down */}
-          <div className="hidden group-hover:block absolute left-0 sm:left-1/2 sm:-translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
-            <div className="font-bold text-rose-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-              {t('dashboard.downDatabasesTooltip')} ({affectedDownDbs.length})
-            </div>
-            {affectedDownDbs.length > 0 ? (
-              <div className="space-y-1 max-h-[150px] overflow-y-auto pr-1">
-                {affectedDownDbs.map((db, idx) => (
-                  <div key={idx} className="flex justify-between items-center gap-4">
-                    <span className="font-medium text-slate-200 truncate max-w-[120px]" title={db.name}>{db.name}</span>
-                    <span className="font-bold text-rose-400 shrink-0">{db.count} alert{db.count !== 1 ? 's' : ''}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-slate-400 italic">{t('dashboard.noOfflineDatabases')}</div>
-            )}
-          </div>
-        </div>
-
-        {/* Critical Alerts Summary Card with Rich Tooltip */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative group cursor-help">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-            {t('dashboard.criticalAlerts')}
-          </div>
-          <div className="flex items-end justify-between">
-            <div className={cn('text-2xl font-bold tracking-tight', criticalAlertsCount > 0 ? 'text-rose-600' : 'text-slate-400')}>
-              {String(criticalAlertsCount).padStart(2, '0')}
-            </div>
-            <div className={cn(
-              'text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded',
-              criticalAlertsCount > 0 ? 'text-rose-700 bg-rose-50' : 'text-slate-500 bg-slate-100'
-            )}>
-              {criticalAlertsCount > 0 ? t('common.actionRequired') : t('common.nominal')}
-            </div>
-          </div>
-
-          {/* Hover Tooltip - Drop Down */}
-          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
-            <div className="font-bold text-rose-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-              {t('dashboard.criticalAlertsTooltip')}
-            </div>
-            {affectedCriticalDbs.length > 0 ? (
-              <div className="space-y-1 max-h-[150px] overflow-y-auto pr-1">
-                {affectedCriticalDbs.map((db, idx) => (
-                  <div key={idx} className="flex justify-between items-center gap-4">
-                    <span className="font-medium text-slate-200 truncate max-w-[120px]" title={db.name}>{db.name}</span>
-                    <span className="font-bold text-rose-400 shrink-0">{db.count} alert{db.count !== 1 ? 's' : ''}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-slate-400 italic">{t('dashboard.noCriticalIncidents')}</div>
-            )}
-          </div>
-        </div>
-
-        {/* High Alerts Summary Card with Rich Tooltip */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative group cursor-help">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-            {t('dashboard.highAlerts')}
-          </div>
-          <div className="flex items-end justify-between">
-            <div className={cn('text-2xl font-bold tracking-tight', highAlertsCount > 0 ? 'text-orange-600' : 'text-slate-400')}>
-              {String(highAlertsCount).padStart(2, '0')}
-            </div>
-            <div className={cn(
-              'text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded',
-              highAlertsCount > 0 ? 'text-orange-700 bg-orange-50 border border-orange-200' : 'text-slate-500 bg-slate-100'
-            )}>
-              {highAlertsCount > 0 ? t('common.actionRequired') : t('common.nominal')}
-            </div>
-          </div>
-
-          {/* Hover Tooltip - Drop Down */}
-          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
-            <div className="font-bold text-orange-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-              {t('dashboard.highAlertsTooltip')}
-            </div>
-            {affectedHighDbs.length > 0 ? (
-              <div className="space-y-1 max-h-[150px] overflow-y-auto pr-1">
-                {affectedHighDbs.map((db, idx) => (
-                  <div key={idx} className="flex justify-between items-center gap-4">
-                    <span className="font-medium text-slate-200 truncate max-w-[120px]" title={db.name}>{db.name}</span>
-                    <span className="font-bold text-orange-400 shrink-0">{db.count} alert{db.count !== 1 ? 's' : ''}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-slate-400 italic">{t('dashboard.noHighPriorityAlerts')}</div>
-            )}
-          </div>
-        </div>
-
-        {/* Warning Level Summary Card with Rich Tooltip */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative group cursor-help">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-            {t('dashboard.warningLevel')}
-          </div>
-          <div className="flex items-end justify-between">
-            <div className={cn('text-2xl font-bold tracking-tight', warnAlertsCount > 0 ? 'text-amber-600' : 'text-slate-400')}>
-              {String(warnAlertsCount).padStart(2, '0')}
-            </div>
-            <div className={cn(
-              'text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded',
-              warnAlertsCount > 0 ? 'text-amber-700 bg-amber-50 border border-amber-200' : 'text-slate-500 bg-slate-100'
-            )}>
-              {warnAlertsCount > 0 ? t('common.threshold') : t('common.nominal')}
-            </div>
-          </div>
-
-          {/* Hover Tooltip - Drop Down */}
-          <div className="hidden group-hover:block absolute right-0 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 lg:right-0 lg:left-auto lg:translate-x-0 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
-            <div className="font-bold text-amber-400 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-              {t('dashboard.warningAlertsTooltip')}
-            </div>
-            {affectedWarnDbs.length > 0 ? (
-              <div className="space-y-1 max-h-[150px] overflow-y-auto pr-1">
-                {affectedWarnDbs.map((db, idx) => (
-                  <div key={idx} className="flex justify-between items-center gap-4">
-                    <span className="font-medium text-slate-200 truncate max-w-[120px]" title={db.name}>{db.name}</span>
-                    <span className="font-bold text-amber-400 shrink-0">{db.count} alert{db.count !== 1 ? 's' : ''}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-slate-400 italic">{t('dashboard.noWarningsActive')}</div>
-            )}
-          </div>
-        </div>
-
-        {/* System Collector */}
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs relative group cursor-help">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-            {t('dashboard.collectorService')}
-          </div>
-          <div className="flex items-end justify-between">
-            <div className="text-2xl font-bold text-indigo-600 tracking-tight">{t('dashboard.online')}</div>
-            <div className="text-indigo-700 text-[9px] font-bold tracking-wider bg-indigo-50 px-2 py-0.5 rounded">
-              {t('dashboard.syncedUtc')}
-            </div>
-          </div>
-
-          {/* Hover Tooltip - Drop Down */}
-          <div className="hidden group-hover:block absolute right-0 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 lg:right-0 lg:left-auto lg:translate-x-0 top-full mt-2.5 z-50 min-w-[220px] max-w-xs p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-relaxed text-left">
-            <div className="font-bold text-indigo-300 pb-1 mb-1 border-b border-slate-800 uppercase tracking-wider text-[10px]">
-              {t('dashboard.collectorService')}
-            </div>
-            <div className="text-slate-300 text-[10px] space-y-1">
-              <div>Status: <span className="text-emerald-400 font-bold">ACTIVE (Online)</span></div>
-              <div>Periodic polling: <span className="font-mono text-slate-200">10s Health Probes</span></div>
-              <div>Telemetry: <span className="font-mono text-slate-200">System metrics synced</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Database Engine Summary Grid */}
+      <DatabaseEngineSummaryGrid
+        databases={databases}
+        databaseEngines={databaseEngines}
+        activeAlerts={activeAlerts}
+        selectedEngine={selectedDbType}
+        onSelectEngine={(engine) => {
+          setSelectedDbType(engine);
+          setCurrentPage(1);
+        }}
+      />
 
       {/* Database Quick Health Grid */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">

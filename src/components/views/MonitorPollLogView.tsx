@@ -36,6 +36,9 @@ import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { useTranslation } from '../../i18n';
 import { api } from '../../lib/api';
+import { AutoRefreshControl } from '../common/AutoRefreshControl';
+import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
+import { TargetDatabaseFilter } from '../common/TargetDatabaseFilter';
 
 // Utility helper for classnames
 function cn(...classes: (string | boolean | undefined | null)[]) {
@@ -76,41 +79,6 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
 }) => {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // --- AUTO REFRESH STATE (Options: 15s, 30s, 1m, 5m, Off) ---
-  type AutoRefreshOption = 'off' | '15s' | '30s' | '1m' | '5m';
-  const [autoRefreshOption, setAutoRefreshOption] = useState<AutoRefreshOption>('30s');
-  const [secondsUntilRefresh, setSecondsUntilRefresh] = useState<number | null>(30);
-
-  useEffect(() => {
-    if (autoRefreshOption === 'off') {
-      setSecondsUntilRefresh(null);
-      return;
-    }
-
-    const secondsMap: Record<AutoRefreshOption, number> = {
-      off: 0,
-      '15s': 15,
-      '30s': 30,
-      '1m': 60,
-      '5m': 300,
-    };
-    const totalSeconds = secondsMap[autoRefreshOption] || 30;
-    setSecondsUntilRefresh(totalSeconds);
-
-    const timerId = setInterval(() => {
-      setSecondsUntilRefresh((prev) => {
-        if (prev === null || prev <= 1) {
-          onRefresh();
-          return totalSeconds;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timerId);
-  }, [autoRefreshOption, onRefresh]);
 
   // If user is not ADMIN, show Access Denied
   if (userRole !== 'ADMIN') {
@@ -132,10 +100,6 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
 
   // --- FILTER 2: TARGET DATABASE SEARCHABLE DROPDOWN ---
   const [selectedDbId, setSelectedDbId] = useState<string>('ALL');
-  const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
-  const [dbSearchQuery, setDbSearchQuery] = useState('');
-  const dbDropdownRef = useRef<HTMLDivElement>(null);
-  const dbSearchInputRef = useRef<HTMLInputElement>(null);
 
   // --- FILTER 3: TIME WINDOW FILTER (Default: 24h) ---
   const [timeRangePreset, setTimeRangePreset] = useState<'1h' | '6h' | '24h' | '3d' | '7d' | 'all'>('24h');
@@ -184,26 +148,6 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
     }
   };
 
-  // Click outside to close Target Database dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dbDropdownRef.current && !dbDropdownRef.current.contains(event.target as Node)) {
-        setIsDbDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Focus search input when Target DB dropdown opens
-  useEffect(() => {
-    if (isDbDropdownOpen) {
-      setTimeout(() => {
-        dbSearchInputRef.current?.focus();
-      }, 50);
-    }
-  }, [isDbDropdownOpen]);
-
   // Compute available Database Engines
   const availableEngines = useMemo(() => {
     const engineMap = new Map<string, { code: string; name: string }>();
@@ -220,27 +164,6 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
     });
     return Array.from(engineMap.values());
   }, [databaseEngines, databases]);
-
-  // Searchable databases list for Target Database dropdown
-  const searchableDatabases = useMemo(() => {
-    return databases.filter((db) => {
-      const matchEngine =
-        selectedEngineType === 'ALL' ||
-        db.dbType.toUpperCase() === selectedEngineType.toUpperCase();
-      const q = dbSearchQuery.toLowerCase().trim();
-      const matchSearch =
-        !q ||
-        db.name.toLowerCase().includes(q) ||
-        (db.databaseName && db.databaseName.toLowerCase().includes(q)) ||
-        db.host.toLowerCase().includes(q) ||
-        String(db.port || '').includes(q) ||
-        (db.environment && db.environment.toLowerCase().includes(q)) ||
-        db.dbType.toLowerCase().includes(q) ||
-        (db.note && db.note.toLowerCase().includes(q)) ||
-        (db.tags && db.tags.some((t) => t.toLowerCase().includes(q)));
-      return matchEngine && matchSearch;
-    });
-  }, [databases, selectedEngineType, dbSearchQuery]);
 
   // Selected Target Database Entity
   const selectedDb = useMemo(() => {
@@ -445,29 +368,9 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
     return filteredLogs.slice(start, start + pageSize);
   }, [filteredLogs, currentPage, pageSize]);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    if (onRefresh) {
-      await onRefresh();
-    }
-    if (autoRefreshOption !== 'off') {
-      const secondsMap: Record<string, number> = { '15s': 15, '30s': 30, '1m': 60, '5m': 300 };
-      setSecondsUntilRefresh(secondsMap[autoRefreshOption] || 30);
-    }
-    setTimeout(() => {
-      setIsRefreshing(false);
-      toast({
-        title: 'Monitor Poll Logs Refreshed',
-        description: 'Loaded latest collector poll queue & execution logs.',
-        type: 'info',
-      });
-    }, 500);
-  };
-
   const handleClearFilters = () => {
     setSelectedEngineType('ALL');
     setSelectedDbId('ALL');
-    setDbSearchQuery('');
     setStatusFilter('ALL');
     setSearchTerm('');
     handleSelectTimePreset('24h');
@@ -494,38 +397,11 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Auto Refresh Select Dropdown */}
-          <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-semibold shadow-2xs">
-            <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-            <span className="text-[11px] text-slate-500 font-medium">{t('monitorPollLog.autoRefresh')}</span>
-            <select
-              value={autoRefreshOption}
-              onChange={(e) => setAutoRefreshOption(e.target.value as any)}
-              className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer"
-            >
-              <option value="off">Off</option>
-              <option value="15s">15s</option>
-              <option value="30s">30s</option>
-              <option value="1m">1m</option>
-              <option value="5m">5m</option>
-            </select>
-            {secondsUntilRefresh !== null && (
-              <span className="text-[10px] font-mono text-indigo-600 font-bold ml-0.5">
-                ({secondsUntilRefresh}s)
-              </span>
-            )}
-          </div>
-
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs cursor-pointer disabled:opacity-60"
-          >
-            <RefreshCw className={cn('w-3.5 h-3.5', isRefreshing && 'animate-spin text-indigo-600')} />
-            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
-          </button>
-        </div>
+        <AutoRefreshControl
+          onRefresh={onRefresh}
+          toastTitle="Monitor Poll Logs Refreshed"
+          toastDescription="Loaded latest collector poll queue & execution logs."
+        />
       </div>
 
       {/* Info Tips */}
@@ -576,217 +452,41 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
               <span>Database Engine</span>
             </label>
             <div className="relative">
-              <select
+              <DatabaseEngineFilter
                 value={selectedEngineType}
-                onChange={(e) => {
-                  const newEngine = e.target.value;
-                  setSelectedEngineType(newEngine);
-                  // If selected DB doesn't match new engine, reset DB to ALL
-                  if (newEngine !== 'ALL' && selectedDb && selectedDb.dbType.toUpperCase() !== newEngine.toUpperCase()) {
+                onChange={(val) => {
+                  setSelectedEngineType(val);
+                  if (val !== 'ALL' && selectedDb && selectedDb.dbType.toUpperCase() !== val.toUpperCase()) {
                     setSelectedDbId('ALL');
                   }
                   setCurrentPage(1);
                 }}
+                databases={databases}
+                databaseEngines={databaseEngines}
+                allLabel="All Database Engines"
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all cursor-pointer appearance-none pr-7"
-              >
-                <option value="ALL">All Database Engines</option>
-                {availableEngines.map((engine) => (
-                  <option key={engine.code} value={engine.code}>
-                    {engine.name} ({engine.code})
-                  </option>
-                ))}
-              </select>
+              />
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2 pointer-events-none" />
             </div>
           </div>
 
-          {/* Filter 2: Target Database (Searchable Custom Dropdown) */}
-          <div className="md:col-span-4 space-y-1" ref={dbDropdownRef}>
+          {/* Filter 2: Target Database (Searchable Selection Dropdown) */}
+          <div className="md:col-span-4 space-y-1">
             <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 uppercase tracking-wider pb-2.5">
               <Database className="w-3 h-3 text-emerald-500" />
               <span>Target Database</span>
             </label>
-
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsDbDropdownOpen(!isDbDropdownOpen)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-left font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all flex items-center justify-between cursor-pointer"
-              >
-                <div className="flex items-center gap-1.5 truncate">
-                  {selectedDb ? (
-                    <>
-                      <span
-                        className={cn(
-                          'w-2 h-2 rounded-full shrink-0',
-                          selectedDb.status === 'UP'
-                            ? 'bg-emerald-500'
-                            : selectedDb.status === 'WARNING'
-                            ? 'bg-amber-500'
-                            : 'bg-rose-500'
-                        )}
-                      />
-                      <span className="font-bold text-slate-900 truncate">{selectedDb.name}</span>
-                      <span
-                        className={cn(
-                          'text-[9px] font-mono px-1 py-0.1 rounded border font-semibold',
-                          getDbEngineBadgeClass(selectedDb.dbType)
-                        )}
-                      >
-                        {selectedDb.dbType}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-slate-700 font-bold">
-                      All Databases ({searchableDatabases.length})
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {selectedDbId !== 'ALL' && (
-                    <span
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedDbId('ALL');
-                        setCurrentPage(1);
-                      }}
-                      className="p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 cursor-pointer text-[10px]"
-                      title="Clear selection"
-                    >
-                      ✕
-                    </span>
-                  )}
-                  <ChevronDown
-                    className={cn(
-                      'w-3.5 h-3.5 text-slate-400 transition-transform duration-200',
-                      isDbDropdownOpen && 'rotate-180 text-indigo-600'
-                    )}
-                  />
-                </div>
-              </button>
-
-              {/* Dropdown Menu */}
-              {isDbDropdownOpen && (
-                <div className="absolute z-50 mt-1.5 w-full min-w-[300px] bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                  {/* Search inside dropdown */}
-                  <div className="p-2 border-b border-slate-100 bg-slate-50/70">
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                      <input
-                        ref={dbSearchInputRef}
-                        type="text"
-                        placeholder="Filter by name, host, port, note..."
-                        value={dbSearchQuery}
-                        onChange={(e) => setDbSearchQuery(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Options List */}
-                  <div className="max-h-60 overflow-y-auto divide-y divide-slate-50 p-1">
-                    {/* All Databases Option */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedDbId('ALL');
-                        setIsDbDropdownOpen(false);
-                        setCurrentPage(1);
-                      }}
-                      className={cn(
-                        'w-full px-3 py-2 rounded-lg text-left text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer',
-                        selectedDbId === 'ALL'
-                          ? 'bg-indigo-50 text-indigo-900 font-bold'
-                          : 'hover:bg-slate-50 text-slate-700'
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Database className="w-3.5 h-3.5 text-slate-400" />
-                        <span>All Databases ({searchableDatabases.length})</span>
-                      </div>
-                      {selectedDbId === 'ALL' && (
-                        <Check className="w-4 h-4 text-indigo-600 shrink-0 font-bold" />
-                      )}
-                    </button>
-
-                    {searchableDatabases.length === 0 ? (
-                      <div className="py-6 text-center text-xs text-slate-400">
-                        No database instances match "{dbSearchQuery}"
-                      </div>
-                    ) : (
-                      searchableDatabases.map((db) => {
-                        const isSelected = selectedDbId === db.id;
-                        return (
-                          <button
-                            key={db.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedDbId(db.id);
-                              setIsDbDropdownOpen(false);
-                              setCurrentPage(1);
-                            }}
-                            className={cn(
-                              'w-full px-3 py-2 rounded-lg text-left text-xs flex items-center justify-between transition-colors cursor-pointer group',
-                              isSelected
-                                ? 'bg-indigo-50/80 text-indigo-900 font-bold'
-                                : 'hover:bg-slate-50 text-slate-800'
-                            )}
-                          >
-                            <div className="flex items-start gap-2.5 truncate">
-                              <span
-                                className={cn(
-                                  'w-2 h-2 rounded-full shrink-0 mt-1.5',
-                                  db.status === 'UP'
-                                    ? 'bg-emerald-500 ring-2 ring-emerald-100'
-                                    : db.status === 'WARNING'
-                                    ? 'bg-amber-500 ring-2 ring-amber-100'
-                                    : 'bg-rose-500 ring-2 ring-rose-100'
-                                )}
-                              />
-                              <div className="truncate">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-slate-900 truncate">{db.name}</span>
-                                  <span
-                                    className={cn(
-                                      'text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border shrink-0',
-                                      getDbEngineBadgeClass(db.dbType)
-                                    )}
-                                  >
-                                    {db.dbType}
-                                  </span>
-                                </div>
-                                <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-2 truncate">
-                                  <span>{db.host}:{db.port}</span>
-                                  {db.databaseName && <span>• {db.databaseName}</span>}
-                                </div>
-                              </div>
-                            </div>
-
-                            {isSelected && (
-                              <Check className="w-4 h-4 text-indigo-600 shrink-0 font-bold" />
-                            )}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  {/* Dropdown Footer */}
-                  <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-500 flex items-center justify-between">
-                    <span>{searchableDatabases.length} databases</span>
-                    {selectedEngineType !== 'ALL' && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedEngineType('ALL')}
-                        className="text-indigo-600 hover:text-indigo-800 font-semibold underline cursor-pointer"
-                      >
-                        Show all engines
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <TargetDatabaseFilter
+              value={selectedDbId}
+              onChange={(val) => {
+                setSelectedDbId(val);
+                setCurrentPage(1);
+              }}
+              databases={databases}
+              selectedEngineType={selectedEngineType}
+              onEngineChange={(eng) => setSelectedEngineType(eng)}
+              variant="compact"
+            />
           </div>
 
           {/* Filter 3: Time Window (Compact) */}

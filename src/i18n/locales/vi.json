@@ -94,7 +94,9 @@
     "auditLogs": "Nhật ký kiểm toán (Audit)",
     "account": "Cài đặt tài khoản",
     "systemSettings": "Cài đặt hệ thống",
-    "logout": "Đăng xuất"
+    "logout": "Đăng xuất",
+    "collapseSidebar": "Thu gọn thanh bên",
+    "expandSidebar": "Mở rộng thanh bên"
   },
   "header": {
     "dashboardTitle": "Tổng quan Dashboard",
@@ -747,7 +749,11 @@
     "noTemplatesMatch": "Không có mẫu nào khớp với từ khóa \"{query}\".",
     "assignTemplateHelpNote": "Các CSDL gán vào nhóm tham chiếu tới tập hợp mẫu này sẽ tự động kế thừa và giám sát chỉ số thăm dò này.",
     "saveTemplateLink": "Lưu liên kết mẫu",
-    "assigned": "Đã gán"
+    "assigned": "Đã gán",
+    "engineSummaryTitle": "Tổng quan chỉ số theo CSDL",
+    "totalMetricsCardTitle": "Tổng số chỉ số",
+    "universalEngine": "Dùng chung (Tất cả CSDL)",
+    "activeMetricsLabel": "Chỉ số đang bật"
   },
   "alertHistory": {
     "title": "Lịch sử cảnh báo",
@@ -777,7 +783,18 @@
     "colRaisedAt": "Thời điểm kích hoạt",
     "colClearedState": "Thời điểm đóng",
     "colDuring": "Thời gian",
-    "colClearedResolver": "Người xử lý"
+    "colClearedResolver": "Người xử lý",
+    "affectedDbs": "CSDL bị ảnh hưởng",
+    "totalIncidents": "Tổng số sự cố",
+    "downIncidents": "Sự cố Down",
+    "criticalIncidents": "Sự cố Critical",
+    "highIncidents": "Mức độ Cao",
+    "warningIncidents": "Mức độ Cảnh báo",
+    "exportCsv": "Xuất CSV",
+    "noDataToExport": "Không có dữ liệu để xuất",
+    "noDataToExportDesc": "Không có bản ghi nhật ký cảnh báo nào phù hợp với bộ lọc hiện tại.",
+    "exportedTitle": "Đã xuất nhật ký cảnh báo",
+    "exportedDesc": "Đã xuất thành công {{count}} bản ghi nhật ký cảnh báo ra tệp CSV."
   },
   "alertNotifications": {
     "title": "Nhật ký gửi thông báo cảnh báo",

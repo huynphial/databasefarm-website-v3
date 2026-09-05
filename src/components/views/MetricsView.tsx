@@ -27,6 +27,7 @@ import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { validateMetricSqlQuery } from '../../lib/sqlValidator';
 import { useTranslation } from '../../i18n';
+import { MetricsEngineSummaryGrid } from '../common/MetricsEngineSummaryGrid';
 
 interface MetricsViewProps {
   metrics: MetricEntity[];
@@ -145,7 +146,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     thresholdsConfig: any;
   }>({
     name: '',
-    sqlQuery: 'SELECT username AS name, COUNT(*) AS value FROM v$session WHERE status = \'ACTIVE\' GROUP BY username',
+    sqlQuery: '',
     valueType: 'NUMBER',
     databaseEngineId: '',
     thresholdOperator: '>=',
@@ -169,7 +170,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     ]);
     setFormData({
       name: '',
-      sqlQuery: 'SELECT count(*) AS value FROM pg_stat_activity WHERE state = \'active\'',
+      sqlQuery: '',
       valueType: 'NUMBER',
       databaseEngineId: '',
       thresholdOperator: '>=',
@@ -281,7 +282,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       const validation = validateMetricSqlQuery(query, targetType);
       setSqlValidationError(validation.isValid ? null : validation.error || 'Invalid query');
     } else {
-      setSqlValidationError('SQL Query cannot be empty.');
+      setSqlValidationError('Query cannot be empty.');
     }
   };
 
@@ -747,6 +748,17 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
         </div>
       </div>
 
+      {/* Metrics Engine Summary Grid Cards */}
+      <MetricsEngineSummaryGrid
+        metrics={metrics}
+        databaseEngines={databaseEngines}
+        selectedEngineFilter={selectedEngineFilter}
+        onSelectEngineFilter={(engineFilter) => {
+          setSelectedEngineFilter(engineFilter);
+          setCurrentPage(1);
+        }}
+      />
+
       {/* Clean, Small & Optimized Filter Bar */}
       <div className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2.5 text-xs">
         <div className="flex flex-wrap items-center gap-2 flex-1">
@@ -768,14 +780,16 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               <option value="ALL">
                 {t('metrics.allTargetEngines')} ({metrics.length})
               </option>
-              {databaseEngines.map((engine) => {
-                const count = engineMetricCounts[engine.id] || engineMetricCounts[engine.dbCode?.toUpperCase()] || 0;
-                return (
-                  <option key={engine.id} value={engine.id}>
-                    {engine.dbName || engine.dbCode} ({count})
-                  </option>
-                );
-              })}
+              {databaseEngines
+                .filter((engine) => engine.statusOnOff === 'ACTIVE')
+                .map((engine) => {
+                  const count = engineMetricCounts[engine.id] || engineMetricCounts[engine.dbCode?.toUpperCase()] || 0;
+                  return (
+                    <option key={engine.id} value={engine.id}>
+                      {engine.dbName || engine.dbCode} ({count})
+                    </option>
+                  );
+                })}
               {universalMetricsCount > 0 && (
                 <option value="UNIVERSAL">
                   {t('metrics.universalEngines')} ({universalMetricsCount})
@@ -965,7 +979,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
               >
                 <option value="">{t('metrics.allEnginesOption')}</option>
-                {databaseEngines.map((eng) => (
+                {databaseEngines.filter((eng) => eng.statusOnOff === 'ACTIVE').map((eng) => (
                   <option key={eng.id} value={eng.id}>
                     {eng.dbName} ({eng.dbCode})
                   </option>
@@ -1015,17 +1029,20 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
               </span>
             </div>
             <textarea
-              rows={3}
+              rows={6}
               required
               value={formData.sqlQuery}
               onChange={(e) => handleSqlQueryChange(e.target.value)}
               className="w-full bg-white border border-slate-300 rounded-lg p-3 text-emerald-800 font-mono text-xs focus:outline-none focus:border-indigo-500"
               placeholder={
                 formData.metricQueryType === 1
-                  ? "SELECT count(*) AS value FROM pg_stat_activity"
+                  ? `SQL: SELECT count(*) AS value FROM pg_stat_activity
+Redis: INFO clients
+MongoDB: db.runCommand({"serverStatus": 1}).connections.current
+                  `
                   : formData.metricQueryType === 2
                   ? "SELECT datname AS name, numbackends AS value FROM pg_stat_database"
-                  : "SELECT tablespace_name AS name, 'used_percent' AS attribute, used_percent AS value FROM dba_tablespace_usage_metrics"
+                  : "SELECT tablespace_name AS name, used_pct, free_pct FROM dba_tablespace_usage_metrics"
               }
             />
             {sqlValidationError && (

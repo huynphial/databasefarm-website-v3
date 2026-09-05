@@ -468,37 +468,7 @@ export class MemoryRepository implements IStorageRepository {
   ];
 
   // Dynamic Alert Notification Methods
-  private alertNotificationMethods: AlertNotificationMethodEntity[] = [
-    {
-      id: 'meth-email-01',
-      name: 'Corporate SMTP Dispatcher',
-      type: 'EMAIL',
-      configJson: {
-        smtpHost: 'smtp.mailgun.org',
-        smtpPort: 587,
-        smtpUser: 'alerts@dbfarm.internal',
-        useTls: true,
-        fromAddress: 'Database Sentinel <noreply-alerts@dbfarm.internal>',
-      },
-      statusOnOff: 'ACTIVE',
-      createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-    },
-    {
-      id: 'meth-tg-02',
-      name: 'Telegram Incident Operations Bot',
-      type: 'TELEGRAM',
-      configJson: {
-        botToken: '6829103847:AAH9f_KzL2e-wZ5qM7Nx982Qp',
-        apiBaseUrl: 'https://api.telegram.org',
-        defaultChatTopic: 'DATABASE_OPERATIONS',
-        parseMode: 'HTML',
-      },
-      statusOnOff: 'ACTIVE',
-      createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-    },
-  ];
+  private alertNotificationMethods: AlertNotificationMethodEntity[] = [];
 
   private systemSettings: SystemSettingsEntity = {
     apiCollectorEnabled: true,

@@ -48,6 +48,8 @@ import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { useTranslation } from '../../i18n';
 import { api } from '../../lib/api';
+import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
+import { TargetDatabaseFilter } from '../common/TargetDatabaseFilter';
 
 // Token Template definitions for Notification Messages
 const NOTIFICATION_TOKENS = [
@@ -319,10 +321,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
   // 1. DATABASE ENGINE & TARGET DATABASE FILTER STATE (Default: Not Filter / 'ALL')
   const [selectedEngineType, setSelectedEngineType] = useState<string>('ALL');
   const [selectedDbId, setSelectedDbId] = useState<string>('ALL');
-  const [dbSearchQuery, setDbSearchQuery] = useState<string>('');
-  const [isDbDropdownOpen, setIsDbDropdownOpen] = useState<boolean>(false);
-  const dbDropdownRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // 2. TIME WINDOW FILTER STATE (Default: 24H like tab Analytics Database)
   const [timeRangePreset, setTimeRangePreset] = useState<'1h' | '6h' | '24h' | '3d' | '7d' | 'all' | 'custom'>('24h');
@@ -367,37 +365,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     dispatcherName?: string | null;
     dispatcherType?: string | null;
   } | null>(null);
-
-  // Close dropdown on click outside or escape key
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dbDropdownRef.current && !dbDropdownRef.current.contains(event.target as Node)) {
-        setIsDbDropdownOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsDbDropdownOpen(false);
-      }
-    };
-    if (isDbDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleKeyDown);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isDbDropdownOpen]);
-
-  // Focus search input when database dropdown opens
-  useEffect(() => {
-    if (isDbDropdownOpen && searchInputRef.current) {
-      setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 50);
-    }
-  }, [isDbDropdownOpen]);
 
   // Quick Preset Handler for Time Window
   const handleSelectTimePreset = (preset: '1h' | '6h' | '24h' | '3d' | '7d' | 'all') => {
@@ -484,27 +451,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
     });
     return Array.from(engineMap.values());
   }, [databaseEngines, databases]);
-
-  // Searchable databases list for dropdown selection
-  const searchableDatabases = useMemo(() => {
-    return databases.filter((db) => {
-      const matchEngine =
-        selectedEngineType === 'ALL' ||
-        db.dbType.toUpperCase() === selectedEngineType.toUpperCase();
-      const q = dbSearchQuery.toLowerCase().trim();
-      const matchSearch =
-        !q ||
-        db.name.toLowerCase().includes(q) ||
-        (db.databaseName && db.databaseName.toLowerCase().includes(q)) ||
-        db.host.toLowerCase().includes(q) ||
-        String(db.port || '').includes(q) ||
-        (db.environment && db.environment.toLowerCase().includes(q)) ||
-        db.dbType.toLowerCase().includes(q) ||
-        (db.note && db.note.toLowerCase().includes(q)) ||
-        (db.tags && db.tags.some((t) => t.toLowerCase().includes(q)));
-      return matchEngine && matchSearch;
-    });
-  }, [databases, selectedEngineType, dbSearchQuery]);
 
   // Selected Target Database Entity (if selectedDbId !== 'ALL')
   const selectedDb = useMemo(() => {
@@ -766,7 +712,6 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
   const handleClearFilters = () => {
     setSelectedEngineType('ALL');
     setSelectedDbId('ALL');
-    setDbSearchQuery('');
     setStatusFilter('ALL');
     setChannelFilter('ALL');
     setSeverityFilter('ALL');
@@ -868,242 +813,37 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
             </div>
 
             <div className="relative">
-              <select
+              <DatabaseEngineFilter
                 value={selectedEngineType}
-                onChange={(e) => {
-                  const val = e.target.value;
+                onChange={(val) => {
                   setSelectedEngineType(val);
-                  // If selected DB doesn't match new engine, reset DB to ALL
                   if (val !== 'ALL' && selectedDb && selectedDb.dbType.toUpperCase() !== val.toUpperCase()) {
                     setSelectedDbId('ALL');
                   }
                   setCurrentPage(1);
                 }}
+                databases={databases}
+                databaseEngines={databaseEngines}
                 className="w-full h-10 appearance-none bg-slate-50/80 hover:bg-slate-100/60 border border-slate-200 hover:border-slate-300 text-slate-900 text-xs font-medium rounded-xl px-3 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all cursor-pointer shadow-2xs"
-              >
-                <option value="ALL">All Database Engines ({databases.length})</option>
-                {availableEngines.map((eng) => {
-                  const count = databases.filter(
-                    (d) => d.dbType.toUpperCase() === eng.code.toUpperCase()
-                  ).length;
-                  return (
-                    <option key={eng.code} value={eng.code}>
-                      {eng.name} ({count})
-                    </option>
-                  );
-                })}
-              </select>
+              />
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
           </div>
 
           {/* Filter 2: Target Database (Searchable Selection Dropdown) */}
-          <div className="md:col-span-4 space-y-2" ref={dbDropdownRef}>
-            <div className="h-5 flex items-center justify-between">
-              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                <Server className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Target Database</span>
-              </label>
-              <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
-                {selectedDbId === 'ALL' ? 'All Databases' : '1 Selected'}
-              </span>
-            </div>
-
-            <div className="relative">
-              {/* Dropdown Trigger Button */}
-              <button
-                type="button"
-                onClick={() => setIsDbDropdownOpen((prev) => !prev)}
-                className={cn(
-                  'w-full h-10 flex items-center justify-between gap-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-900 text-xs rounded-xl px-3 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-2xs group',
-                  isDbDropdownOpen && 'ring-2 ring-indigo-500/20 border-indigo-500'
-                )}
-              >
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  {selectedDb ? (
-                    <>
-                      <span
-                        className={cn(
-                          'w-2 h-2 rounded-full shrink-0',
-                          (selectedDb.status || 'UP').toUpperCase() === 'UP' || (selectedDb.status || 'UP').toUpperCase() === 'NORMAL'
-                            ? 'bg-emerald-500'
-                            : (selectedDb.status || '').toUpperCase() === 'DOWN' || (selectedDb.status || '').toUpperCase() === 'CRITICAL'
-                            ? 'bg-rose-500'
-                            : 'bg-amber-500'
-                        )}
-                      />
-                      <div className="min-w-0 flex-1 flex items-center gap-1.5">
-                        <span className="font-bold text-slate-900 truncate">{selectedDb.name}</span>
-                        <span className="text-[10px] text-slate-400 font-mono hidden sm:inline truncate">
-                          ({selectedDb.host}:{selectedDb.port})
-                        </span>
-                      </div>
-                      <span
-                        className={cn(
-                          'text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0',
-                          getDbEngineBadgeClass(selectedDb.dbType)
-                        )}
-                      >
-                        {selectedDb.dbType}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Database className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                      <span className="font-medium text-slate-700 truncate">
-                        All Databases ({searchableDatabases.length})
-                      </span>
-                    </>
-                  )}
-                </div>
-                <ChevronDown
-                  className={cn(
-                    'w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 group-hover:text-slate-600',
-                    isDbDropdownOpen && 'rotate-180 text-indigo-600'
-                  )}
-                />
-              </button>
-
-              {/* Popover Dropdown Panel */}
-              {isDbDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col max-h-80 w-full min-w-[280px]">
-                  {/* Search input header */}
-                  <div className="p-2.5 bg-slate-50 border-b border-slate-200">
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                      <input
-                        ref={searchInputRef}
-                        type="text"
-                        placeholder="Search database, host, IP, engine..."
-                        value={dbSearchQuery}
-                        onChange={(e) => setDbSearchQuery(e.target.value)}
-                        className="w-full bg-white border border-slate-200 text-slate-900 text-xs rounded-lg pl-8 pr-7 py-1.5 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium"
-                      />
-                      {dbSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setDbSearchQuery('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs p-0.5 rounded cursor-pointer"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Database List */}
-                  <div className="overflow-y-auto divide-y divide-slate-100 flex-1 max-h-60">
-                    {/* "All Databases" option */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedDbId('ALL');
-                        setIsDbDropdownOpen(false);
-                        setCurrentPage(1);
-                      }}
-                      className={cn(
-                        'w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-indigo-50/50 transition-colors cursor-pointer',
-                        selectedDbId === 'ALL' && 'bg-indigo-50/80 font-bold'
-                      )}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Database className="w-4 h-4 text-indigo-600" />
-                        <div>
-                          <div className="text-xs font-bold text-slate-900">All Databases</div>
-                          <div className="text-[10px] text-slate-400">Do not filter by target database instance</div>
-                        </div>
-                      </div>
-                      {selectedDbId === 'ALL' && (
-                        <Check className="w-4 h-4 text-indigo-600 shrink-0 font-bold" />
-                      )}
-                    </button>
-
-                    {searchableDatabases.length === 0 ? (
-                      <div className="p-4 text-center text-slate-400">
-                        <Database className="w-5 h-5 mx-auto text-slate-300 mb-1" />
-                        <p className="text-xs font-semibold text-slate-600">No matching databases</p>
-                      </div>
-                    ) : (
-                      searchableDatabases.map((db) => {
-                        const isSelected = db.id === selectedDbId;
-                        const isUp = (db.status || 'UP').toUpperCase() === 'UP' || (db.status || 'UP').toUpperCase() === 'NORMAL';
-                        const isDown = (db.status || '').toUpperCase() === 'DOWN' || (db.status || '').toUpperCase() === 'CRITICAL';
-
-                        return (
-                          <button
-                            key={db.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedDbId(db.id);
-                              setIsDbDropdownOpen(false);
-                              if (selectedEngineType !== 'ALL' && selectedEngineType.toUpperCase() !== db.dbType.toUpperCase()) {
-                                setSelectedEngineType('ALL');
-                              }
-                              setCurrentPage(1);
-                            }}
-                            className={cn(
-                              'w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-indigo-50/50 transition-colors cursor-pointer group',
-                              isSelected && 'bg-indigo-50/80'
-                            )}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                              <span
-                                className={cn(
-                                  'w-2 h-2 rounded-full shrink-0',
-                                  isUp ? 'bg-emerald-500' : isDown ? 'bg-rose-500' : 'bg-amber-500'
-                                )}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className={cn('text-xs font-bold text-slate-900', isSelected && 'text-indigo-900')}>
-                                    {db.name}
-                                  </span>
-                                  <span
-                                    className={cn(
-                                      'text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider',
-                                      getDbEngineBadgeClass(db.dbType)
-                                    )}
-                                  >
-                                    {db.dbType}
-                                  </span>
-                                  {db.environment && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase">
-                                      {db.environment}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-2 truncate">
-                                  <span>{db.host}:{db.port}</span>
-                                  {db.databaseName && <span>• {db.databaseName}</span>}
-                                </div>
-                              </div>
-                            </div>
-
-                            {isSelected && (
-                              <Check className="w-4 h-4 text-indigo-600 shrink-0 font-bold" />
-                            )}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  {/* Dropdown Footer */}
-                  <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-500 flex items-center justify-between">
-                    <span>{searchableDatabases.length} databases</span>
-                    {selectedEngineType !== 'ALL' && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedEngineType('ALL')}
-                        className="text-indigo-600 hover:text-indigo-800 font-semibold underline cursor-pointer"
-                      >
-                        Show all engines
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+          <div className="md:col-span-4 space-y-2">
+            <TargetDatabaseFilter
+              value={selectedDbId}
+              onChange={(val) => {
+                setSelectedDbId(val);
+                setCurrentPage(1);
+              }}
+              databases={databases}
+              selectedEngineType={selectedEngineType}
+              onEngineChange={(eng) => setSelectedEngineType(eng)}
+              showHeader={true}
+              label="Target Database"
+            />
           </div>
 
           {/* Filter 3: Time Window (like tab Analytics Database, Default: 24h) */}

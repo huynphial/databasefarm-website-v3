@@ -244,6 +244,10 @@ export const MetricFormModal: React.FC<MetricFormModalProps> = ({
     }
   };
 
+  const activeEngines = React.useMemo(() => {
+    return databaseEngines.filter((e) => e.statusOnOff === 'ACTIVE');
+  }, [databaseEngines]);
+
   const currentEngine = databaseEngines.find((e) => e.id === formData.databaseEngineId);
 
   return (
@@ -365,7 +369,7 @@ export const MetricFormModal: React.FC<MetricFormModalProps> = ({
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
             >
               <option value="">Universal / All DB Engines</option>
-              {databaseEngines.map((eng) => (
+              {activeEngines.map((eng) => (
                 <option key={eng.id} value={eng.id}>
                   {eng.dbName} ({eng.dbCode})
                 </option>

@@ -572,16 +572,19 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
   const totalPages = Math.ceil(filteredTemplates.length / pageSize) || 1;
   const paginatedTemplates = filteredTemplates.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  // Available unique engine codes for the filter dropdown
+  // Available unique engine codes for the filter dropdown (only ACTIVE engines)
   const availableEngineFilterOptions = useMemo(() => {
+    const activeEngines = databaseEngines.filter((e) => e.statusOnOff === 'ACTIVE');
+    if (activeEngines.length > 0) {
+      return activeEngines.map((e) => e.dbCode.toUpperCase());
+    }
     const codes = new Set<string>();
-    databaseEngines.forEach((e) => {
-      if (e.dbCode) codes.add(e.dbCode.toUpperCase());
-    });
     templates.forEach((t) => {
-      if (t.targetDbType) codes.add(t.targetDbType.toUpperCase());
+      if (t.targetDbType && t.targetDbType.toUpperCase() !== 'ALL') {
+        codes.add(t.targetDbType.toUpperCase());
+      }
     });
-    return Array.from(codes).filter((c) => c !== 'ALL');
+    return Array.from(codes);
   }, [databaseEngines, templates]);
 
   const activeFiltersCount = (selectedEngineFilter !== 'ALL' ? 1 : 0) + (selectedMonitorTypeFilter !== 'ALL' ? 1 : 0) + (searchTerm.trim() ? 1 : 0);
@@ -928,7 +931,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
                 >
                   <option value="">Auto-detect from template file</option>
-                  {databaseEngines.map((eng) => (
+                  {databaseEngines.filter((eng) => eng.statusOnOff === 'ACTIVE').map((eng) => (
                     <option key={eng.id} value={eng.id}>
                       {eng.dbName} ({eng.dbCode})
                     </option>

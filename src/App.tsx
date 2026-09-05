@@ -864,6 +864,7 @@ function MainAppContent() {
           {activeTab === 'dashboard' && (
             <DashboardView
               databases={databases}
+              databaseEngines={databaseEngines}
               activeAlerts={activeAlerts}
               onClearAlert={handleClearAlert}
               onRefresh={loadData}

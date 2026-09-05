@@ -41,6 +41,9 @@ import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { DB_ENGINES, getDbEngineBadgeClass, getDbEngineConfig, getDbEngineHexColor } from '../../config/dbEngines';
 import { useTranslation } from '../../i18n/LanguageContext';
+import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
+import { DatabaseEngineSummaryGrid } from '../common/DatabaseEngineSummaryGrid';
+import { cn } from '../../lib/utils';
 
 interface DatabasesViewProps {
   databases: DatabaseEntity[];
@@ -74,15 +77,18 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const { toast } = useToast();
   const { t } = useTranslation();
   
-  // Available engines (dynamic from registry if available, fallback to config)
+  // Available engines (dynamic from registry if available, fallback to config) - only active engines
   const availableEngines = useMemo(() => {
     if (databaseEngines && databaseEngines.length > 0) {
-      return databaseEngines.map((e) => ({
-        code: e.dbCode,
-        name: e.dbName,
-        defaultPort: e.defaultPort || 1521,
-        color: e.dbColor,
-      }));
+      const activeList = databaseEngines.filter((e) => e.statusOnOff === 'ACTIVE');
+      if (activeList.length > 0) {
+        return activeList.map((e) => ({
+          code: e.dbCode,
+          name: e.dbName,
+          defaultPort: e.defaultPort || 1521,
+          color: e.dbColor,
+        }));
+      }
     }
     return DB_ENGINES;
   }, [databaseEngines]);
@@ -588,10 +594,10 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     setEditingDb(null);
     setShowPassword(false);
     setCustomTagInput('');
-    const defaultEng = DB_ENGINES.find((e) => e.code === 'ORACLE') || DB_ENGINES[0];
+    const defaultEng = availableEngines[0] || DB_ENGINES[0];
     setFormData({
       name: '',
-      dbType: defaultEng?.code || 'ORACLE',
+      dbType: (defaultEng?.code || 'ORACLE') as DbEngine,
       host: '',
       port: defaultEng?.defaultPort || 1521,
       tags: ['PRODUCTION'],
@@ -599,7 +605,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       note: '',
       username: 'dbadm',
       password: '',
-      databaseNameOrSid: 'ORCLPDB1',
+      databaseNameOrSid: '',
       sslMode: 'no',
       groupIds: groups.length > 0 ? [groups[0].id] : [],
       isEnabled: true,
@@ -1047,6 +1053,23 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
 
 
 
+      {/* Top Summary Cards Grid */}
+      <DatabaseEngineSummaryGrid
+        databases={databases}
+        databaseEngines={databaseEngines}
+        activeAlerts={activeAlerts}
+        selectedEngine={selectedEngine}
+        selectedStatus={selectedStatus}
+        onSelectEngine={(eng) => {
+          setSelectedEngine(eng);
+          setCurrentPage(1);
+        }}
+        onSelectStatus={(st) => {
+          setSelectedStatus(st);
+          setCurrentPage(1);
+        }}
+      />
+
       {/* Compact Filter & Controls Toolbar */}
       <div className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2.5 text-xs">
         <div className="flex flex-wrap items-center gap-2 flex-1">
@@ -1056,24 +1079,16 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           </div>
 
           {/* Engine Type Filter */}
-          <select
+          <DatabaseEngineFilter
             value={selectedEngine}
-            onChange={(e) => {
-              setSelectedEngine(e.target.value);
+            onChange={(val) => {
+              setSelectedEngine(val);
               setCurrentPage(1);
             }}
-            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-medium focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
-          >
-            <option value="ALL">{t('common.allEngines')} ({databases.length})</option>
-            {availableEngines.map((engine) => {
-              const count = databases.filter((db) => db.dbType.toUpperCase() === engine.code.toUpperCase()).length;
-              return (
-                <option key={engine.code} value={engine.code}>
-                  {engine.name} ({count})
-                </option>
-              );
-            })}
-          </select>
+            databases={databases}
+            databaseEngines={databaseEngines}
+            allLabel={t('common.allEngines')}
+          />
 
           {/* Status Filter */}
           <select

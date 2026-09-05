@@ -1650,35 +1650,7 @@ export class PrismaRepository implements IStorageRepository {
     } catch (err) {
       console.warn('Prisma getAlertNotificationMethods error:', err);
     }
-    return [
-      {
-        id: 'meth-email-01',
-        name: 'Corporate SMTP Dispatcher',
-        type: 'EMAIL',
-        notificationMessage: '[ALERT] Database D_DATABASE_NAME (D_DATABASE_TYPE:D_DATABASE_PORT) Metric D_METRIC_NAME triggered alert! Value: D_ALERT_VALUE. Message: D_ALERT_MESSAGE. Created At: D_ALERT_CREATED_AT',
-        configJson: {
-          smtpHost: 'smtp.mailgun.org',
-          smtpPort: 587,
-          smtpUser: 'alerts@dbfarm.internal',
-          useTls: true,
-          fromAddress: 'Database Sentinel <noreply-alerts@dbfarm.internal>',
-        },
-        statusOnOff: 'ACTIVE',
-      },
-      {
-        id: 'meth-tg-02',
-        name: 'Telegram Incident Operations Bot',
-        type: 'TELEGRAM',
-        notificationMessage: '🚨 <b>[INCIDENT ALERT]</b> 🚨\nDatabase: <b>D_DATABASE_NAME</b> (ID: D_DATABASE_ID, Engine: D_DATABASE_TYPE:D_DATABASE_PORT)\nMetric: <b>D_METRIC_NAME</b>\nObject: D_OBJECT_NAME | Attr: D_ATTR_NAME\nValue: <code>D_ALERT_VALUE</code>\nDetails: D_ALERT_MESSAGE\nCreated At: D_ALERT_CREATED_AT',
-        configJson: {
-          botToken: '6829103847:AAH9f_KzL2e-wZ5qM7Nx982Qp',
-          apiBaseUrl: 'https://api.telegram.org',
-          defaultChatTopic: 'DATABASE_OPERATIONS',
-          parseMode: 'HTML',
-        },
-        statusOnOff: 'ACTIVE',
-      },
-    ];
+    return [];
   }
 
   async saveAlertNotificationMethod(methodData: Partial<AlertNotificationMethodEntity>): Promise<AlertNotificationMethodEntity> {

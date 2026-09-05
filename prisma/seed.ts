@@ -87,7 +87,7 @@ async function main() {
       dbName: 'IBM Db2',
       dbColor: '#0062FF',
       defaultPort: 50000,
-      statusOnOff: 'ACTIVE',
+      statusOnOff: 'INACTIVE',
       description: 'Family of data management products developed by IBM for enterprise workloads.',
     },
     {
@@ -123,7 +123,7 @@ async function main() {
       dbName: 'ClickHouse',
       dbColor: '#F59E0B',
       defaultPort: 8123,
-      statusOnOff: 'ACTIVE',
+      statusOnOff: 'INACTIVE',
       description: 'Fast open-source column-oriented database management system for real-time analytical reporting.',
     },
     {
@@ -132,7 +132,7 @@ async function main() {
       dbName: 'Elasticsearch',
       dbColor: '#005571',
       defaultPort: 9200,
-      statusOnOff: 'ACTIVE',
+      statusOnOff: 'INACTIVE',
       description: 'Distributed, JSON-based search and analytics engine designed for horizontal scalability.',
     },
     {
@@ -141,7 +141,7 @@ async function main() {
       dbName: 'OpenSearch',
       dbColor: '#005FB8',
       defaultPort: 9200,
-      statusOnOff: 'ACTIVE',
+      statusOnOff: 'INACTIVE',
       description: 'Community-driven, open-source search and analytics suite derived from Elasticsearch.',
     },
     {
@@ -150,7 +150,7 @@ async function main() {
       dbName: 'Cassandra',
       dbColor: '#1287A5',
       defaultPort: 9042,
-      statusOnOff: 'ACTIVE',
+      statusOnOff: 'INACTIVE',
       description: 'Highly-scalable, distributed NoSQL database designed to handle large amounts of data across commodity servers.',
     },
     {
@@ -159,7 +159,7 @@ async function main() {
       dbName: 'SAP HANA',
       dbColor: '#008FD3',
       defaultPort: 39015,
-      statusOnOff: 'ACTIVE',
+      statusOnOff: 'INACTIVE',
       description: 'High-performance in-memory database and application platform from SAP.',
     },
     {
@@ -168,7 +168,7 @@ async function main() {
       dbName: 'Snowflake',
       dbColor: '#29B5E8',
       defaultPort: 443,
-      statusOnOff: 'ACTIVE',
+      statusOnOff: 'INACTIVE',
       description: 'Cloud computing-based data warehousing and analytics service.',
     },
     {
@@ -177,7 +177,7 @@ async function main() {
       dbName: 'BigQuery',
       dbColor: '#4285F4',
       defaultPort: 443,
-      statusOnOff: 'ACTIVE',
+      statusOnOff: 'INACTIVE',
       description: 'Fully-managed, serverless enterprise data warehouse for analytics by Google Cloud.',
     },
     {
@@ -186,7 +186,7 @@ async function main() {
       dbName: 'Redshift',
       dbColor: '#8C4FFF',
       defaultPort: 5439,
-      statusOnOff: 'ACTIVE',
+      statusOnOff: 'INACTIVE',
       description: 'Fast, fully managed, petabyte-scale data warehouse service in the cloud by AWS.',
     },
     {
@@ -195,7 +195,7 @@ async function main() {
       dbName: 'Databricks',
       dbColor: '#FF3621',
       defaultPort: 443,
-      statusOnOff: 'ACTIVE',
+      statusOnOff: 'INACTIVE',
       description: 'Unified analytics and Lakehouse data intelligence platform built on Apache Spark.',
     },
   ];

@@ -16,6 +16,8 @@ import { RawMeasurementEntity, DatabaseEntity, MetricEntity, DatabaseEngineEntit
 import { getDbEngineBadgeClass, getDbEngineHexColor } from '../../config/dbEngines';
 import { useTranslation } from '../../i18n';
 import { api } from '../../lib/api';
+import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
+import { TargetDatabaseFilter } from '../common/TargetDatabaseFilter';
 
 interface RawMeasurementsViewProps {
   measurements: RawMeasurementEntity[];
@@ -503,53 +505,34 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           {/* Secondary Dropdowns: DB Engine, Database, Metric */}
           <div className="flex flex-wrap items-center gap-2">
             {/* DB Engine Filter */}
-            <select
+            <DatabaseEngineFilter
               value={engineFilter}
-              onChange={(e) => {
-                const val = e.target.value;
+              onChange={(val) => {
                 setEngineFilter(val);
                 setCurrentPage(1);
                 handleRunQuery({ dbType: val });
               }}
+              databases={databases}
+              databaseEngines={databaseEngines}
+              allLabel={t('rawMeasurements.allEngines')}
               className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
-            >
-              <option value="ALL">{t('rawMeasurements.allEngines')}</option>
-              {databaseEngines.map((eng) => (
-                <option key={eng.id} value={eng.dbCode}>
-                  {eng.dbName} ({eng.dbCode})
-                </option>
-              ))}
-              {databaseEngines.length === 0 && (
-                <>
-                  <option value="ORACLE">Oracle</option>
-                  <option value="MYSQL">MySQL</option>
-                  <option value="POSTGRES">PostgreSQL</option>
-                  <option value="MSSQL">Microsoft SQL</option>
-                  <option value="SINGLESTORE">SingleStore</option>
-                  <option value="MONGODB">MongoDB</option>
-                  <option value="REDIS">Redis</option>
-                </>
-              )}
-            </select>
+            />
 
             {/* Target Database Filter */}
-            <select
+            <TargetDatabaseFilter
               value={selectedDbFilter}
-              onChange={(e) => {
-                const val = e.target.value;
+              onChange={(val) => {
                 setSelectedDbFilter(val);
                 setCurrentPage(1);
                 handleRunQuery({ dbId: val });
               }}
-              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 max-w-[150px] font-semibold truncate"
-            >
-              <option value="ALL">{t('rawMeasurements.allDatabases')}</option>
-              {databases.map((db) => (
-                <option key={db.id} value={db.id}>
-                  {db.name} ({db.dbType})
-                </option>
-              ))}
-            </select>
+              databases={databases}
+              selectedEngineType={engineFilter}
+              onEngineChange={(eng) => setEngineFilter(eng)}
+              allLabel={t('rawMeasurements.allDatabases')}
+              variant="compact"
+              className="min-w-[160px] sm:min-w-[180px]"
+            />
 
             {/* Metric Filter */}
             <select

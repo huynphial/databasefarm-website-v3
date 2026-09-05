@@ -10,6 +10,7 @@ import {
 import { DatabaseEntity, DatabaseEngineEntity } from '../../../types';
 import { getDbEngineBadgeClass } from '../../../config/dbEngines';
 import { useLanguage } from '../../../i18n/LanguageContext';
+import { DatabaseEngineFilter } from '../../common/DatabaseEngineFilter';
 
 interface DatabaseFilterHeaderProps {
   databases: DatabaseEntity[];
@@ -112,21 +113,17 @@ export const DatabaseFilterHeader: React.FC<DatabaseFilterHeaderProps> = ({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
           {/* Engine Filter */}
           <div className="relative shrink-0 sm:w-44">
-            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 z-10">
               <Filter className="w-3.5 h-3.5" />
             </div>
-            <select
+            <DatabaseEngineFilter
               value={selectedEngineType}
-              onChange={(e) => onSelectEngineType(e.target.value)}
+              onChange={onSelectEngineType}
+              databases={databases}
+              databaseEngines={databaseEngines}
+              allLabel={t('analytics.allEngineTypes')}
               className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold rounded-xl pl-8 pr-7 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
-            >
-              <option value="ALL">{t('analytics.allEngineTypes')}</option>
-              {availableEngineCodes.map((code) => (
-                <option key={code} value={code}>
-                  {t('analytics.engineDatabases', { code })}
-                </option>
-              ))}
-            </select>
+            />
             <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-2.5 text-slate-400 pointer-events-none" />
           </div>
 

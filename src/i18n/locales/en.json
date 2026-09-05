@@ -94,7 +94,9 @@
     "auditLogs": "Audit Trail Log",
     "account": "Account Settings",
     "systemSettings": "System Settings",
-    "logout": "Sign Out"
+    "logout": "Sign Out",
+    "collapseSidebar": "Collapse Sidebar",
+    "expandSidebar": "Expand Sidebar"
   },
   "header": {
     "dashboardTitle": "Dashboard Overview",
@@ -747,7 +749,11 @@
     "noTemplatesMatch": "No templates match search query \"{query}\".",
     "assignTemplateHelpNote": "Databases assigned to groups referencing this template bundle will automatically inherit and monitor this metric probe.",
     "saveTemplateLink": "Save Template Link",
-    "assigned": "Assigned"
+    "assigned": "Assigned",
+    "engineSummaryTitle": "Metrics Engine Overview",
+    "totalMetricsCardTitle": "Total Metrics",
+    "universalEngine": "Universal Engine",
+    "activeMetricsLabel": "Active Metrics"
   },
   "alertHistory": {
     "title": "Alert History Log",
@@ -777,7 +783,18 @@
     "colRaisedAt": "Raised At",
     "colClearedState": "Cleared At",
     "colDuring": "During",
-    "colClearedResolver": "Cleared Resolver"
+    "colClearedResolver": "Cleared Resolver",
+    "affectedDbs": "Affected DBs",
+    "totalIncidents": "Total Incidents",
+    "downIncidents": "Down Incidents",
+    "criticalIncidents": "Critical Incidents",
+    "highIncidents": "High Severity",
+    "warningIncidents": "Warning Alerts",
+    "exportCsv": "Export CSV",
+    "noDataToExport": "No Data to Export",
+    "noDataToExportDesc": "There are no alert history records to export based on current filters.",
+    "exportedTitle": "Alert History Exported",
+    "exportedDesc": "Exported {{count}} alert history record(s) to CSV."
   },
   "alertNotifications": {
     "title": "Alert Notification Log",
