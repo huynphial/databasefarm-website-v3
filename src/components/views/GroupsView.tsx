@@ -233,10 +233,9 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
   const availableEngineCodes = useMemo(() => {
     if (databaseEngines && databaseEngines.length > 0) {
-      const activeList = databaseEngines.filter((e) => e.statusOnOff === 'ACTIVE');
-      if (activeList.length > 0) {
-        return activeList.map((e) => e.dbCode.toUpperCase());
-      }
+      return databaseEngines
+        .filter((e) => e.statusOnOff === 'ACTIVE')
+        .map((e) => e.dbCode.toUpperCase());
     }
     return Array.from(
       new Set(databases.map((d) => d.dbType.toUpperCase()))

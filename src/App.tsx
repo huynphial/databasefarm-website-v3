@@ -89,21 +89,21 @@ function MainAppContent() {
   // Storage Type state indicator
   const [storageType, setStorageType] = useState<'prisma' | 'memory'>('memory');
 
-  // Core Data Store States
-  const [databases, setDatabases] = useState<DatabaseEntity[]>([]);
-  const [databaseEngines, setDatabaseEngines] = useState<DatabaseEngineEntity[]>([]);
-  const [alertMethods, setAlertMethods] = useState<AlertNotificationMethodEntity[]>([]);
-  const [rawMeasurements, setRawMeasurements] = useState<RawMeasurementEntity[]>([]);
-  const [metrics, setMetrics] = useState<MetricEntity[]>([]);
-  const [templates, setTemplates] = useState<TemplateEntity[]>([]);
-  const [groups, setGroups] = useState<GroupEntity[]>([]);
-  const [activeAlerts, setActiveAlerts] = useState<ActiveAlertEntity[]>([]);
-  const [alertHistory, setAlertHistory] = useState<AlertHistoryEntity[]>([]);
-  const [alertNotificationLogs, setAlertNotificationLogs] = useState<AlertNotificationLogEntity[]>([]);
-  const [alertNotificationQueue, setAlertNotificationQueue] = useState<AlertNotificationQueueEntity[]>([]);
-  const [databasePollQueue, setDatabasePollQueue] = useState<DatabasePollQueueEntity[]>([]);
-  const [databasePollLogs, setDatabasePollLogs] = useState<DatabasePollLogEntity[]>([]);
-  const [metricHistory, setMetricHistory] = useState<MetricHistoryEntity[]>([]);
+  // Core Data Store States (initialized from cache/defaults for instant zero-flicker render)
+  const [databases, setDatabases] = useState<DatabaseEntity[]>(() => storage.getDatabases());
+  const [databaseEngines, setDatabaseEngines] = useState<DatabaseEngineEntity[]>(() => storage.getDatabaseEngines());
+  const [alertMethods, setAlertMethods] = useState<AlertNotificationMethodEntity[]>(() => storage.getAlertNotificationMethods());
+  const [rawMeasurements, setRawMeasurements] = useState<RawMeasurementEntity[]>(() => storage.getRawMeasurements());
+  const [metrics, setMetrics] = useState<MetricEntity[]>(() => storage.getMetrics());
+  const [templates, setTemplates] = useState<TemplateEntity[]>(() => storage.getTemplates());
+  const [groups, setGroups] = useState<GroupEntity[]>(() => storage.getGroups());
+  const [activeAlerts, setActiveAlerts] = useState<ActiveAlertEntity[]>(() => storage.getActiveAlerts());
+  const [alertHistory, setAlertHistory] = useState<AlertHistoryEntity[]>(() => storage.getAlertHistory());
+  const [alertNotificationLogs, setAlertNotificationLogs] = useState<AlertNotificationLogEntity[]>(() => storage.getAlertNotificationLogs());
+  const [alertNotificationQueue, setAlertNotificationQueue] = useState<AlertNotificationQueueEntity[]>(() => storage.getAlertNotificationQueue());
+  const [databasePollQueue, setDatabasePollQueue] = useState<DatabasePollQueueEntity[]>(() => storage.getDatabasePollQueue());
+  const [databasePollLogs, setDatabasePollLogs] = useState<DatabasePollLogEntity[]>(() => storage.getDatabasePollLogs());
+  const [metricHistory, setMetricHistory] = useState<MetricHistoryEntity[]>(() => storage.getMetricHistory());
   const [systemSettings, setSystemSettings] = useState<SystemSettingsEntity>(() => storage.getSystemSettings());
 
   // Ref to handle concurrent data load requests safely
@@ -133,9 +133,9 @@ function MainAppContent() {
       ] = await Promise.all([
         api.getStorageInfo().catch(() => ({ storageType: 'memory' as const, isPrismaActive: false })),
         api.getDatabases().catch(() => storage.getDatabases()),
-        api.getDatabaseEngines().catch(() => []),
-        api.getAlertNotificationMethods().catch(() => []),
-        api.getRawMeasurements().catch(() => []),
+        api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+        api.getAlertNotificationMethods().catch(() => storage.getAlertNotificationMethods()),
+        api.getRawMeasurements().catch(() => storage.getRawMeasurements()),
         api.getMetrics().catch(() => storage.getMetrics()),
         api.getTemplates().catch(() => storage.getTemplates()),
         api.getGroups().catch(() => storage.getGroups()),
@@ -151,40 +151,87 @@ function MainAppContent() {
 
       if (requestId !== loadDataCountRef.current) return;
 
-      const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(dbs, grps, tpls, mets);
+      const safeDbs = Array.isArray(dbs) ? dbs : [];
+      const safeEngines = Array.isArray(engines) ? engines : [];
+      const safeMethods = Array.isArray(methods) ? methods : [];
+      const safeRaws = Array.isArray(raws) ? raws : [];
+      const safeMets = Array.isArray(mets) ? mets : [];
+      const safeTpls = Array.isArray(tpls) ? tpls : [];
+      const safeGrps = Array.isArray(grps) ? grps : [];
+      const safeActive = Array.isArray(active) ? active : [];
+      const safeHistory = Array.isArray(history) ? history : [];
+      const safeNotifLogs = Array.isArray(notifLogs) ? notifLogs : [];
+      const safeNotifQueue = Array.isArray(notifQueue) ? notifQueue : [];
+      const safeDbPollQueue = Array.isArray(dbPollQueue) ? dbPollQueue : [];
+      const safeDbPollLogs = Array.isArray(dbPollLogs) ? dbPollLogs : [];
+      const safeMHistory = Array.isArray(mHistory) ? mHistory : [];
+      const safeSettings = settings && typeof settings === 'object' ? settings : storage.getSystemSettings();
 
-      setStorageType(sInfo.storageType);
-      setDatabases(syncedDatabases);
-      setDatabaseEngines(engines);
-      setAlertMethods(methods);
-      setRawMeasurements(raws);
-      setMetrics(mets);
-      setTemplates(tpls);
-      setGroups(grps);
-      setActiveAlerts(active);
-      setAlertHistory(history);
-      setAlertNotificationLogs(notifLogs);
-      setAlertNotificationQueue(notifQueue);
-      setDatabasePollQueue(dbPollQueue);
-      setDatabasePollLogs(dbPollLogs);
-      setMetricHistory(mHistory);
-      setSystemSettings(settings);
+      let safeSyncedDbs = safeDbs;
+      try {
+        const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(safeDbs, safeGrps, safeTpls, safeMets);
+        if (Array.isArray(syncedDatabases) && syncedDatabases.length > 0) {
+          safeSyncedDbs = syncedDatabases;
+        }
+      } catch (err) {
+        console.warn('autoSyncDatabaseTemplateMetrics warning:', err);
+      }
+
+      setStorageType(sInfo?.storageType || 'memory');
+      setDatabases(safeSyncedDbs);
+      setDatabaseEngines(safeEngines);
+      setAlertMethods(safeMethods);
+      setRawMeasurements(safeRaws);
+      setMetrics(safeMets);
+      setTemplates(safeTpls);
+      setGroups(safeGrps);
+      setActiveAlerts(safeActive);
+      setAlertHistory(safeHistory);
+      setAlertNotificationLogs(safeNotifLogs);
+      setAlertNotificationQueue(safeNotifQueue);
+      setDatabasePollQueue(safeDbPollQueue);
+      setDatabasePollLogs(safeDbPollLogs);
+      setMetricHistory(safeMHistory);
+      setSystemSettings(safeSettings);
 
       // Cache locally for offline availability
-      storage.setDatabases(syncedDatabases);
-      storage.setMetrics(mets);
-      storage.setTemplates(tpls);
-      storage.setGroups(grps);
-      storage.setActiveAlerts(active);
-      storage.setAlertHistory(history);
-      storage.setAlertNotificationLogs(notifLogs);
-      storage.setAlertNotificationQueue(notifQueue);
-      storage.setDatabasePollQueue(dbPollQueue);
-      storage.setDatabasePollLogs(dbPollLogs);
-      storage.setMetricHistory(mHistory);
-      storage.setSystemSettings(settings);
+      try {
+        storage.setDatabases(safeSyncedDbs);
+        storage.setDatabaseEngines(safeEngines);
+        storage.setAlertNotificationMethods(safeMethods);
+        storage.setRawMeasurements(safeRaws);
+        storage.setMetrics(safeMets);
+        storage.setTemplates(safeTpls);
+        storage.setGroups(safeGrps);
+        storage.setActiveAlerts(safeActive);
+        storage.setAlertHistory(safeHistory);
+        storage.setAlertNotificationLogs(safeNotifLogs);
+        storage.setAlertNotificationQueue(safeNotifQueue);
+        storage.setDatabasePollQueue(safeDbPollQueue);
+        storage.setDatabasePollLogs(safeDbPollLogs);
+        storage.setMetricHistory(safeMHistory);
+        storage.setSystemSettings(safeSettings);
+      } catch (cacheErr) {
+        console.warn('Storage caching warning:', cacheErr);
+      }
     } catch (e) {
       console.warn('API sync warning, using local storage cache fallback:', e);
+      // Fallback state population so view is never empty
+      setDatabases(storage.getDatabases());
+      setDatabaseEngines(storage.getDatabaseEngines());
+      setAlertMethods(storage.getAlertNotificationMethods());
+      setRawMeasurements(storage.getRawMeasurements());
+      setMetrics(storage.getMetrics());
+      setTemplates(storage.getTemplates());
+      setGroups(storage.getGroups());
+      setActiveAlerts(storage.getActiveAlerts());
+      setAlertHistory(storage.getAlertHistory());
+      setAlertNotificationLogs(storage.getAlertNotificationLogs());
+      setAlertNotificationQueue(storage.getAlertNotificationQueue());
+      setDatabasePollQueue(storage.getDatabasePollQueue());
+      setDatabasePollLogs(storage.getDatabasePollLogs());
+      setMetricHistory(storage.getMetricHistory());
+      setSystemSettings(storage.getSystemSettings());
     }
   }, []);
 

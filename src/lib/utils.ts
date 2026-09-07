@@ -12,18 +12,28 @@ export function autoSyncDatabaseTemplateMetrics<TD extends DatabaseEntity = Data
   tpls: { id: string; targetDbType?: any }[],
   mets: { id: string; isEnabled?: boolean; templateId?: string | null; templateIds?: string[] }[]
 ): { syncedDatabases: TD[]; updatedDbIds: string[] } {
-  const groupMap = new Map(grps.map((g) => [g.id, g]));
-  const templateMap = new Map(tpls.map((t) => [t.id, t]));
+  if (!Array.isArray(dbs)) {
+    return { syncedDatabases: [], updatedDbIds: [] };
+  }
+  const safeGrps = Array.isArray(grps) ? grps : [];
+  const safeTpls = Array.isArray(tpls) ? tpls : [];
+  const safeMets = Array.isArray(mets) ? mets : [];
+
+  const groupMap = new Map(safeGrps.filter(Boolean).map((g) => [g.id, g]));
+  const templateMap = new Map(safeTpls.filter(Boolean).map((t) => [t.id, t]));
   const updatedDbIds: string[] = [];
 
   const syncedDatabases: TD[] = dbs.map((db) => {
-    const attachedGroupIds = db.groupIds || [];
+    if (!db || typeof db !== 'object') return db;
+    const attachedGroupIds = Array.isArray(db.groupIds) ? db.groupIds : [];
     const attachedTemplateIds = new Set<string>();
 
     attachedGroupIds.forEach((gid) => {
       const group = groupMap.get(gid);
-      if (group && group.templateIds) {
-        group.templateIds.forEach((tid) => attachedTemplateIds.add(tid));
+      if (group && Array.isArray(group.templateIds)) {
+        group.templateIds.forEach((tid) => {
+          if (tid) attachedTemplateIds.add(tid);
+        });
       }
     });
 
@@ -39,18 +49,18 @@ export function autoSyncDatabaseTemplateMetrics<TD extends DatabaseEntity = Data
       }
     });
 
-    const inheritedMetricIds = mets
+    const inheritedMetricIds = safeMets
       .filter((m) => {
-        if (m.isEnabled === false) return false;
-        const mTemplateIds = m.templateIds || (m.templateId ? [m.templateId] : []);
+        if (!m || m.isEnabled === false) return false;
+        const mTemplateIds = Array.isArray(m.templateIds) ? m.templateIds : (m.templateId ? [m.templateId] : []);
         return mTemplateIds.some((tid) => compatibleTemplateIds.has(tid));
       })
       .map((m) => m.id);
 
-    const existingMetricSet = new Set(db.metricIds || []);
+    const existingMetricSet = new Set(Array.isArray(db.metricIds) ? db.metricIds : []);
     let hasNewMetric = false;
     inheritedMetricIds.forEach((mid) => {
-      if (!existingMetricSet.has(mid)) {
+      if (mid && !existingMetricSet.has(mid)) {
         existingMetricSet.add(mid);
         hasNewMetric = true;
       }

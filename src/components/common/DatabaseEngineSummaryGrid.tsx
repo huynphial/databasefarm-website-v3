@@ -16,7 +16,7 @@ export interface DatabaseEngineSummaryGridProps {
 }
 
 export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps> = ({
-  databases,
+  databases = [],
   databaseEngines = [],
   activeAlerts = [],
   selectedEngine = 'ALL',
@@ -27,18 +27,22 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
 }) => {
   const { t } = useTranslation();
 
-  const summaryMetrics = useMemo(() => {
-    const totalDbs = databases.length;
-    const dbsUp = databases.filter((d) => (d.status || '').toUpperCase() === 'UP').length;
-    const dbsDown = databases.filter((d) => (d.status || '').toUpperCase() === 'DOWN').length;
-    const monitoredDbs = databases.filter((d) => d.isEnabled !== false).length;
+  const safeDatabases = Array.isArray(databases) ? databases : [];
+  const safeActiveAlerts = Array.isArray(activeAlerts) ? activeAlerts : [];
+  const safeEngines = Array.isArray(databaseEngines) ? databaseEngines : [];
 
-    const criticalAlerts = activeAlerts.filter((a) => {
+  const summaryMetrics = useMemo(() => {
+    const totalDbs = safeDatabases.length;
+    const dbsUp = safeDatabases.filter((d) => (d.status || '').toUpperCase() === 'UP').length;
+    const dbsDown = safeDatabases.filter((d) => (d.status || '').toUpperCase() === 'DOWN').length;
+    const monitoredDbs = safeDatabases.filter((d) => d.isEnabled !== false).length;
+
+    const criticalAlerts = safeActiveAlerts.filter((a) => {
       const lvl = (a.alertLevel || '').toUpperCase();
       return lvl === 'CRITICAL' || lvl === 'FATAL';
     }).length;
-    const highAlerts = activeAlerts.filter((a) => (a.alertLevel || '').toUpperCase() === 'HIGH').length;
-    const warningAlerts = activeAlerts.filter((a) => {
+    const highAlerts = safeActiveAlerts.filter((a) => (a.alertLevel || '').toUpperCase() === 'HIGH').length;
+    const warningAlerts = safeActiveAlerts.filter((a) => {
       const lvl = (a.alertLevel || '').toUpperCase();
       return lvl === 'WARN' || lvl === 'WARNING';
     }).length;
@@ -52,7 +56,7 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
       highAlerts,
       warningAlerts,
     };
-  }, [databases, activeAlerts]);
+  }, [safeDatabases, safeActiveAlerts]);
 
   const engineSummaryMetrics = useMemo(() => {
     const map = new Map<
@@ -73,21 +77,21 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
 
     // Build lookup for active databaseEngines if available
     const activeEngineCodes = new Set(
-      (databaseEngines || [])
+      safeEngines
         .filter((e) => e.statusOnOff === 'ACTIVE')
         .map((e) => e.dbCode.toUpperCase())
     );
 
-    databases.forEach((db) => {
+    safeDatabases.forEach((db) => {
       const code = (db.dbType || 'UNKNOWN').toUpperCase();
-      
+
       // If databaseEngines is present and has active entries, skip inactive engines
       if (activeEngineCodes.size > 0 && !activeEngineCodes.has(code)) {
         return;
       }
 
-      const hexColor = getDbEngineHexColor(code, databaseEngines);
-      const dbEngObj = databaseEngines?.find((e) => e.dbCode.toUpperCase() === code);
+      const dbEngObj = safeEngines.find((e) => e.dbCode.toUpperCase() === code);
+      const hexColor = dbEngObj?.dbColor || getDbEngineHexColor(code, safeEngines);
       const name = dbEngObj?.dbName || getDbEngineConfig(code)?.name || code;
 
       if (!map.has(code)) {
@@ -117,7 +121,7 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
         item.upCount += 1;
       }
 
-      const dbAlerts = activeAlerts.filter((a) => {
+      const dbAlerts = safeActiveAlerts.filter((a) => {
         const aDbId = String(a.dbId || (a as any).databaseId || '');
         const matchId = aDbId && aDbId === String(db.id);
         const matchName = Boolean(
@@ -141,12 +145,12 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
     return Array.from(map.values())
       .filter((item) => item.totalCount > 0)
       .sort((a, b) => b.totalCount - a.totalCount);
-  }, [databases, databaseEngines, activeAlerts]);
+  }, [safeDatabases, safeEngines, safeActiveAlerts]);
 
   return (
     <div
       className={cn(
-        'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5',
+        'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2',
         className
       )}
     >
@@ -157,30 +161,17 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
           if (onSelectStatus) onSelectStatus('ALL');
         }}
         className={cn(
-          'px-3.5 py-2.5 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
+          'px-3.5 py-2 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-center group shadow-2xs hover:shadow-xs min-h-[52px]',
           selectedEngine.toUpperCase() === 'ALL' && selectedStatus.toUpperCase() === 'ALL'
-            ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20'
-            : 'border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20'
+            ? 'border-indigo-500 ring-1.5 ring-indigo-500/20 bg-indigo-50/25'
+            : 'border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/15'
         )}
       >
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-1.5 leading-tight">
           <div className="text-xs font-bold text-indigo-600 tracking-tight truncate group-hover:text-indigo-700 transition-colors">
             All Databases
           </div>
-          <span className="w-2 h-2 rounded-full shrink-0 bg-indigo-500 shadow-2xs shadow-indigo-500/50" />
-        </div>
-
-        <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] gap-2">
-          <div className="text-[11px] text-slate-600 font-mono truncate">
-            <span className="font-bold text-slate-800">{summaryMetrics.monitoredDbs}/{summaryMetrics.totalDbs}</span> active
-            {summaryMetrics.dbsDown > 0 ? (
-              <> • <span className="text-rose-600 font-bold">{summaryMetrics.dbsDown} DOWN</span></>
-            ) : summaryMetrics.dbsUp > 0 ? (
-              <> • <span className="text-emerald-600 font-medium">{summaryMetrics.dbsUp} UP</span></>
-            ) : null}
-          </div>
-
-          <div className="font-mono font-bold text-[11px] shrink-0" title="Critical / High / Warning Alerts">
+          <div className="font-mono text-[11px] shrink-0" title="Critical / High / Warning Alerts">
             <span className={summaryMetrics.criticalAlerts > 0 ? 'text-rose-600 font-extrabold' : 'text-slate-400'}>
               {summaryMetrics.criticalAlerts}
             </span>
@@ -194,9 +185,22 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
             </span>
           </div>
         </div>
+
+        <div className="mt-1 flex items-center justify-between text-[11px] text-slate-600 font-mono leading-tight">
+          <div className="truncate">
+            <span className="font-bold text-slate-800">Active: {summaryMetrics.monitoredDbs}</span>
+            <span className="text-slate-400 mx-1">/</span>
+            <span className="text-slate-700 font-medium">Total: {summaryMetrics.totalDbs}</span>
+          </div>
+          {summaryMetrics.dbsDown > 0 ? (
+            <span className="text-rose-600 font-bold shrink-0 ml-1.5">{summaryMetrics.dbsDown} DOWN</span>
+          ) : summaryMetrics.dbsUp > 0 ? (
+            <span className="text-emerald-600 font-medium shrink-0 ml-1.5">{summaryMetrics.dbsUp} UP</span>
+          ) : null}
+        </div>
       </div>
 
-      {/* Card 2: Active Databases (Enabled) */}
+      {/* Card 2: Active Databases */}
       <div
         onClick={() => {
           if (onSelectStatus) {
@@ -204,34 +208,36 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
           }
         }}
         className={cn(
-          'px-3.5 py-2.5 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
+          'px-3.5 py-2 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-center group shadow-2xs hover:shadow-xs min-h-[52px]',
           selectedStatus === 'UP'
-            ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20'
-            : 'border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/20'
+            ? 'border-emerald-500 ring-1.5 ring-emerald-500/20 bg-emerald-50/25'
+            : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/15'
         )}
       >
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-1.5 leading-tight">
           <div className="text-xs font-bold text-emerald-600 tracking-tight truncate group-hover:text-emerald-700 transition-colors">
             Active Databases
           </div>
-          <span className="w-2 h-2 rounded-full shrink-0 bg-emerald-500 shadow-2xs shadow-emerald-500/50" />
-        </div>
-
-        <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] gap-2">
-          <div className="text-[11px] text-slate-600 font-mono truncate">
-            <span className="font-bold text-slate-800">{summaryMetrics.monitoredDbs}/{summaryMetrics.totalDbs}</span> active
-            {summaryMetrics.totalDbs - summaryMetrics.monitoredDbs > 0 ? (
-              <> • <span className="text-slate-400 font-medium">{summaryMetrics.totalDbs - summaryMetrics.monitoredDbs} Off</span></>
-            ) : null}
-          </div>
-
-          <div className="font-mono font-bold text-[11px] shrink-0 text-slate-700">
+          <div className="font-mono font-bold text-[11px] shrink-0 text-emerald-600">
             {summaryMetrics.dbsUp} UP
           </div>
         </div>
+
+        <div className="mt-1 flex items-center justify-between text-[11px] text-slate-600 font-mono leading-tight">
+          <div className="truncate">
+            <span className="font-bold text-slate-800">Active: {summaryMetrics.monitoredDbs}</span>
+            <span className="text-slate-400 mx-1">/</span>
+            <span className="text-slate-700 font-medium">Total: {summaryMetrics.totalDbs}</span>
+          </div>
+          {summaryMetrics.totalDbs - summaryMetrics.monitoredDbs > 0 && (
+            <span className="text-slate-400 font-medium shrink-0 ml-1.5">
+              {summaryMetrics.totalDbs - summaryMetrics.monitoredDbs} Off
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Cards 3+: Engine Specific Cards (count > 0) */}
+      {/* Cards 3+: Engine Specific Cards */}
       {engineSummaryMetrics.map((eng) => {
         const isSelected = selectedEngine.toUpperCase() === eng.code.toUpperCase();
 
@@ -244,42 +250,20 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
               }
             }}
             className={cn(
-              'px-3.5 py-2.5 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
+              'px-3.5 py-2 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-center group shadow-2xs hover:shadow-xs min-h-[52px]',
               isSelected
-                ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20'
-                : 'border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20'
+                ? 'border-indigo-500 ring-1.5 ring-indigo-500/20 bg-indigo-50/25'
+                : 'border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/15'
             )}
           >
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-1.5 leading-tight">
               <div
                 className="text-xs font-bold tracking-tight truncate transition-opacity group-hover:opacity-90"
                 style={{ color: eng.color }}
               >
                 {eng.name}
               </div>
-              <span
-                className={cn(
-                  'w-2 h-2 rounded-full shrink-0',
-                  eng.criticalCount > 0 || eng.downCount > 0
-                    ? 'bg-rose-500 shadow-2xs shadow-rose-500/50 animate-pulse'
-                    : eng.highCount > 0 || eng.warnCount > 0
-                    ? 'bg-amber-500 shadow-2xs shadow-amber-500/50'
-                    : 'bg-emerald-500 shadow-2xs shadow-emerald-500/50'
-                )}
-              />
-            </div>
-
-            <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] gap-2">
-              <div className="text-[11px] text-slate-600 font-mono truncate">
-                <span className="font-bold text-slate-800">{eng.activeCount}/{eng.totalCount}</span> active
-                {eng.downCount > 0 ? (
-                  <> • <span className="text-rose-600 font-bold">{eng.downCount} DOWN</span></>
-                ) : eng.upCount > 0 ? (
-                  <> • <span className="text-emerald-600 font-medium">{eng.upCount} UP</span></>
-                ) : null}
-              </div>
-
-              <div className="font-mono font-bold text-[11px] shrink-0" title="Critical / High / Warning Alerts">
+              <div className="font-mono text-[11px] shrink-0" title="Critical / High / Warning Alerts">
                 <span className={eng.criticalCount > 0 ? 'text-rose-600 font-extrabold' : 'text-slate-400'}>
                   {eng.criticalCount}
                 </span>
@@ -292,6 +276,19 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
                   {eng.warnCount}
                 </span>
               </div>
+            </div>
+
+            <div className="mt-1 flex items-center justify-between text-[11px] text-slate-600 font-mono leading-tight">
+              <div className="truncate">
+                <span className="font-bold text-slate-800">Active: {eng.activeCount}</span>
+                <span className="text-slate-400 mx-1">/</span>
+                <span className="text-slate-700 font-medium">Total: {eng.totalCount}</span>
+              </div>
+              {eng.downCount > 0 ? (
+                <span className="text-rose-600 font-bold shrink-0 ml-1.5">{eng.downCount} DOWN</span>
+              ) : eng.upCount > 0 ? (
+                <span className="text-emerald-600 font-medium shrink-0 ml-1.5">{eng.upCount} UP</span>
+              ) : null}
             </div>
           </div>
         );

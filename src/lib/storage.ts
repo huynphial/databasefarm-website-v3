@@ -16,6 +16,9 @@ import {
 
 const STORAGE_KEYS = {
   USER: 'dbmon_current_user',
+  DATABASE_ENGINES: 'dbmon_database_engines',
+  ALERT_METHODS: 'dbmon_alert_methods',
+  RAW_MEASUREMENTS: 'dbmon_raw_measurements',
   SESSION_ACTIVITY: 'dbmon_session_last_activity',
   DATABASES: 'dbmon_databases',
   METRICS: 'dbmon_metrics',
@@ -918,9 +921,9 @@ export const storage = {
   },
 
   getDatabases(): DatabaseEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.DATABASES);
-    if (raw) {
-      try {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.DATABASES);
+      if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           return parsed.map((db: any) => ({
@@ -928,158 +931,236 @@ export const storage = {
             lastCheckAt: db.lastCheckAt || db.updatedAt || new Date().toISOString(),
           }));
         }
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.DATABASES, JSON.stringify(INITIAL_DATABASES));
+      }
+      localStorage.setItem(STORAGE_KEYS.DATABASES, JSON.stringify(INITIAL_DATABASES));
+    } catch (e) {}
     return INITIAL_DATABASES;
   },
   setDatabases(data: DatabaseEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.DATABASES, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.DATABASES, JSON.stringify(data));
+    } catch (e) {}
+  },
+  getDatabaseEngines(): any[] {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.DATABASE_ENGINES);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  },
+  setDatabaseEngines(data: any[]) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.DATABASE_ENGINES, JSON.stringify(data));
+    } catch (e) {}
+  },
+  getAlertNotificationMethods(): any[] {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ALERT_METHODS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  },
+  setAlertNotificationMethods(data: any[]) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ALERT_METHODS, JSON.stringify(data));
+    } catch (e) {}
+  },
+  getRawMeasurements(): any[] {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.RAW_MEASUREMENTS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  },
+  setRawMeasurements(data: any[]) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.RAW_MEASUREMENTS, JSON.stringify(data));
+    } catch (e) {}
   },
   getSystemSettings(): SystemSettingsEntity {
-    const raw = localStorage.getItem(STORAGE_KEYS.SYSTEM_SETTINGS);
-    if (raw) {
-      try {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SYSTEM_SETTINGS);
+      if (raw) {
         return { ...INITIAL_SYSTEM_SETTINGS, ...JSON.parse(raw) };
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.SYSTEM_SETTINGS, JSON.stringify(INITIAL_SYSTEM_SETTINGS));
+      }
+      localStorage.setItem(STORAGE_KEYS.SYSTEM_SETTINGS, JSON.stringify(INITIAL_SYSTEM_SETTINGS));
+    } catch (e) {}
     return INITIAL_SYSTEM_SETTINGS;
   },
   setSystemSettings(data: SystemSettingsEntity) {
-    localStorage.setItem(STORAGE_KEYS.SYSTEM_SETTINGS, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.SYSTEM_SETTINGS, JSON.stringify(data));
+    } catch (e) {}
   },
   getMetrics(): MetricEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.METRICS);
-    if (raw) {
-      try {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.METRICS);
+      if (raw) {
         const parsed = JSON.parse(raw);
-        // Ensure isEnabled defaults to true if missing
-        return parsed.map((m: any) => ({
-          ...m,
-          isEnabled: m.isEnabled !== undefined ? m.isEnabled : true,
-        }));
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.METRICS, JSON.stringify(INITIAL_METRICS));
+        if (Array.isArray(parsed)) {
+          return parsed.map((m: any) => ({
+            ...m,
+            isEnabled: m.isEnabled !== undefined ? m.isEnabled : true,
+          }));
+        }
+      }
+      localStorage.setItem(STORAGE_KEYS.METRICS, JSON.stringify(INITIAL_METRICS));
+    } catch (e) {}
     return INITIAL_METRICS;
   },
   setMetrics(data: MetricEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.METRICS, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.METRICS, JSON.stringify(data));
+    } catch (e) {}
   },
   getTemplates(): TemplateEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.TEMPLATES);
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(INITIAL_TEMPLATES));
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.TEMPLATES);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      localStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(INITIAL_TEMPLATES));
+    } catch (e) {}
     return INITIAL_TEMPLATES;
   },
   setTemplates(data: TemplateEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(data));
+    } catch (e) {}
   },
   getGroups(): GroupEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.GROUPS);
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(INITIAL_GROUPS));
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.GROUPS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(INITIAL_GROUPS));
+    } catch (e) {}
     return INITIAL_GROUPS;
   },
   setGroups(data: GroupEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(data));
+    } catch (e) {}
   },
   getActiveAlerts(): ActiveAlertEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_ALERTS);
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERTS, JSON.stringify(INITIAL_ACTIVE_ALERTS));
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_ALERTS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERTS, JSON.stringify(INITIAL_ACTIVE_ALERTS));
+    } catch (e) {}
     return INITIAL_ACTIVE_ALERTS;
   },
   setActiveAlerts(data: ActiveAlertEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERTS, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_ALERTS, JSON.stringify(data));
+    } catch (e) {}
   },
   getAlertHistory(): AlertHistoryEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.ALERT_HISTORY);
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.ALERT_HISTORY, JSON.stringify(INITIAL_ALERT_HISTORY));
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ALERT_HISTORY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      localStorage.setItem(STORAGE_KEYS.ALERT_HISTORY, JSON.stringify(INITIAL_ALERT_HISTORY));
+    } catch (e) {}
     return INITIAL_ALERT_HISTORY;
   },
   setAlertHistory(data: AlertHistoryEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.ALERT_HISTORY, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.ALERT_HISTORY, JSON.stringify(data));
+    } catch (e) {}
   },
   getAlertNotificationLogs(): AlertNotificationLogEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS);
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS, JSON.stringify(INITIAL_ALERT_NOTIFICATION_LOGS));
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      localStorage.setItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS, JSON.stringify(INITIAL_ALERT_NOTIFICATION_LOGS));
+    } catch (e) {}
     return INITIAL_ALERT_NOTIFICATION_LOGS;
   },
   setAlertNotificationLogs(data: AlertNotificationLogEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS, JSON.stringify(data));
+    } catch (e) {}
   },
   addAlertNotificationLog(log: AlertNotificationLogEntity) {
-    const current = this.getAlertNotificationLogs();
-    const updated = [log, ...current].slice(0, 1000); // keep last 1000 logs
-    this.setAlertNotificationLogs(updated);
+    try {
+      const current = this.getAlertNotificationLogs();
+      const updated = [log, ...current].slice(0, 1000); // keep last 1000 logs
+      this.setAlertNotificationLogs(updated);
+    } catch (e) {}
   },
   getAlertNotificationQueue(): AlertNotificationQueueEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE);
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE, JSON.stringify(INITIAL_ALERT_NOTIFICATION_QUEUE));
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      localStorage.setItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE, JSON.stringify(INITIAL_ALERT_NOTIFICATION_QUEUE));
+    } catch (e) {}
     return INITIAL_ALERT_NOTIFICATION_QUEUE;
   },
   setAlertNotificationQueue(data: AlertNotificationQueueEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE, JSON.stringify(data));
+    } catch (e) {}
   },
   getDatabasePollQueue(): DatabasePollQueueEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.DATABASE_POLL_QUEUE);
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_QUEUE, JSON.stringify(INITIAL_DATABASE_POLL_QUEUE));
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.DATABASE_POLL_QUEUE);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_QUEUE, JSON.stringify(INITIAL_DATABASE_POLL_QUEUE));
+    } catch (e) {}
     return INITIAL_DATABASE_POLL_QUEUE;
   },
   setDatabasePollQueue(data: DatabasePollQueueEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_QUEUE, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_QUEUE, JSON.stringify(data));
+    } catch (e) {}
   },
   getDatabasePollLogs(): DatabasePollLogEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.DATABASE_POLL_LOGS);
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch (e) {}
-    }
-    localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_LOGS, JSON.stringify(INITIAL_DATABASE_POLL_LOGS));
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.DATABASE_POLL_LOGS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_LOGS, JSON.stringify(INITIAL_DATABASE_POLL_LOGS));
+    } catch (e) {}
     return INITIAL_DATABASE_POLL_LOGS;
   },
   setDatabasePollLogs(data: DatabasePollLogEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_LOGS, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.DATABASE_POLL_LOGS, JSON.stringify(data));
+    } catch (e) {}
   },
   getMetricHistory(): MetricHistoryEntity[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.METRIC_HISTORY);
-    if (raw) {
-      try {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.METRIC_HISTORY);
+      if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((item: any) => ({
@@ -1087,40 +1168,53 @@ export const storage = {
             objectName: item.objectName || 'INSTANCE',
           }));
         }
-      } catch (e) {}
-    }
-    const initial = generateInitialMetricHistory();
-    localStorage.setItem(STORAGE_KEYS.METRIC_HISTORY, JSON.stringify(initial));
-    return initial;
+      }
+      const initial = generateInitialMetricHistory();
+      localStorage.setItem(STORAGE_KEYS.METRIC_HISTORY, JSON.stringify(initial));
+      return initial;
+    } catch (e) {}
+    return generateInitialMetricHistory();
   },
   setMetricHistory(data: MetricHistoryEntity[]) {
-    localStorage.setItem(STORAGE_KEYS.METRIC_HISTORY, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEYS.METRIC_HISTORY, JSON.stringify(data));
+    } catch (e) {}
   },
   resetData() {
-    localStorage.removeItem(STORAGE_KEYS.DATABASES);
-    localStorage.removeItem(STORAGE_KEYS.METRICS);
-    localStorage.removeItem(STORAGE_KEYS.TEMPLATES);
-    localStorage.removeItem(STORAGE_KEYS.GROUPS);
-    localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERTS);
-    localStorage.removeItem(STORAGE_KEYS.ALERT_HISTORY);
-    localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS);
-    localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE);
-    localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_QUEUE);
-    localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_LOGS);
-    localStorage.removeItem(STORAGE_KEYS.METRIC_HISTORY);
+    try {
+      localStorage.removeItem(STORAGE_KEYS.DATABASES);
+      localStorage.removeItem(STORAGE_KEYS.DATABASE_ENGINES);
+      localStorage.removeItem(STORAGE_KEYS.ALERT_METHODS);
+      localStorage.removeItem(STORAGE_KEYS.RAW_MEASUREMENTS);
+      localStorage.removeItem(STORAGE_KEYS.METRICS);
+      localStorage.removeItem(STORAGE_KEYS.TEMPLATES);
+      localStorage.removeItem(STORAGE_KEYS.GROUPS);
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERTS);
+      localStorage.removeItem(STORAGE_KEYS.ALERT_HISTORY);
+      localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS);
+      localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE);
+      localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_QUEUE);
+      localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_LOGS);
+      localStorage.removeItem(STORAGE_KEYS.METRIC_HISTORY);
+    } catch (e) {}
   },
   resetToDefaults() {
-    localStorage.removeItem(STORAGE_KEYS.DATABASES);
-    localStorage.removeItem(STORAGE_KEYS.METRICS);
-    localStorage.removeItem(STORAGE_KEYS.TEMPLATES);
-    localStorage.removeItem(STORAGE_KEYS.GROUPS);
-    localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERTS);
-    localStorage.removeItem(STORAGE_KEYS.ALERT_HISTORY);
-    localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS);
-    localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE);
-    localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_QUEUE);
-    localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_LOGS);
-    localStorage.removeItem(STORAGE_KEYS.METRIC_HISTORY);
-    localStorage.removeItem(STORAGE_KEYS.SYSTEM_SETTINGS);
+    try {
+      localStorage.removeItem(STORAGE_KEYS.DATABASES);
+      localStorage.removeItem(STORAGE_KEYS.DATABASE_ENGINES);
+      localStorage.removeItem(STORAGE_KEYS.ALERT_METHODS);
+      localStorage.removeItem(STORAGE_KEYS.RAW_MEASUREMENTS);
+      localStorage.removeItem(STORAGE_KEYS.METRICS);
+      localStorage.removeItem(STORAGE_KEYS.TEMPLATES);
+      localStorage.removeItem(STORAGE_KEYS.GROUPS);
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_ALERTS);
+      localStorage.removeItem(STORAGE_KEYS.ALERT_HISTORY);
+      localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_LOGS);
+      localStorage.removeItem(STORAGE_KEYS.ALERT_NOTIFICATION_QUEUE);
+      localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_QUEUE);
+      localStorage.removeItem(STORAGE_KEYS.DATABASE_POLL_LOGS);
+      localStorage.removeItem(STORAGE_KEYS.METRIC_HISTORY);
+      localStorage.removeItem(STORAGE_KEYS.SYSTEM_SETTINGS);
+    } catch (e) {}
   }
 };

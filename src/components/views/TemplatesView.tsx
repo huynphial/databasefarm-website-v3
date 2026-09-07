@@ -574,9 +574,10 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
   // Available unique engine codes for the filter dropdown (only ACTIVE engines)
   const availableEngineFilterOptions = useMemo(() => {
-    const activeEngines = databaseEngines.filter((e) => e.statusOnOff === 'ACTIVE');
-    if (activeEngines.length > 0) {
-      return activeEngines.map((e) => e.dbCode.toUpperCase());
+    if (databaseEngines && databaseEngines.length > 0) {
+      return databaseEngines
+        .filter((e) => e.statusOnOff === 'ACTIVE')
+        .map((e) => e.dbCode.toUpperCase());
     }
     const codes = new Set<string>();
     templates.forEach((t) => {
