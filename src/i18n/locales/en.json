@@ -202,7 +202,7 @@
     "allDatabases": "All Databases",
     "licenseExpiredTitle": "Software License Expired or Invalid (Worker Suspended)",
     "licenseExpiredDesc": "The background collector daemon detected {count} license failure log(s) today (started_at > CURDATE()). Monitoring probe sweeps are suspended because the annual license has expired or is invalid. Alert will be cleared after updating license 1 day.",
-    "licenseExpiredAction": "Update annual_license_key in System Settings",
+    "licenseExpiredAction": "Update annual_license_key in System Settings. Then restart DatabaseFarm Backend.",
     "licenseRecheck": "Re-check License",
     "licenseRechecking": "Checking License...",
     "guidanceTitle": "Enterprise Database Endpoints & Monitoring Registry",
