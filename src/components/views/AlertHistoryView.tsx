@@ -489,7 +489,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       )}
 
       {/* Summary Statistics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
         {/* Card 1: Affected Databases */}
         <div
           onClick={() => {
@@ -497,28 +497,25 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
             setCurrentPage(1);
           }}
           className={cn(
-            'p-3.5 rounded-xl border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
+            'p-2.5 px-3 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
             selectedLevel === 'ALL'
               ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20'
               : 'border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20'
           )}
         >
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1">
-              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
-                <Database className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <span className="truncate">{t('alertHistory.affectedDbs')}</span>
-              </span>
-              <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-indigo-500 shadow-2xs shadow-indigo-500/50" />
-            </div>
-            <div className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">
-              {summaryMetrics.alertedDbCount}{' '}
-              <span className="text-xs font-normal text-slate-400">/ {summaryMetrics.totalScopedDbs}</span>
-            </div>
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
+              <Database className="w-3 h-3 text-indigo-600 shrink-0" />
+              <span className="truncate">{t('alertHistory.affectedDbs')}</span>
+            </span>
+            <span className="w-2 h-2 rounded-full shrink-0 bg-indigo-500 shadow-2xs shadow-indigo-500/50" />
           </div>
-          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-            <span className="text-slate-500 font-medium uppercase">AFFECTED</span>
-            <span className="font-mono font-bold text-indigo-600">{summaryMetrics.alertedPercent}%</span>
+          <div className="flex items-baseline justify-between mt-1 pt-0.5">
+            <div className="text-base font-black text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight">
+              {summaryMetrics.alertedDbCount}{' '}
+              <span className="text-[10px] font-normal text-slate-400">/ {summaryMetrics.totalScopedDbs}</span>
+            </div>
+            <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100">{summaryMetrics.alertedPercent}%</span>
           </div>
         </div>
 
@@ -529,27 +526,24 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
             setCurrentPage(1);
           }}
           className={cn(
-            'p-3.5 rounded-xl border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
+            'p-2.5 px-3 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
             selectedLevel === 'ALL'
               ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20'
               : 'border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20'
           )}
         >
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1">
-              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
-                <History className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                <span className="truncate">{t('alertHistory.totalIncidents')}</span>
-              </span>
-              <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-slate-400" />
-            </div>
-            <div className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
+              <History className="w-3 h-3 text-slate-600 shrink-0" />
+              <span className="truncate">{t('alertHistory.totalIncidents')}</span>
+            </span>
+            <span className="w-2 h-2 rounded-full shrink-0 bg-slate-400" />
+          </div>
+          <div className="flex items-baseline justify-between mt-1 pt-0.5">
+            <div className="text-base font-black text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight">
               {summaryMetrics.totalIncidents}
             </div>
-          </div>
-          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-            <span className="text-slate-500 font-medium uppercase">EVENTS</span>
-            <span className="font-mono font-bold text-slate-600">LOGGED</span>
+            <span className="text-[9px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">LOGGED</span>
           </div>
         </div>
 
@@ -560,34 +554,31 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
             setCurrentPage(1);
           }}
           className={cn(
-            'p-3.5 rounded-xl border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
+            'p-2.5 px-3 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
             selectedLevel === 'DOWN'
               ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
               : 'border-slate-200 hover:border-rose-400 hover:bg-rose-50/20'
           )}
         >
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1">
-              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
-                <AlertOctagon className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                <span className="truncate">{t('alertHistory.downIncidents')}</span>
-              </span>
-              <span
-                className={cn(
-                  'w-2.5 h-2.5 rounded-full shrink-0',
-                  summaryMetrics.downCount > 0
-                    ? 'bg-rose-500 shadow-2xs shadow-rose-500/50 animate-pulse'
-                    : 'bg-slate-300'
-                )}
-              />
-            </div>
-            <div className="text-xl font-black text-slate-900 group-hover:text-rose-600 transition-colors">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
+              <AlertOctagon className="w-3 h-3 text-rose-600 shrink-0" />
+              <span className="truncate">{t('alertHistory.downIncidents')}</span>
+            </span>
+            <span
+              className={cn(
+                'w-2 h-2 rounded-full shrink-0',
+                summaryMetrics.downCount > 0
+                  ? 'bg-rose-500 shadow-2xs shadow-rose-500/50 animate-pulse'
+                  : 'bg-slate-300'
+              )}
+            />
+          </div>
+          <div className="flex items-baseline justify-between mt-1 pt-0.5">
+            <div className="text-base font-black text-slate-900 group-hover:text-rose-600 transition-colors tracking-tight">
               {summaryMetrics.downCount}
             </div>
-          </div>
-          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-            <span className="text-slate-500 font-medium uppercase">SEVERITY</span>
-            <span className="font-mono font-extrabold text-rose-600">DOWN</span>
+            <span className={cn('text-[9px] font-mono font-extrabold px-1.5 py-0.2 rounded border', summaryMetrics.downCount > 0 ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-slate-500 bg-slate-50 border-slate-200')}>DOWN</span>
           </div>
         </div>
 
@@ -598,34 +589,31 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
             setCurrentPage(1);
           }}
           className={cn(
-            'p-3.5 rounded-xl border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
+            'p-2.5 px-3 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
             selectedLevel === 'CRITICAL'
               ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20'
               : 'border-slate-200 hover:border-rose-400 hover:bg-rose-50/20'
           )}
         >
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1">
-              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                <span className="truncate">{t('alertHistory.criticalIncidents')}</span>
-              </span>
-              <span
-                className={cn(
-                  'w-2.5 h-2.5 rounded-full shrink-0',
-                  summaryMetrics.criticalCount > 0
-                    ? 'bg-rose-500 shadow-2xs shadow-rose-500/50 animate-pulse'
-                    : 'bg-slate-300'
-                )}
-              />
-            </div>
-            <div className="text-xl font-black text-slate-900 group-hover:text-rose-600 transition-colors">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
+              <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+              <span className="truncate">{t('alertHistory.criticalIncidents')}</span>
+            </span>
+            <span
+              className={cn(
+                'w-2 h-2 rounded-full shrink-0',
+                summaryMetrics.criticalCount > 0
+                  ? 'bg-rose-500 shadow-2xs shadow-rose-500/50 animate-pulse'
+                  : 'bg-slate-300'
+              )}
+            />
+          </div>
+          <div className="flex items-baseline justify-between mt-1 pt-0.5">
+            <div className="text-base font-black text-slate-900 group-hover:text-rose-600 transition-colors tracking-tight">
               {summaryMetrics.criticalCount}
             </div>
-          </div>
-          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-            <span className="text-slate-500 font-medium uppercase">SEVERITY</span>
-            <span className="font-mono font-extrabold text-rose-600">CRITICAL</span>
+            <span className={cn('text-[9px] font-mono font-extrabold px-1.5 py-0.2 rounded border', summaryMetrics.criticalCount > 0 ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-slate-500 bg-slate-50 border-slate-200')}>CRITICAL</span>
           </div>
         </div>
 
@@ -636,34 +624,31 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
             setCurrentPage(1);
           }}
           className={cn(
-            'p-3.5 rounded-xl border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
+            'p-2.5 px-3 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
             selectedLevel === 'HIGH'
               ? 'border-orange-500 ring-2 ring-orange-500/20 bg-orange-50/20'
               : 'border-slate-200 hover:border-orange-400 hover:bg-orange-50/20'
           )}
         >
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1">
-              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
-                <AlertCircle className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                <span className="truncate">{t('alertHistory.highIncidents')}</span>
-              </span>
-              <span
-                className={cn(
-                  'w-2.5 h-2.5 rounded-full shrink-0',
-                  summaryMetrics.highCount > 0
-                    ? 'bg-orange-500 shadow-2xs shadow-orange-500/50'
-                    : 'bg-slate-300'
-                )}
-              />
-            </div>
-            <div className="text-xl font-black text-slate-900 group-hover:text-orange-600 transition-colors">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
+              <AlertCircle className="w-3 h-3 text-orange-600 shrink-0" />
+              <span className="truncate">{t('alertHistory.highIncidents')}</span>
+            </span>
+            <span
+              className={cn(
+                'w-2 h-2 rounded-full shrink-0',
+                summaryMetrics.highCount > 0
+                  ? 'bg-orange-500 shadow-2xs shadow-orange-500/50'
+                  : 'bg-slate-300'
+              )}
+            />
+          </div>
+          <div className="flex items-baseline justify-between mt-1 pt-0.5">
+            <div className="text-base font-black text-slate-900 group-hover:text-orange-600 transition-colors tracking-tight">
               {summaryMetrics.highCount}
             </div>
-          </div>
-          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-            <span className="text-slate-500 font-medium uppercase">SEVERITY</span>
-            <span className="font-mono font-extrabold text-orange-600">HIGH</span>
+            <span className={cn('text-[9px] font-mono font-extrabold px-1.5 py-0.2 rounded border', summaryMetrics.highCount > 0 ? 'text-orange-700 bg-orange-50 border-orange-200' : 'text-slate-500 bg-slate-50 border-slate-200')}>HIGH</span>
           </div>
         </div>
 
@@ -674,34 +659,31 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
             setCurrentPage(1);
           }}
           className={cn(
-            'p-3.5 rounded-xl border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
+            'p-2.5 px-3 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm relative',
             selectedLevel === 'WARN'
               ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/20'
               : 'border-slate-200 hover:border-amber-400 hover:bg-amber-50/20'
           )}
         >
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1">
-              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
-                <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span className="truncate">{t('alertHistory.warningIncidents')}</span>
-              </span>
-              <span
-                className={cn(
-                  'w-2.5 h-2.5 rounded-full shrink-0',
-                  summaryMetrics.warnCount > 0
-                    ? 'bg-amber-500 shadow-2xs shadow-amber-500/50'
-                    : 'bg-slate-300'
-                )}
-              />
-            </div>
-            <div className="text-xl font-black text-slate-900 group-hover:text-amber-600 transition-colors">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
+              <Info className="w-3 h-3 text-amber-600 shrink-0" />
+              <span className="truncate">{t('alertHistory.warningIncidents')}</span>
+            </span>
+            <span
+              className={cn(
+                'w-2 h-2 rounded-full shrink-0',
+                summaryMetrics.warnCount > 0
+                  ? 'bg-amber-500 shadow-2xs shadow-amber-500/50'
+                  : 'bg-slate-300'
+              )}
+            />
+          </div>
+          <div className="flex items-baseline justify-between mt-1 pt-0.5">
+            <div className="text-base font-black text-slate-900 group-hover:text-amber-600 transition-colors tracking-tight">
               {summaryMetrics.warnCount}
             </div>
-          </div>
-          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-            <span className="text-slate-500 font-medium uppercase">SEVERITY</span>
-            <span className="font-mono font-extrabold text-amber-600">WARN</span>
+            <span className={cn('text-[9px] font-mono font-extrabold px-1.5 py-0.2 rounded border', summaryMetrics.warnCount > 0 ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-slate-500 bg-slate-50 border-slate-200')}>WARN</span>
           </div>
         </div>
       </div>
