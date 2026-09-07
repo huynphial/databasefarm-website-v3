@@ -2554,6 +2554,42 @@ export class PrismaRepository implements IStorageRepository {
     return [];
   }
 
+  async getLicenseFailCount(): Promise<{ failCount: number; isLicensed: boolean }> {
+    try {
+      const sql = `SELECT count(1) as count FROM database_poll_log WHERE error_message = 'annual license has expired or is invalid, worker suspended execution' AND started_at > curdate()`;
+      const result: any = await (this.prisma as any).$queryRawUnsafe(sql);
+      let count = 0;
+      if (Array.isArray(result) && result.length > 0) {
+        const row = result[0];
+        const val = row.count ?? row.cnt ?? row['count(1)'] ?? Object.values(row)[0];
+        count = Number(val) || 0;
+      }
+      return {
+        failCount: count,
+        isLicensed: count === 0,
+      };
+    } catch (e) {
+      console.warn('Prisma getLicenseFailCount query failed, fallback to ORM count:', e);
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const count = await (this.prisma as any).databasePollLog?.count({
+          where: {
+            errorMessage: 'annual license has expired or is invalid, worker suspended execution',
+            startedAt: { gt: today },
+          },
+        });
+        const cnt = Number(count) || 0;
+        return {
+          failCount: cnt,
+          isLicensed: cnt === 0,
+        };
+      } catch (e2) {
+        return { failCount: 0, isLicensed: true };
+      }
+    }
+  }
+
   async cleanAllMonitorData(daysToKeep = 0, dbId = 'ALL') {
     const cutoffDate = daysToKeep <= 0 ? new Date(Date.now() + 60000) : new Date(Date.now() - daysToKeep * 86400000);
     const dbFilter = dbId === 'ALL' ? {} : { dbId };

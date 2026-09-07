@@ -187,6 +187,13 @@ export const api = {
       return [];
     }
   },
+  async getLicenseStatus(): Promise<{ failCount: number; isLicensed: boolean }> {
+    try {
+      return await fetchJson('/api/license-status');
+    } catch {
+      return { failCount: 0, isLicensed: true };
+    }
+  },
 
   // Metric History
   async getMetricHistory(dbId?: string, metricId?: string, fromDate?: string, toDate?: string): Promise<MetricHistoryEntity[]> {

@@ -804,6 +804,15 @@ async function startServer() {
     }
   });
 
+  app.get('/api/license-status', async (req, res) => {
+    try {
+      const status = await repo.getLicenseFailCount();
+      res.json(status);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post('/api/raw-measurements', async (req, res) => {
     try {
       const entry = await repo.addRawMeasurement(req.body);

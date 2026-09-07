@@ -84,6 +84,7 @@ export interface IStorageRepository {
   getDatabasePollQueue(): Promise<DatabasePollQueueEntity[]>;
   clearDatabasePollQueue(statusFilter?: 'processing' | 'pending' | 'all', dbId?: string): Promise<{ clearedCount: number }>;
   getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]>;
+  getLicenseFailCount(): Promise<{ failCount: number; isLicensed: boolean }>;
 
   // System Settings
   getSystemSettings(): Promise<SystemSettingsEntity>;

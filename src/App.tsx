@@ -974,6 +974,7 @@ function MainAppContent() {
               onSaveDatabase={handleSaveDatabase}
               onDeleteDatabase={handleDeleteDatabase}
               onNavigateToAnalytics={(dbId) => handleSelectTab('analytics-database', dbId)}
+              onNavigateToSettings={() => handleSelectTab('system-settings')}
               onRefresh={loadData}
             />
           )}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus,
   Edit2,
@@ -33,7 +33,8 @@ import {
   FileDown,
   FileUp,
   Layers,
-  Lock
+  Lock,
+  ArrowRight
 } from 'lucide-react';
 import { ActiveAlertEntity, DatabaseEntity, DatabaseEngineEntity, DbEngine, GroupEntity, MetricEntity, TemplateEntity, UserRole } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
@@ -43,6 +44,7 @@ import { DB_ENGINES, getDbEngineBadgeClass, getDbEngineConfig, getDbEngineHexCol
 import { useTranslation } from '../../i18n/LanguageContext';
 import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
 import { DatabaseEngineSummaryGrid } from '../common/DatabaseEngineSummaryGrid';
+import { api } from '../../lib/api';
 import { cn } from '../../lib/utils';
 
 interface DatabasesViewProps {
@@ -57,6 +59,7 @@ interface DatabasesViewProps {
   onSaveDatabase: (database: Partial<DatabaseEntity>) => void;
   onDeleteDatabase: (id: string) => void;
   onNavigateToAnalytics?: (dbId: string) => void;
+  onNavigateToSettings?: () => void;
   onRefresh?: () => void;
 }
 
@@ -72,10 +75,44 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   onSaveDatabase,
   onDeleteDatabase,
   onNavigateToAnalytics,
+  onNavigateToSettings,
   onRefresh,
 }) => {
   const { toast } = useToast();
   const { t } = useTranslation();
+
+  // License Status State (checks database_poll_log for worker license expiry errors)
+  const [licenseStatus, setLicenseStatus] = useState<{
+    failCount: number;
+    isLicensed: boolean;
+    checked: boolean;
+    loading: boolean;
+  }>({
+    failCount: 0,
+    isLicensed: true,
+    checked: false,
+    loading: false,
+  });
+
+  const checkLicenseStatus = async () => {
+    try {
+      setLicenseStatus((prev) => ({ ...prev, loading: true }));
+      const res = await api.getLicenseStatus();
+      setLicenseStatus({
+        failCount: res.failCount || 0,
+        isLicensed: res.isLicensed !== false && (res.failCount || 0) === 0,
+        checked: true,
+        loading: false,
+      });
+    } catch (err) {
+      console.warn('Failed to check license status:', err);
+      setLicenseStatus((prev) => ({ ...prev, loading: false, checked: true }));
+    }
+  };
+
+  useEffect(() => {
+    checkLicenseStatus();
+  }, []);
   
   // Available engines (dynamic from registry if available, fallback to config) - only active engines
   const availableEngines = useMemo(() => {
@@ -1036,6 +1073,48 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
 
   return (
     <div className="p-6 sm:p-8 flex-1 flex flex-col gap-6 overflow-y-auto bg-slate-50/50">
+      {/* License Expiry / Invalid Alert Panel */}
+      {licenseStatus.checked && (!licenseStatus.isLicensed || licenseStatus.failCount > 0) && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs animate-fade-in">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 bg-rose-100 text-rose-700 rounded-lg shrink-0 mt-0.5 md:mt-0">
+              <AlertOctagon className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-rose-900 flex items-center gap-2">
+                <span>{t('databases.licenseExpiredTitle')}</span>
+                <span className="px-2 py-0.5 text-xs bg-rose-200/80 text-rose-800 rounded-full font-mono font-bold">
+                  {licenseStatus.failCount > 0 ? `${licenseStatus.failCount} Failures` : 'Invalid / Expired'}
+                </span>
+              </h4>
+              <p className="text-xs text-rose-700 leading-relaxed max-w-3xl">
+                {t('databases.licenseExpiredDesc', { count: licenseStatus.failCount })}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
+            <button
+              onClick={checkLicenseStatus}
+              disabled={licenseStatus.loading}
+              className="px-3 py-1.5 text-xs font-semibold text-rose-700 bg-white border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+              title={t('databases.licenseRecheck')}
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", licenseStatus.loading && "animate-spin")} />
+              <span>{licenseStatus.loading ? t('databases.licenseRechecking') : t('databases.licenseRecheck')}</span>
+            </button>
+            {onNavigateToSettings && (
+              <button
+                onClick={onNavigateToSettings}
+                className="px-3.5 py-1.5 text-xs font-bold text-white bg-rose-600 rounded-lg hover:bg-rose-700 transition-colors flex items-center gap-1.5 shadow-2xs"
+              >
+                <span>{t('databases.licenseExpiredAction')}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Decoupled Architecture Banner */}
       {showInfoTips && (
         <div className="p-4 bg-white border border-slate-200 rounded-xl flex items-start gap-3 text-xs text-slate-600 shadow-2xs">

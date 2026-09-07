@@ -2234,6 +2234,21 @@ FROM pg_tablespace`,
     return result.slice(0, effectiveLimit);
   }
 
+  async getLicenseFailCount(): Promise<{ failCount: number; isLicensed: boolean }> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMs = today.getTime();
+    const count = this.databasePollLogs.filter(
+      (l) =>
+        l.errorMessage === 'annual license has expired or is invalid, worker suspended execution' &&
+        new Date(l.startedAt).getTime() > todayMs
+    ).length;
+    return {
+      failCount: count,
+      isLicensed: count === 0,
+    };
+  }
+
   // --- System Settings ---
   async getSystemSettings(): Promise<SystemSettingsEntity> {
     return this.systemSettings;
