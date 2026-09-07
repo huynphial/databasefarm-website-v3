@@ -71,18 +71,24 @@ export class PrismaRepository implements IStorageRepository {
   // --- Users ---
   async getUsers(): Promise<User[]> {
     let users: any[] = [];
+    let hasLoaded = false;
     try {
-      users = await this.prisma.user.findMany({ orderBy: { username: 'asc' } });
+      if (this.prisma.user) {
+        users = await this.prisma.user.findMany({ orderBy: { username: 'asc' } });
+        hasLoaded = true;
+      }
     } catch (err) {
       console.warn('Prisma user.findMany error:', err);
     }
 
-    if (!users || users.length === 0) {
+    if (!hasLoaded) {
       try {
         users = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM users ORDER BY username ASC');
+        hasLoaded = true;
       } catch (e1) {
         try {
           users = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM user ORDER BY username ASC');
+          hasLoaded = true;
         } catch (e2) {}
       }
     }
@@ -1496,52 +1502,62 @@ export class PrismaRepository implements IStorageRepository {
       { id: 'ss-04', name: 'annual_license_key', value: '', updatedBy: 'admin', updatedAt: new Date().toISOString() },
     ];
 
+    const targetKeys = ['autoClearResolvedAlerts', 'showInfoTips', 'SESSION_TIMEOUT_MINUTES', 'annual_license_key'];
     let records: any[] = [];
+    let hasLoaded = false;
     try {
       if ((this.prisma as any).systemSettings) {
         records = await (this.prisma as any).systemSettings.findMany({
-          orderBy: { id: 'asc' },
+          where: { name: { in: targetKeys } },
         });
+        hasLoaded = true;
       }
     } catch (e) {
       console.warn('Prisma getSystemSettingsList findMany error:', e);
     }
 
-    if (!records || records.length === 0) {
+    if (!hasLoaded) {
       try {
-        records = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM system_settings ORDER BY id ASC');
+        records = await (this.prisma as any).$queryRawUnsafe(
+          `SELECT * FROM system_settings WHERE name IN ('autoClearResolvedAlerts', 'showInfoTips', 'SESSION_TIMEOUT_MINUTES', 'annual_license_key')`
+        );
+        hasLoaded = true;
       } catch (e1) {
         try {
-          records = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM system_setting ORDER BY id ASC');
+          records = await (this.prisma as any).$queryRawUnsafe(
+            `SELECT * FROM system_setting WHERE name IN ('autoClearResolvedAlerts', 'showInfoTips', 'SESSION_TIMEOUT_MINUTES', 'annual_license_key')`
+          );
+          hasLoaded = true;
         } catch (e2) {}
       }
     }
 
+    const valueMap = new Map<string, { value: string; updatedAt: string; updatedBy: string }>();
     if (records && records.length > 0) {
-      const items: SystemSettingItem[] = records.map((r: any) => {
+      records.forEach((r: any) => {
         const uAt = r.updatedAt || r.updated_at;
         const isoDate = uAt ? (uAt instanceof Date ? uAt.toISOString() : new Date(uAt).toISOString()) : new Date().toISOString();
-        return {
-          id: String(r.id || ''),
-          name: String(r.name || ''),
+        valueMap.set(String(r.name), {
           value: r.value != null ? String(r.value) : '',
           updatedAt: isoDate,
           updatedBy: r.updatedBy || r.updated_by || 'admin',
-        };
+        });
       });
-
-      // Ensure key default settings exist in the list if not present in DB
-      const existingNames = new Set(items.map((i) => i.name));
-      defaultSettings.forEach((d) => {
-        if (!existingNames.has(d.name)) {
-          items.push(d);
-        }
-      });
-
-      return items;
     }
 
-    return defaultSettings;
+    return defaultSettings.map((def) => {
+      const found = valueMap.get(def.name);
+      if (found) {
+        return {
+          id: def.id,
+          name: def.name,
+          value: found.value,
+          updatedAt: found.updatedAt,
+          updatedBy: found.updatedBy,
+        };
+      }
+      return def;
+    });
   }
 
   async saveSystemSettingItem(item: Partial<SystemSettingItem>): Promise<SystemSettingItem> {
@@ -1605,34 +1621,40 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   // --- Audit Logs ---
-  async getAuditLogs(limit = 500): Promise<AuditLogEntity[]> {
+  async getAuditLogs(limit = 200): Promise<AuditLogEntity[]> {
     let logs: any[] = [];
+    let hasLoaded = false;
+    const maxLimit = limit > 0 ? limit : 200;
     try {
       if ((this.prisma as any).auditLog) {
         logs = await (this.prisma as any).auditLog.findMany({
           orderBy: { createdAt: 'desc' },
-          ...(limit > 0 ? { take: limit } : {}),
+          take: maxLimit,
         });
+        hasLoaded = true;
       }
     } catch (err) {
       console.warn('Prisma auditLog.findMany error:', err);
     }
 
-    if (!logs || logs.length === 0) {
+    if (!hasLoaded) {
       try {
         logs = await (this.prisma as any).$queryRawUnsafe(
-          `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ${limit > 0 ? limit : 500}`
+          `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ${maxLimit}`
         );
+        hasLoaded = true;
       } catch (rawErr1) {
         try {
           logs = await (this.prisma as any).$queryRawUnsafe(
-            `SELECT * FROM audit_logs ORDER BY createdAt DESC LIMIT ${limit > 0 ? limit : 500}`
+            `SELECT * FROM audit_logs ORDER BY createdAt DESC LIMIT ${maxLimit}`
           );
+          hasLoaded = true;
         } catch (rawErr2) {
           try {
             logs = await (this.prisma as any).$queryRawUnsafe(
-              `SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ${limit > 0 ? limit : 500}`
+              `SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ${maxLimit}`
             );
+            hasLoaded = true;
           } catch (rawErr3) {}
         }
       }
@@ -1913,13 +1935,13 @@ export class PrismaRepository implements IStorageRepository {
     try {
       const client = (this.prisma as any).metricDataPoint;
       if (client) {
-        let limit = 0;
+        let limit = 1500;
         const where: any = {};
 
         if (typeof filterOrLimit === 'number') {
-          limit = filterOrLimit;
+          if (filterOrLimit > 0) limit = filterOrLimit;
         } else if (filterOrLimit) {
-          if (filterOrLimit.limit !== undefined) {
+          if (filterOrLimit.limit !== undefined && filterOrLimit.limit > 0) {
             limit = filterOrLimit.limit;
           }
           if (filterOrLimit.dbId && filterOrLimit.dbId !== 'ALL') {
@@ -1954,21 +1976,23 @@ export class PrismaRepository implements IStorageRepository {
         }
 
         let dataPoints: any[] = [];
+        let hasLoaded = false;
         try {
           dataPoints = await client.findMany({
             where,
             orderBy: { measuredAt: 'desc' },
-            ...(limit > 0 ? { take: limit } : {}),
+            take: limit,
             include: {
               database: true,
               metric: true,
             },
           });
+          hasLoaded = true;
         } catch (findErr) {
           console.warn('Prisma metricDataPoint.findMany error, trying raw SQL:', findErr);
         }
 
-        if (!dataPoints || dataPoints.length === 0) {
+        if (!hasLoaded) {
           try {
             const rawSql = `
               SELECT 
@@ -1990,7 +2014,7 @@ export class PrismaRepository implements IStorageRepository {
               LEFT JOIN databases d ON d.id = mdp.database_id OR d.id = mdp.dbId
               LEFT JOIN metrics m ON m.id = mdp.metric_id OR m.id = mdp.metricId
               ORDER BY mdp.measured_at DESC
-              LIMIT ${limit > 0 ? limit : 2000}
+              LIMIT ${limit}
             `;
             const rawRows: any[] = await (this.prisma as any).$queryRawUnsafe(rawSql);
             if (rawRows && rawRows.length > 0) {
@@ -2015,6 +2039,7 @@ export class PrismaRepository implements IStorageRepository {
                 },
               }));
             }
+            hasLoaded = true;
           } catch (rawSqlErr) {
             // raw sql query fallback catch
           }

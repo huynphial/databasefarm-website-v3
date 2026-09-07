@@ -50,9 +50,9 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   const [selectedObjectFilter, setSelectedObjectFilter] = useState<string>('ALL');
   const [selectedAttributeFilter, setSelectedAttributeFilter] = useState<string>('ALL');
 
-  // Date Range Filter (Default: All time / empty so existing db measurements show up immediately)
-  const [fromDate, setFromDate] = useState<string>('');
-  const [toDate, setToDate] = useState<string>('');
+  // Date Range Filter (Default: Last 24 Hours)
+  const [fromDate, setFromDate] = useState<string>(() => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
 
   // Pagination state (Default: 50 per page)
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -144,9 +144,9 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     }
   }, [selectedDbFilter, selectedMetricFilter, engineFilter, selectedObjectFilter, selectedAttributeFilter, fromDate, toDate, searchTerm]);
 
-  // Reset all filters to default state and execute search
+  // Reset all filters to default state and execute search (default to 24h)
   const handleResetFilters = async () => {
-    const defaultFrom = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const defaultFrom = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const defaultTo = new Date().toISOString().slice(0, 10);
     setSearchTerm('');
     setEngineFilter('ALL');
