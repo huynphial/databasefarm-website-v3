@@ -167,7 +167,6 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
                               {col}
                             </th>
                           ))}
-                          <th className="py-2.5 px-3.5">{t('analytics.colOverallStatus')}</th>
                           <th className="py-2.5 px-3.5">{t('analytics.colLastMeasured')}</th>
                           <th className="py-2.5 px-3.5 text-right">{t('analytics.colAction')}</th>
                         </tr>
@@ -195,11 +194,6 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
                                   </td>
                                 );
                               })}
-                              <td className="py-2.5 px-3.5">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadge}`}>
-                                  {row.status}
-                                </span>
-                              </td>
                               <td className="py-2.5 px-3.5 font-mono text-[11px] text-slate-500">
                                 {formatTimeVN(row.measuredAt)}
                               </td>
