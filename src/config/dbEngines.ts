@@ -32,6 +32,9 @@ export const getDbEngineBadgeClass = (code: string): string => {
   if (typeUpper === 'BIGQUERY') return 'text-indigo-700 bg-indigo-50 border-indigo-200';
   if (typeUpper === 'REDSHIFT') return 'text-violet-700 bg-violet-50 border-violet-200';
   if (typeUpper === 'DATABRICKS') return 'text-rose-700 bg-rose-50 border-rose-200';
+  if (typeUpper === 'INFLUXDB') return 'text-sky-700 bg-sky-50 border-sky-200';
+  if (typeUpper === 'PROMETHEUS') return 'text-orange-700 bg-orange-50 border-orange-200';
+  if (typeUpper === 'PROMETHEUS_EXPORTER') return 'text-amber-700 bg-amber-50 border-amber-200';
 
   return 'text-slate-700 bg-slate-100 border-slate-200';
 };
@@ -63,6 +66,9 @@ export const getDbEngineHexColor = (code: string, dynamicEngines?: DatabaseEngin
   if (typeUpper === 'BIGQUERY') return '#4285F4';
   if (typeUpper === 'REDSHIFT') return '#8C4FFF';
   if (typeUpper === 'DATABRICKS') return '#FF3621';
+  if (typeUpper === 'INFLUXDB') return '#22ADF6';
+  if (typeUpper === 'PROMETHEUS') return '#E6522C';
+  if (typeUpper === 'PROMETHEUS_EXPORTER') return '#F97316';
   return '#475569';
 };
 
@@ -86,5 +92,8 @@ export const getDbEngineTagStyle = (code: string): string => {
   if (typeUpper === 'BIGQUERY') return 'bg-indigo-100 text-indigo-800 border-indigo-300 font-bold';
   if (typeUpper === 'REDSHIFT') return 'bg-violet-100 text-violet-800 border-violet-300 font-bold';
   if (typeUpper === 'DATABRICKS') return 'bg-rose-100 text-rose-800 border-rose-300 font-bold';
+  if (typeUpper === 'INFLUXDB') return 'bg-sky-100 text-sky-800 border-sky-300 font-bold';
+  if (typeUpper === 'PROMETHEUS') return 'bg-orange-100 text-orange-800 border-orange-300 font-bold';
+  if (typeUpper === 'PROMETHEUS_EXPORTER') return 'bg-amber-100 text-amber-800 border-amber-300 font-bold';
   return 'bg-slate-100 text-slate-800 border-slate-300 font-bold';
 };

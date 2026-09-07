@@ -23,6 +23,9 @@ declare module '@prisma/client' {
     BIGQUERY = 'BIGQUERY',
     REDSHIFT = 'REDSHIFT',
     DATABRICKS = 'DATABRICKS',
+    INFLUXDB = 'INFLUXDB',
+    PROMETHEUS = 'PROMETHEUS',
+    PROMETHEUS_EXPORTER = 'PROMETHEUS_EXPORTER',
   }
 
   export enum ValueType {

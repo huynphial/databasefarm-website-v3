@@ -1754,6 +1754,9 @@ export class PrismaRepository implements IStorageRepository {
       { id: 'eng-16', dbCode: 'BIGQUERY', dbName: 'BigQuery', dbColor: '#4285F4', defaultPort: 443, statusOnOff: 'ACTIVE', description: 'Fully-managed, serverless enterprise data warehouse for analytics by Google Cloud.' },
       { id: 'eng-17', dbCode: 'REDSHIFT', dbName: 'Redshift', dbColor: '#8C4FFF', defaultPort: 5439, statusOnOff: 'ACTIVE', description: 'Fast, fully managed, petabyte-scale data warehouse service in the cloud by AWS.' },
       { id: 'eng-18', dbCode: 'DATABRICKS', dbName: 'Databricks', dbColor: '#FF3621', defaultPort: 443, statusOnOff: 'ACTIVE', description: 'Unified analytics and Lakehouse data intelligence platform built on Apache Spark.' },
+      { id: 'eng-19', dbCode: 'INFLUXDB', dbName: 'InfluxDB', dbColor: '#22ADF6', defaultPort: 8086, statusOnOff: 'ACTIVE', description: 'Open-source time series database purpose-built for high-volume metrics, sensor data, and real-time events.' },
+      { id: 'eng-20', dbCode: 'PROMETHEUS', dbName: 'Prometheus', dbColor: '#E6522C', defaultPort: 9090, statusOnOff: 'ACTIVE', description: 'Open-source systems monitoring and alerting toolkit with a multi-dimensional time series data model and PromQL.' },
+      { id: 'eng-21', dbCode: 'PROMETHEUS_EXPORTER', dbName: 'Prometheus Exporter', dbColor: '#F97316', defaultPort: 9100, statusOnOff: 'ACTIVE', description: 'Standardized telemetry exporter exposing Prometheus metric endpoints for scraping services and node agents.' },
     ];
   }
 

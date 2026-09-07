@@ -28,6 +28,9 @@ export type DbEngine =
   | 'BIGQUERY'
   | 'REDSHIFT'
   | 'DATABRICKS'
+  | 'INFLUXDB'
+  | 'PROMETHEUS'
+  | 'PROMETHEUS_EXPORTER'
   | string;
 
 export interface DbEngineConfig {

@@ -142,5 +142,29 @@
     "badgeColor": "text-rose-700 bg-rose-50 border-rose-200",
     "color": "#FF3621",
     "description": "Unified analytics and Lakehouse data intelligence platform built on Apache Spark."
+  },
+  {
+    "code": "INFLUXDB",
+    "name": "InfluxDB",
+    "defaultPort": 8086,
+    "badgeColor": "text-sky-700 bg-sky-50 border-sky-200",
+    "color": "#22ADF6",
+    "description": "Open-source time series database purpose-built for high-volume metrics, sensor data, and real-time events."
+  },
+  {
+    "code": "PROMETHEUS",
+    "name": "Prometheus",
+    "defaultPort": 9090,
+    "badgeColor": "text-orange-700 bg-orange-50 border-orange-200",
+    "color": "#E6522C",
+    "description": "Open-source systems monitoring and alerting toolkit with a multi-dimensional time series data model and PromQL."
+  },
+  {
+    "code": "PROMETHEUS_EXPORTER",
+    "name": "Prometheus Exporter",
+    "defaultPort": 9100,
+    "badgeColor": "text-amber-700 bg-amber-50 border-amber-200",
+    "color": "#F97316",
+    "description": "Standardized telemetry exporter exposing Prometheus metric endpoints for scraping services and node agents."
   }
 ]

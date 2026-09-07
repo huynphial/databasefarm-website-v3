@@ -21,7 +21,7 @@ enum Role {
 }
 
 /// DbType Enum: Supported relational and NoSQL database engines matching database_engines catalog.
-/// Supports all engines configured in databaseEnginesData (Oracle, MySQL, Postgres, MSSQL, MariaDB, DB2, MongoDB, Redis, SingleStore, ClickHouse, Elasticsearch, OpenSearch, Cassandra, SAP HANA, Snowflake, BigQuery, Redshift, Databricks).
+/// Supports all engines configured in databaseEnginesData (Oracle, MySQL, Postgres, MSSQL, MariaDB, DB2, MongoDB, Redis, SingleStore, ClickHouse, Elasticsearch, OpenSearch, Cassandra, SAP HANA, Snowflake, BigQuery, Redshift, Databricks, InfluxDB, Prometheus, Prometheus Exporter).
 enum DbType {
   ORACLE
   MYSQL
@@ -41,6 +41,9 @@ enum DbType {
   BIGQUERY
   REDSHIFT
   DATABRICKS
+  INFLUXDB
+  PROMETHEUS
+  PROMETHEUS_EXPORTER
 }
 
 /// ValueType Enum: Metric execution result evaluation types.

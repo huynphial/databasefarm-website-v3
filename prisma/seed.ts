@@ -198,6 +198,33 @@ async function main() {
       statusOnOff: 'INACTIVE',
       description: 'Unified analytics and Lakehouse data intelligence platform built on Apache Spark.',
     },
+    {
+      id: 'eng-19',
+      dbCode: 'INFLUXDB',
+      dbName: 'InfluxDB',
+      dbColor: '#22ADF6',
+      defaultPort: 8086,
+      statusOnOff: 'ACTIVE',
+      description: 'Open-source time series database purpose-built for high-volume metrics, sensor data, and real-time events.',
+    },
+    {
+      id: 'eng-20',
+      dbCode: 'PROMETHEUS',
+      dbName: 'Prometheus',
+      dbColor: '#E6522C',
+      defaultPort: 9090,
+      statusOnOff: 'ACTIVE',
+      description: 'Open-source systems monitoring and alerting toolkit with a multi-dimensional time series data model and PromQL.',
+    },
+    {
+      id: 'eng-21',
+      dbCode: 'PROMETHEUS_EXPORTER',
+      dbName: 'Prometheus Exporter',
+      dbColor: '#F97316',
+      defaultPort: 9100,
+      statusOnOff: 'ACTIVE',
+      description: 'Standardized telemetry exporter exposing Prometheus metric endpoints for scraping services and node agents.',
+    },
   ];
 
   // 1.6 Seeding Alert Notification Methods (Dynamic Protocol Dispatchers matching memoryRepository.ts)
