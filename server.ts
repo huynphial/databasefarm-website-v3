@@ -1,11 +1,7 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { getStorageRepository } from './server/repositories';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Global BigInt serialization patch for JSON.stringify support (MySQL BigInt values)
 (BigInt.prototype as any).toJSON = function () {

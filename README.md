@@ -45,10 +45,6 @@
 | `SEED_ADMIN_PASSWORD` | Default admin account password | `secure_admin_password_123!` |
 | `SEED_VIEWER_USERNAME` | Default viewer account username | `viewer` |
 | `SEED_VIEWER_PASSWORD` | Default viewer account password | `secure_viewer_password_123!` |
-| `COLLECTOR_HEALTH_CHECK_URL` | Target endpoint URL for Collector API health checks | `http://localhost:3000/api/collector/mock-health` |
-| `TELEGRAM_API_URL` | Base URL for Telegram Bot API | `https://api.telegram.org` |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot token for alerting | `123456789:ABCdefGHIjkl...` |
-| `TELEGRAM_CHAT_ID` | Telegram chat ID for alert notifications | `-1001234567890` |
 | `DEFAULT_TIMEZONE` | Timezone for display and telemetry formatting | `Asia/Ho_Chi_Minh` |
 
 ---

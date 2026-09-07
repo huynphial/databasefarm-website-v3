@@ -202,7 +202,7 @@
     "allDatabases": "Tất cả cơ sở dữ liệu",
     "licenseExpiredTitle": "Bản quyền phần mềm đã hết hạn hoặc không hợp lệ (Tạm dừng thu thập)",
     "licenseExpiredDesc": "Hệ thống daemon nền đã ghi nhận {count} lỗi bản quyền hôm nay (started_at > CURDATE()). Tiến trình quét giám sát đang bị tạm dừng do giấy phép hàng năm đã hết hạn hoặc không hợp lệ. Cảnh báo sẽ hết sau khi bạn cập nhật giấy phép 1 ngày.",
-    "licenseExpiredAction": "Cập nhật annual_license_key trong Cài đặt hệ thống (System Settings). Sau đó, khởi động lại tiến trình DatabaseFarm Backend hoặc chờ 1 giờ.",
+    "licenseExpiredAction": "Cập nhật annual_license_key trong Cài đặt hệ thống (System Settings) và bật lại DatabaseFarm Backend",
     "licenseRecheck": "Kiểm tra lại bản quyền",
     "licenseRechecking": "Đang kiểm tra...",
     "guidanceTitle": "Enterprise Database Endpoints & Monitoring Registry",
