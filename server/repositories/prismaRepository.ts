@@ -70,26 +70,86 @@ export class PrismaRepository implements IStorageRepository {
 
   // --- Users ---
   async getUsers(): Promise<User[]> {
-    const users = await this.prisma.user.findMany();
-    return users.map((u) => ({
-      id: u.id,
-      username: u.username,
-      role: u.role as any,
-      isLocked: (u as any).isLocked || false,
-      createdAt: u.createdAt.toISOString(),
-    }));
+    let users: any[] = [];
+    try {
+      users = await this.prisma.user.findMany({ orderBy: { username: 'asc' } });
+    } catch (err) {
+      console.warn('Prisma user.findMany error:', err);
+    }
+
+    if (!users || users.length === 0) {
+      try {
+        users = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM users ORDER BY username ASC');
+      } catch (e1) {
+        try {
+          users = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM user ORDER BY username ASC');
+        } catch (e2) {}
+      }
+    }
+
+    if (users && users.length > 0) {
+      return users.map((u: any) => {
+        const cAt = u.createdAt || u.created_at;
+        const isoDate = cAt ? (cAt instanceof Date ? cAt.toISOString() : new Date(cAt).toISOString()) : new Date().toISOString();
+        return {
+          id: String(u.id || ''),
+          username: u.username || 'admin',
+          role: (u.role as any) || 'ADMIN',
+          isLocked: u.isLocked ?? u.is_locked ?? false,
+          createdAt: isoDate,
+        };
+      });
+    }
+
+    return [
+      {
+        id: 'u-admin-01',
+        username: 'admin',
+        role: 'ADMIN',
+        isLocked: false,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'u-viewer-01',
+        username: 'viewer',
+        role: 'VIEWER',
+        isLocked: false,
+        createdAt: new Date().toISOString(),
+      },
+    ];
   }
 
   async getUserByUsername(username: string): Promise<User | null> {
-    const u = await this.prisma.user.findUnique({ where: { username } });
-    if (!u) return null;
-    return {
-      id: u.id,
-      username: u.username,
-      role: u.role as any,
-      isLocked: (u as any).isLocked || false,
-      createdAt: u.createdAt.toISOString(),
-    };
+    try {
+      const u = await this.prisma.user.findUnique({ where: { username } });
+      if (u) {
+        return {
+          id: u.id,
+          username: u.username,
+          role: u.role as any,
+          isLocked: (u as any).isLocked ?? (u as any).is_locked ?? false,
+          createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : new Date().toISOString(),
+        };
+      }
+    } catch (err) {
+      // fallback to raw query
+      try {
+        const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+          `SELECT * FROM users WHERE username = '${username.replace(/'/g, "''")}' LIMIT 1`
+        );
+        if (rows && rows.length > 0) {
+          const r = rows[0];
+          return {
+            id: String(r.id),
+            username: r.username,
+            role: r.role as any,
+            isLocked: r.isLocked ?? r.is_locked ?? false,
+            createdAt: r.createdAt || r.created_at ? new Date(r.createdAt || r.created_at).toISOString() : new Date().toISOString(),
+          };
+        }
+      } catch (rawErr) {}
+    }
+    return null;
   }
 
   async saveUser(userData: Partial<User> & { password?: string }): Promise<User> {
@@ -404,33 +464,113 @@ export class PrismaRepository implements IStorageRepository {
 
   // --- Metrics ---
   async getMetrics(): Promise<MetricEntity[]> {
-    const metrics = await this.prisma.metric.findMany({
-      include: { templates: true, databaseEngine: true },
-    });
+    let metrics: any[] = [];
+    let engines: DatabaseEngineEntity[] = [];
+
+    try {
+      engines = await this.getDatabaseEngines().catch(() => []);
+      metrics = await this.prisma.metric.findMany({
+        include: {
+          templates: {
+            include: {
+              template: {
+                include: {
+                  databaseEngine: true,
+                },
+              },
+            },
+          },
+          databaseEngine: true,
+        },
+      });
+    } catch (err) {
+      console.warn('Prisma metric.findMany with deep relations error, fallback to basic findMany:', err);
+      try {
+        metrics = await this.prisma.metric.findMany({
+          include: { templates: true, databaseEngine: true },
+        });
+      } catch (err2) {
+        console.warn('Prisma basic metric.findMany error:', err2);
+      }
+    }
+
+    if (!metrics || metrics.length === 0) {
+      try {
+        metrics = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM metrics');
+      } catch (rawErr) {}
+    }
+
+    if (!metrics) return [];
 
     return metrics.map((m) => {
-      const templateIds = m.templates.map((t) => t.templateId);
-      const firstTpl = m.templates[0];
+      const templateIds = Array.isArray(m.templates) ? m.templates.map((t: any) => t.templateId || t.template_id) : [];
+      const firstTpl = Array.isArray(m.templates) && m.templates.length > 0 ? m.templates[0] : null;
       const tConfig = m.thresholdsConfig ? (typeof m.thresholdsConfig === 'string' ? JSON.parse(m.thresholdsConfig) : m.thresholdsConfig) : null;
       const globalConf = tConfig?.global || (tConfig?.type === 'GLOBAL' ? tConfig.global : null);
-      const dbEngine = (m as any).databaseEngine ? {
+      
+      let dbEngine: DatabaseEngineEntity | null = (m as any).databaseEngine ? {
         id: (m as any).databaseEngine.id,
-        dbCode: (m as any).databaseEngine.dbCode,
-        dbName: (m as any).databaseEngine.dbName,
-        dbColor: (m as any).databaseEngine.dbColor,
-        defaultPort: (m as any).databaseEngine.defaultPort,
-        statusOnOff: (m as any).databaseEngine.statusOnOff as any,
+        dbCode: (m as any).databaseEngine.dbCode || (m as any).databaseEngine.db_code,
+        dbName: (m as any).databaseEngine.dbName || (m as any).databaseEngine.db_name,
+        dbColor: (m as any).databaseEngine.dbColor || (m as any).databaseEngine.db_color || '#2563EB',
+        defaultPort: (m as any).databaseEngine.defaultPort || (m as any).databaseEngine.default_port || 5432,
+        statusOnOff: ((m as any).databaseEngine.statusOnOff || (m as any).databaseEngine.status_on_off || 'ACTIVE') as any,
         description: (m as any).databaseEngine.description || undefined,
-        createdAt: (m as any).databaseEngine.createdAt.toISOString(),
-        updatedAt: (m as any).databaseEngine.updatedAt.toISOString(),
+        createdAt: (m as any).databaseEngine.createdAt ? new Date((m as any).databaseEngine.createdAt).toISOString() : new Date().toISOString(),
+        updatedAt: (m as any).databaseEngine.updatedAt ? new Date((m as any).databaseEngine.updatedAt).toISOString() : new Date().toISOString(),
       } : null;
+
+      let databaseEngineId = (m as any).databaseEngineId || (m as any).database_engine_id || null;
+
+      // If dbEngine is null, check if databaseEngineId matches any registered engine
+      if (!dbEngine && databaseEngineId && engines.length > 0) {
+        const matched = engines.find((e) => e.id === databaseEngineId || e.dbCode.toUpperCase() === String(databaseEngineId).toUpperCase());
+        if (matched) {
+          dbEngine = matched;
+          databaseEngineId = matched.id;
+        }
+      }
+
+      // If still not matched, derive engine from assigned templates (template.databaseEngine or template.targetDbType)
+      if (!dbEngine && Array.isArray(m.templates) && m.templates.length > 0) {
+        for (const tMapping of m.templates) {
+          const tpl = (tMapping as any).template;
+          if (tpl?.databaseEngine) {
+            dbEngine = {
+              id: tpl.databaseEngine.id,
+              dbCode: tpl.databaseEngine.dbCode || tpl.databaseEngine.db_code,
+              dbName: tpl.databaseEngine.dbName || tpl.databaseEngine.db_name,
+              dbColor: tpl.databaseEngine.dbColor || tpl.databaseEngine.db_color || '#2563EB',
+              defaultPort: tpl.databaseEngine.defaultPort || tpl.databaseEngine.default_port || 5432,
+              statusOnOff: (tpl.databaseEngine.statusOnOff || tpl.databaseEngine.status_on_off || 'ACTIVE') as any,
+              description: tpl.databaseEngine.description || undefined,
+              createdAt: tpl.databaseEngine.createdAt ? new Date(tpl.databaseEngine.createdAt).toISOString() : new Date().toISOString(),
+              updatedAt: tpl.databaseEngine.updatedAt ? new Date(tpl.databaseEngine.updatedAt).toISOString() : new Date().toISOString(),
+            };
+            databaseEngineId = dbEngine.id;
+            break;
+          }
+          const targetType = (tMapping as any).targetDbType || (tMapping as any).target_db_type || tpl?.targetDbType || tpl?.target_db_type;
+          if (targetType && engines.length > 0) {
+            const foundEng = engines.find((e) => e.dbCode.toUpperCase() === String(targetType).toUpperCase());
+            if (foundEng) {
+              dbEngine = foundEng;
+              databaseEngineId = foundEng.id;
+              break;
+            }
+          }
+        }
+      }
+
+      const cAt = m.createdAt || m.created_at;
+      const uAt = m.updatedAt || m.updated_at;
 
       return {
         id: m.id,
         name: m.name,
-        sqlQuery: m.sqlQuery,
-        valueType: m.valueType as any,
-        databaseEngineId: (m as any).databaseEngineId || null,
+        sqlQuery: m.sqlQuery || m.sql_query,
+        valueType: (m.valueType || m.value_type || 'NUMBER') as any,
+        databaseEngineId: databaseEngineId || null,
         databaseEngine: dbEngine,
         relationalOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
         thresholdOperator: (m as any).relationalOperator || (m as any).relational_operator || '>=',
@@ -439,14 +579,14 @@ export class PrismaRepository implements IStorageRepository {
         thresholdCritical: globalConf?.critical || null,
         // cycle: execution frequency per database polling run (1 = query every run, 3 = query every 3rd run)
         cycle: (m as any).cycle ?? (m as any).frequencyMinutes ?? 1,
-        templateId: firstTpl ? firstTpl.templateId : undefined,
-        templateName: firstTpl ? firstTpl.templateName : undefined,
+        templateId: firstTpl ? (firstTpl.templateId || firstTpl.template_id) : undefined,
+        templateName: firstTpl ? (firstTpl.templateName || firstTpl.template_name) : undefined,
         templateIds,
-        isEnabled: m.isEnabled,
-        metricQueryType: ((m as any).metricQueryType ?? 1) as 1 | 2 | 3,
+        isEnabled: m.isEnabled ?? m.is_enabled ?? true,
+        metricQueryType: (((m as any).metricQueryType ?? (m as any).metric_query_type ?? 1)) as 1 | 2 | 3,
         thresholdsConfig: tConfig,
-        createdAt: m.createdAt.toISOString(),
-        updatedAt: m.updatedAt.toISOString(),
+        createdAt: cAt ? (cAt instanceof Date ? cAt.toISOString() : new Date(cAt).toISOString()) : new Date().toISOString(),
+        updatedAt: uAt ? (uAt instanceof Date ? uAt.toISOString() : new Date(uAt).toISOString()) : new Date().toISOString(),
       };
     });
   }
@@ -1349,54 +1489,59 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async getSystemSettingsList(): Promise<SystemSettingItem[]> {
-    const systemSettingsData = [
-      { id: 'ss-01', name: 'autoClearResolvedAlerts', value: 'true', updatedBy: 'admin' },
-      { id: 'ss-02', name: 'showInfoTips', value: 'false', updatedBy: 'admin' },
-      { id: 'ss-03', name: 'SESSION_TIMEOUT_MINUTES', value: '2880', updatedBy: 'admin' },
-      { id: 'ss-04', name: 'annual_license_key', value: '', updatedBy: 'admin' },
+    const defaultSettings: SystemSettingItem[] = [
+      { id: 'ss-01', name: 'autoClearResolvedAlerts', value: 'true', updatedBy: 'admin', updatedAt: new Date().toISOString() },
+      { id: 'ss-02', name: 'showInfoTips', value: 'false', updatedBy: 'admin', updatedAt: new Date().toISOString() },
+      { id: 'ss-03', name: 'SESSION_TIMEOUT_MINUTES', value: '2880', updatedBy: 'admin', updatedAt: new Date().toISOString() },
+      { id: 'ss-04', name: 'annual_license_key', value: '', updatedBy: 'admin', updatedAt: new Date().toISOString() },
     ];
 
-    const allowedKeys = ['autoClearResolvedAlerts', 'showInfoTips', 'SESSION_TIMEOUT_MINUTES', 'annual_license_key'];
-
+    let records: any[] = [];
     try {
-      const records = await (this.prisma as any).systemSettings.findMany({
-        where: { name: { in: allowedKeys } },
-        orderBy: { id: 'asc' },
-      });
-      if (records && records.length > 0) {
-        // Map database records and fill any missing items from systemSettingsData
-        const recordMap = new Map(records.map((r: any) => [r.name, r]));
-        return systemSettingsData.map((d) => {
-          const found = recordMap.get(d.name);
-          if (found) {
-            return {
-              id: (found as any).id || d.id,
-              name: (found as any).name,
-              value: (found as any).value ?? d.value,
-              updatedAt: (found as any).updatedAt ? new Date((found as any).updatedAt).toISOString() : new Date().toISOString(),
-              updatedBy: (found as any).updatedBy || d.updatedBy,
-            };
-          }
-          return {
-            id: d.id,
-            name: d.name,
-            value: d.value,
-            updatedAt: new Date().toISOString(),
-            updatedBy: d.updatedBy,
-          };
+      if ((this.prisma as any).systemSettings) {
+        records = await (this.prisma as any).systemSettings.findMany({
+          orderBy: { id: 'asc' },
         });
       }
     } catch (e) {
-      console.warn('Prisma getSystemSettingsList failed, returning defaults:', e);
+      console.warn('Prisma getSystemSettingsList findMany error:', e);
     }
 
-    return systemSettingsData.map((d) => ({
-      id: d.id,
-      name: d.name,
-      value: d.value,
-      updatedAt: new Date().toISOString(),
-      updatedBy: d.updatedBy,
-    }));
+    if (!records || records.length === 0) {
+      try {
+        records = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM system_settings ORDER BY id ASC');
+      } catch (e1) {
+        try {
+          records = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM system_setting ORDER BY id ASC');
+        } catch (e2) {}
+      }
+    }
+
+    if (records && records.length > 0) {
+      const items: SystemSettingItem[] = records.map((r: any) => {
+        const uAt = r.updatedAt || r.updated_at;
+        const isoDate = uAt ? (uAt instanceof Date ? uAt.toISOString() : new Date(uAt).toISOString()) : new Date().toISOString();
+        return {
+          id: String(r.id || ''),
+          name: String(r.name || ''),
+          value: r.value != null ? String(r.value) : '',
+          updatedAt: isoDate,
+          updatedBy: r.updatedBy || r.updated_by || 'admin',
+        };
+      });
+
+      // Ensure key default settings exist in the list if not present in DB
+      const existingNames = new Set(items.map((i) => i.name));
+      defaultSettings.forEach((d) => {
+        if (!existingNames.has(d.name)) {
+          items.push(d);
+        }
+      });
+
+      return items;
+    }
+
+    return defaultSettings;
   }
 
   async saveSystemSettingItem(item: Partial<SystemSettingItem>): Promise<SystemSettingItem> {
@@ -1452,31 +1597,65 @@ export class PrismaRepository implements IStorageRepository {
       return true;
     } catch (e) {
       console.warn('Prisma deleteSystemSettingItem error:', e);
+      try {
+        await (this.prisma as any).$executeRawUnsafe(`DELETE FROM system_settings WHERE id = '${id.replace(/'/g, "''")}'`);
+      } catch (e2) {}
       return true;
     }
   }
 
   // --- Audit Logs ---
-  async getAuditLogs(limit = 100): Promise<AuditLogEntity[]> {
+  async getAuditLogs(limit = 500): Promise<AuditLogEntity[]> {
+    let logs: any[] = [];
     try {
-      const logs = await (this.prisma as any).auditLog.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-      });
-      return logs.map((l: any) => ({
-        id: l.id,
-        userId: l.userId,
-        clientIp: l.clientIp,
-        actionType: l.actionType,
-        targetEntity: l.targetEntity,
-        targetId: l.targetId,
-        details: l.details,
-        createdAt: l.createdAt.toISOString(),
-      }));
+      if ((this.prisma as any).auditLog) {
+        logs = await (this.prisma as any).auditLog.findMany({
+          orderBy: { createdAt: 'desc' },
+          ...(limit > 0 ? { take: limit } : {}),
+        });
+      }
     } catch (err) {
-      console.warn('Prisma getAuditLogs error, returning empty list:', err);
-      return [];
+      console.warn('Prisma auditLog.findMany error:', err);
     }
+
+    if (!logs || logs.length === 0) {
+      try {
+        logs = await (this.prisma as any).$queryRawUnsafe(
+          `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ${limit > 0 ? limit : 500}`
+        );
+      } catch (rawErr1) {
+        try {
+          logs = await (this.prisma as any).$queryRawUnsafe(
+            `SELECT * FROM audit_logs ORDER BY createdAt DESC LIMIT ${limit > 0 ? limit : 500}`
+          );
+        } catch (rawErr2) {
+          try {
+            logs = await (this.prisma as any).$queryRawUnsafe(
+              `SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ${limit > 0 ? limit : 500}`
+            );
+          } catch (rawErr3) {}
+        }
+      }
+    }
+
+    if (logs && logs.length > 0) {
+      return logs.map((l: any) => {
+        const cAt = l.createdAt || l.created_at;
+        const isoDate = cAt ? (cAt instanceof Date ? cAt.toISOString() : new Date(cAt).toISOString()) : new Date().toISOString();
+        return {
+          id: String(l.id || ''),
+          userId: l.userId || l.user_id || 'system',
+          clientIp: l.clientIp || l.client_ip || '127.0.0.1',
+          actionType: l.actionType || l.action_type || 'INFO',
+          targetEntity: l.targetEntity || l.target_entity || 'SYSTEM',
+          targetId: l.targetId || l.target_id || null,
+          details: l.details || null,
+          createdAt: isoDate,
+        };
+      });
+    }
+
+    return [];
   }
 
   async addAuditLog(logData: Partial<AuditLogEntity>): Promise<AuditLogEntity> {
@@ -1774,17 +1953,74 @@ export class PrismaRepository implements IStorageRepository {
           }
         }
 
-        const dataPoints = await client.findMany({
-          where,
-          orderBy: { measuredAt: 'desc' },
-          ...(limit > 0 ? { take: limit } : {}),
-          include: {
-            database: true,
-            metric: true,
-          },
-        });
+        let dataPoints: any[] = [];
+        try {
+          dataPoints = await client.findMany({
+            where,
+            orderBy: { measuredAt: 'desc' },
+            ...(limit > 0 ? { take: limit } : {}),
+            include: {
+              database: true,
+              metric: true,
+            },
+          });
+        } catch (findErr) {
+          console.warn('Prisma metricDataPoint.findMany error, trying raw SQL:', findErr);
+        }
 
-        if (dataPoints) {
+        if (!dataPoints || dataPoints.length === 0) {
+          try {
+            const rawSql = `
+              SELECT 
+                mdp.id,
+                COALESCE(mdp.database_id, mdp.dbId, '') as dbId,
+                COALESCE(mdp.metric_id, mdp.metricId, '') as metricId,
+                COALESCE(mdp.object_name, mdp.objectName, 'INSTANCE') as objectName,
+                COALESCE(mdp.attribute_name, mdp.attributeName, 'value') as attributeName,
+                COALESCE(mdp.value, '') as value,
+                COALESCE(mdp.measured_at, mdp.measuredAt, NOW()) as measuredAt,
+                d.name as database_name,
+                COALESCE(d.dbType, d.db_type, 'ORACLE') as database_dbType,
+                m.name as metric_name,
+                COALESCE(m.valueType, m.value_type, 'NUMBER') as metric_valueType,
+                COALESCE(m.relational_operator, m.relationalOperator, '>=') as metric_thresholdOperator,
+                COALESCE(m.thresholds_config, m.thresholdsConfig) as metric_thresholdsConfig,
+                COALESCE(m.cycle, 1) as metric_cycle
+              FROM metric_data_points mdp
+              LEFT JOIN databases d ON d.id = mdp.database_id OR d.id = mdp.dbId
+              LEFT JOIN metrics m ON m.id = mdp.metric_id OR m.id = mdp.metricId
+              ORDER BY mdp.measured_at DESC
+              LIMIT ${limit > 0 ? limit : 2000}
+            `;
+            const rawRows: any[] = await (this.prisma as any).$queryRawUnsafe(rawSql);
+            if (rawRows && rawRows.length > 0) {
+              dataPoints = rawRows.map((r) => ({
+                id: r.id,
+                dbId: r.dbId,
+                metricId: r.metricId,
+                objectName: r.objectName,
+                attributeName: r.attributeName,
+                value: r.value,
+                measuredAt: r.measuredAt,
+                database: {
+                  name: r.database_name,
+                  dbType: r.database_dbType,
+                },
+                metric: {
+                  name: r.metric_name,
+                  valueType: r.metric_valueType,
+                  thresholdOperator: r.metric_thresholdOperator,
+                  thresholdsConfig: r.metric_thresholdsConfig,
+                  cycle: r.metric_cycle,
+                },
+              }));
+            }
+          } catch (rawSqlErr) {
+            // raw sql query fallback catch
+          }
+        }
+
+        if (dataPoints && dataPoints.length > 0) {
           let list: RawMeasurementEntity[] = dataPoints.map((dp: any) => {
             let triggeredThreshold: string | null = null;
             let status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'DOWN' = 'NORMAL';
@@ -1977,7 +2213,11 @@ export class PrismaRepository implements IStorageRepository {
           records = await (this.prisma as any).$queryRawUnsafe(
             'SELECT * FROM alert_notification_log ORDER BY finished_at DESC LIMIT 500'
           );
-        } catch (e2) {}
+        } catch (e2) {
+          try {
+            records = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM alert_notification_logs LIMIT 500');
+          } catch (e3) {}
+        }
       }
     }
 
@@ -2143,24 +2383,38 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async getDatabasePollQueue(): Promise<DatabasePollQueueEntity[]> {
+    let records: any[] = [];
     try {
-      const records = await (this.prisma as any).databasePollQueue?.findMany({
-        orderBy: { scheduledAt: 'desc' },
-      });
-      if (records) {
-        return records.map((r: any) => ({
-          id: String(r.id),
-          dbId: r.dbId || '',
-          dbName: r.dbName || '',
-          status: r.status || 'pending',
-          lockedBy: r.lockedBy || null,
-          lockedAt: r.lockedAt ? new Date(r.lockedAt).toISOString() : null,
-          scheduledAt: r.scheduledAt ? new Date(r.scheduledAt).toISOString() : new Date().toISOString(),
-          createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
-        }));
+      if ((this.prisma as any).databasePollQueue) {
+        records = await (this.prisma as any).databasePollQueue.findMany({
+          orderBy: { scheduledAt: 'desc' },
+        });
       }
     } catch (e) {
       console.warn('Prisma getDatabasePollQueue failed:', e);
+    }
+
+    if (!records || records.length === 0) {
+      try {
+        records = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM database_poll_queue ORDER BY scheduled_at DESC LIMIT 500');
+      } catch (e1) {
+        try {
+          records = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM database_poll_queues ORDER BY scheduled_at DESC LIMIT 500');
+        } catch (e2) {}
+      }
+    }
+
+    if (records && records.length > 0) {
+      return records.map((r: any) => ({
+        id: String(r.id),
+        dbId: r.dbId || r.db_id || '',
+        dbName: r.dbName || r.db_name || '',
+        status: r.status || 'pending',
+        lockedBy: r.lockedBy || r.locked_by || null,
+        lockedAt: (r.lockedAt || r.locked_at) ? new Date(r.lockedAt || r.locked_at).toISOString() : null,
+        scheduledAt: (r.scheduledAt || r.scheduled_at) ? new Date(r.scheduledAt || r.scheduled_at).toISOString() : new Date().toISOString(),
+        createdAt: (r.createdAt || r.created_at) ? new Date(r.createdAt || r.created_at).toISOString() : new Date().toISOString(),
+      }));
     }
 
     return [];

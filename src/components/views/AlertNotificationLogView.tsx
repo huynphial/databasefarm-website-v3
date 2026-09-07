@@ -322,12 +322,9 @@ export const AlertNotificationLogView: React.FC<AlertNotificationLogViewProps> =
   const [selectedEngineType, setSelectedEngineType] = useState<string>('ALL');
   const [selectedDbId, setSelectedDbId] = useState<string>('ALL');
 
-  // 2. TIME WINDOW FILTER STATE (Default: 24H like tab Analytics Database)
-  const [timeRangePreset, setTimeRangePreset] = useState<'1h' | '6h' | '24h' | '3d' | '7d' | 'all' | 'custom'>('24h');
-  const [fromDateTime, setFromDateTime] = useState<string>(() => {
-    const d = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    return d.toISOString().slice(0, 16);
-  });
+  // 2. TIME WINDOW FILTER STATE (Default: 'all' to ensure all database logs are visible)
+  const [timeRangePreset, setTimeRangePreset] = useState<'1h' | '6h' | '24h' | '3d' | '7d' | 'all' | 'custom'>('all');
+  const [fromDateTime, setFromDateTime] = useState<string>('');
   const [toDateTime, setToDateTime] = useState<string>(() => {
     const d = new Date();
     return d.toISOString().slice(0, 16);

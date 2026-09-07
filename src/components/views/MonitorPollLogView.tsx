@@ -101,8 +101,8 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
   // --- FILTER 2: TARGET DATABASE SEARCHABLE DROPDOWN ---
   const [selectedDbId, setSelectedDbId] = useState<string>('ALL');
 
-  // --- FILTER 3: TIME WINDOW FILTER (Default: 24h) ---
-  const [timeRangePreset, setTimeRangePreset] = useState<'1h' | '6h' | '24h' | '3d' | '7d' | 'all'>('24h');
+  // --- FILTER 3: TIME WINDOW FILTER (Default: 'all' to show all poll records in DB) ---
+  const [timeRangePreset, setTimeRangePreset] = useState<'1h' | '6h' | '24h' | '3d' | '7d' | 'all'>('all');
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
 

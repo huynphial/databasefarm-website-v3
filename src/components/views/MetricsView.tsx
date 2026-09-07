@@ -63,21 +63,36 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
   const { engineMetricCounts, universalMetricsCount } = useMemo(() => {
     const counts: Record<string, number> = {};
     let universalCount = 0;
+    const activeEngines = databaseEngines.filter((e) => e.statusOnOff === 'ACTIVE');
 
     metrics.forEach((m) => {
-      const eng = m.databaseEngine || (m.databaseEngineId ? databaseEngines.find((e) => e.id === m.databaseEngineId) : null);
+      let eng = m.databaseEngine || (m.databaseEngineId ? activeEngines.find((e) => e.id === m.databaseEngineId || e.dbCode.toUpperCase() === m.databaseEngineId?.toUpperCase()) : null);
+      if (!eng && templates && templates.length > 0 && m.templateIds && m.templateIds.length > 0) {
+        for (const tId of m.templateIds) {
+          const tpl = templates.find((t) => t.id === tId);
+          if (tpl?.targetDbType) {
+            eng = activeEngines.find((e) => e.dbCode.toUpperCase() === tpl.targetDbType?.toUpperCase()) || null;
+            if (eng) break;
+          }
+          if (tpl?.databaseEngineId) {
+            eng = activeEngines.find((e) => e.id === tpl.databaseEngineId || e.dbCode.toUpperCase() === tpl.databaseEngineId?.toUpperCase()) || null;
+            if (eng) break;
+          }
+        }
+      }
+
       if (eng) {
         counts[eng.id] = (counts[eng.id] || 0) + 1;
         if (eng.dbCode) {
           counts[eng.dbCode.toUpperCase()] = (counts[eng.dbCode.toUpperCase()] || 0) + 1;
         }
-      } else if (!m.databaseEngineId || m.databaseEngineId === 'ALL') {
+      } else {
         universalCount++;
       }
     });
 
     return { engineMetricCounts: counts, universalMetricsCount: universalCount };
-  }, [metrics, databaseEngines]);
+  }, [metrics, databaseEngines, templates]);
 
   // Template metric counts calculation
   const { templateMetricCounts, unassignedTemplatesCount } = useMemo(() => {
@@ -635,16 +650,49 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
 
   // Filter metrics by engine, template, and search term
   const filteredMetrics = useMemo(() => {
+    const activeEngines = databaseEngines.filter((e) => e.statusOnOff === 'ACTIVE');
+
+    const getMetricEng = (m: MetricEntity): DatabaseEngineEntity | null => {
+      if (m.databaseEngine) {
+        const found = activeEngines.find(
+          (e) => e.id === m.databaseEngine?.id || e.dbCode.toUpperCase() === m.databaseEngine?.dbCode?.toUpperCase()
+        );
+        if (found) return found;
+      }
+      if (m.databaseEngineId && m.databaseEngineId !== 'ALL') {
+        const found = activeEngines.find(
+          (e) => e.id === m.databaseEngineId || e.dbCode.toUpperCase() === m.databaseEngineId?.toUpperCase()
+        );
+        if (found) return found;
+      }
+      if (templates && templates.length > 0 && m.templateIds && m.templateIds.length > 0) {
+        for (const tId of m.templateIds) {
+          const tpl = templates.find((t) => t.id === tId);
+          if (tpl?.targetDbType) {
+            const found = activeEngines.find((e) => e.dbCode.toUpperCase() === tpl.targetDbType?.toUpperCase());
+            if (found) return found;
+          }
+          if (tpl?.databaseEngineId) {
+            const found = activeEngines.find(
+              (e) => e.id === tpl.databaseEngineId || e.dbCode.toUpperCase() === tpl.databaseEngineId?.toUpperCase()
+            );
+            if (found) return found;
+          }
+        }
+      }
+      return null;
+    };
+
     return metrics.filter((m) => {
       // 1. Target Engine Filter
       if (selectedEngineFilter !== 'ALL') {
+        const eng = getMetricEng(m);
         if (selectedEngineFilter === 'UNIVERSAL') {
-          const isUniversal = !m.databaseEngineId || m.databaseEngineId === 'ALL' || m.databaseEngine?.dbCode === 'ALL';
-          if (!isUniversal) return false;
+          if (eng) return false;
         } else {
-          const eng = m.databaseEngine || (m.databaseEngineId ? databaseEngines.find((e) => e.id === m.databaseEngineId) : null);
-          const matchById = m.databaseEngineId === selectedEngineFilter || m.databaseEngine?.id === selectedEngineFilter;
-          const matchByCode = eng?.dbCode && eng.dbCode.toUpperCase() === selectedEngineFilter.toUpperCase();
+          if (!eng) return false;
+          const matchById = eng.id === selectedEngineFilter || m.databaseEngineId === selectedEngineFilter;
+          const matchByCode = eng.dbCode.toUpperCase() === selectedEngineFilter.toUpperCase();
           if (!matchById && !matchByCode) return false;
         }
       }
@@ -663,7 +711,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       // 3. Search Query Filter
       if (searchTerm.trim()) {
         const term = searchTerm.toLowerCase().trim();
-        const eng = m.databaseEngine || (m.databaseEngineId ? databaseEngines.find((e) => e.id === m.databaseEngineId) : null);
+        const eng = getMetricEng(m);
         const engineMatch = eng ? (eng.dbName?.toLowerCase().includes(term) || eng.dbCode?.toLowerCase().includes(term)) : false;
         
         const templateMatch = (m.templateIds && m.templateIds.length > 0)
@@ -752,6 +800,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       <MetricsEngineSummaryGrid
         metrics={metrics}
         databaseEngines={databaseEngines}
+        templates={templates}
         selectedEngineFilter={selectedEngineFilter}
         onSelectEngineFilter={(engineFilter) => {
           setSelectedEngineFilter(engineFilter);

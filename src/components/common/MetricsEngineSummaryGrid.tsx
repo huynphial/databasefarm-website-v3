@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Gauge } from 'lucide-react';
-import { MetricEntity, DatabaseEngineEntity } from '../../types';
+import { MetricEntity, DatabaseEngineEntity, TemplateEntity } from '../../types';
 import { getDbEngineBadgeClass, getDbEngineConfig } from '../../config/dbEngines';
 import { useTranslation } from '../../i18n/LanguageContext';
 import { cn } from '../../lib/utils';
@@ -8,6 +8,7 @@ import { cn } from '../../lib/utils';
 export interface MetricsEngineSummaryGridProps {
   metrics: MetricEntity[];
   databaseEngines: DatabaseEngineEntity[];
+  templates?: TemplateEntity[];
   selectedEngineFilter: string;
   onSelectEngineFilter: (engineFilter: string) => void;
   className?: string;
@@ -16,11 +17,44 @@ export interface MetricsEngineSummaryGridProps {
 export const MetricsEngineSummaryGrid: React.FC<MetricsEngineSummaryGridProps> = ({
   metrics,
   databaseEngines = [],
+  templates = [],
   selectedEngineFilter = 'ALL',
   onSelectEngineFilter,
   className,
 }) => {
   const { t } = useTranslation();
+
+  // Helper to find matching engine for a metric
+  const getMetricEngine = (m: MetricEntity, activeEngines: DatabaseEngineEntity[]): DatabaseEngineEntity | null => {
+    if (m.databaseEngine) {
+      const found = activeEngines.find(
+        (e) => e.id === m.databaseEngine?.id || e.dbCode.toUpperCase() === m.databaseEngine?.dbCode?.toUpperCase()
+      );
+      if (found) return found;
+    }
+    if (m.databaseEngineId && m.databaseEngineId !== 'ALL') {
+      const found = activeEngines.find(
+        (e) => e.id === m.databaseEngineId || e.dbCode.toUpperCase() === m.databaseEngineId?.toUpperCase()
+      );
+      if (found) return found;
+    }
+    if (templates && templates.length > 0 && m.templateIds && m.templateIds.length > 0) {
+      for (const tId of m.templateIds) {
+        const tpl = templates.find((t) => t.id === tId);
+        if (tpl?.targetDbType) {
+          const found = activeEngines.find((e) => e.dbCode.toUpperCase() === tpl.targetDbType?.toUpperCase());
+          if (found) return found;
+        }
+        if (tpl?.databaseEngineId) {
+          const found = activeEngines.find(
+            (e) => e.id === tpl.databaseEngineId || e.dbCode.toUpperCase() === tpl.databaseEngineId?.toUpperCase()
+          );
+          if (found) return found;
+        }
+      }
+    }
+    return null;
+  };
 
   // Total summary calculation
   const totalSummary = useMemo(() => {
@@ -39,11 +73,16 @@ export const MetricsEngineSummaryGrid: React.FC<MetricsEngineSummaryGridProps> =
     return { totalCount, activeCount, type1Count, type2Count, type3Count };
   }, [metrics]);
 
+  const activeEngines = useMemo(() => {
+    return databaseEngines.filter((e) => e.statusOnOff === 'ACTIVE');
+  }, [databaseEngines]);
+
   // Universal metrics calculation
   const universalSummary = useMemo(() => {
-    const universalMetrics = metrics.filter(
-      (m) => !m.databaseEngineId || m.databaseEngineId === 'ALL' || m.databaseEngine?.dbCode === 'ALL'
-    );
+    const universalMetrics = metrics.filter((m) => {
+      const eng = getMetricEngine(m, activeEngines);
+      return !eng;
+    });
     const totalCount = universalMetrics.length;
     const activeCount = universalMetrics.filter((m) => m.isEnabled !== false).length;
     let type1Count = 0;
@@ -57,7 +96,7 @@ export const MetricsEngineSummaryGrid: React.FC<MetricsEngineSummaryGridProps> =
     });
 
     return { totalCount, activeCount, type1Count, type2Count, type3Count };
-  }, [metrics]);
+  }, [metrics, activeEngines, templates]);
 
   // Engine summary calculation (Only engines with > 0 metrics will be returned)
   const engineSummaries = useMemo(() => {
@@ -76,10 +115,9 @@ export const MetricsEngineSummaryGrid: React.FC<MetricsEngineSummaryGridProps> =
     >();
 
     // First initialize map entries from registered active databaseEngines
-    const activeEngines = databaseEngines.filter((e) => e.statusOnOff === 'ACTIVE');
     activeEngines.forEach((eng) => {
       const code = (eng.dbCode || 'UNKNOWN').toUpperCase();
-      map.set(eng.id, {
+      const obj = {
         id: eng.id,
         code,
         name: eng.dbName || code,
@@ -88,32 +126,24 @@ export const MetricsEngineSummaryGrid: React.FC<MetricsEngineSummaryGridProps> =
         type1Count: 0,
         type2Count: 0,
         type3Count: 0,
-      });
-      map.set(code, map.get(eng.id)!);
+      };
+      map.set(eng.id, obj);
+      map.set(code, obj);
     });
 
     // Populate counts from metrics
     metrics.forEach((m) => {
-      const isUniversal = !m.databaseEngineId || m.databaseEngineId === 'ALL' || m.databaseEngine?.dbCode === 'ALL';
-      if (isUniversal) return;
-
-      const eng =
-        m.databaseEngine ||
-        (m.databaseEngineId ? activeEngines.find((e) => e.id === m.databaseEngineId || e.dbCode.toUpperCase() === m.databaseEngineId.toUpperCase()) : null);
-
+      const eng = getMetricEngine(m, activeEngines);
       if (!eng || eng.statusOnOff === 'INACTIVE') return;
 
       const qType = m.metricQueryType || 1;
-
-      if (eng) {
-        const item = map.get(eng.id) || map.get(eng.dbCode.toUpperCase());
-        if (item) {
-          item.totalCount += 1;
-          if (m.isEnabled !== false) item.activeCount += 1;
-          if (qType === 1) item.type1Count += 1;
-          else if (qType === 2) item.type2Count += 1;
-          else if (qType === 3) item.type3Count += 1;
-        }
+      const item = map.get(eng.id) || (eng.dbCode ? map.get(eng.dbCode.toUpperCase()) : null);
+      if (item) {
+        item.totalCount += 1;
+        if (m.isEnabled !== false) item.activeCount += 1;
+        if (qType === 1) item.type1Count += 1;
+        else if (qType === 2) item.type2Count += 1;
+        else if (qType === 3) item.type3Count += 1;
       }
     });
 
@@ -142,7 +172,7 @@ export const MetricsEngineSummaryGrid: React.FC<MetricsEngineSummaryGridProps> =
     });
 
     return list;
-  }, [metrics, databaseEngines]);
+  }, [metrics, activeEngines, templates]);
 
   return (
     <div className={cn('bg-white border border-slate-200 rounded-xl p-3 shadow-2xs space-y-2.5', className)}>

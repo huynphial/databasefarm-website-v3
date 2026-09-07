@@ -50,15 +50,9 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   const [selectedObjectFilter, setSelectedObjectFilter] = useState<string>('ALL');
   const [selectedAttributeFilter, setSelectedAttributeFilter] = useState<string>('ALL');
 
-  // Date Range Filter (Default: Last 3 Days)
-  const [fromDate, setFromDate] = useState<string>(() => {
-    const d = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    return d.toISOString().slice(0, 10);
-  });
-  const [toDate, setToDate] = useState<string>(() => {
-    const d = new Date();
-    return d.toISOString().slice(0, 10);
-  });
+  // Date Range Filter (Default: All time / empty so existing db measurements show up immediately)
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
 
   // Pagination state (Default: 50 per page)
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -107,10 +101,12 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [measurementsData, measurements, metrics, selectedMetricFilter, selectedDbFilter]);
 
-  // Sync with prop updates if not actively searching
+  // Sync with prop updates or trigger query
   useEffect(() => {
-    if (!isSearching && measurements && measurements.length > 0 && measurementsData.length === 0) {
+    if (measurements && measurements.length > 0) {
       setMeasurementsData(measurements);
+    } else {
+      handleRunQuery();
     }
   }, [measurements]);
 
