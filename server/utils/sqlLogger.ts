@@ -51,9 +51,21 @@ class SqlLogger {
   }
 
   /**
+   * Check if SQL logging is enabled via ENABLE_SQL_LOG env variable
+   */
+  public isEnabled(): boolean {
+    const envVal = process.env.ENABLE_SQL_LOG?.trim().toLowerCase();
+    if (envVal === 'false' || envVal === '0' || envVal === 'no' || envVal === 'off' || envVal === 'disabled') {
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Log an executed SQL query with duration and parameters
    */
   public logQuery(entry: SqlLogEntry): void {
+    if (!this.isEnabled()) return;
     try {
       const timeStr = this.formatTimestamp(entry.timestamp);
       const durationStr = entry.duration !== undefined ? `${entry.duration}ms` : '0ms';
@@ -85,6 +97,7 @@ class SqlLogger {
    * Log SQL / Prisma error
    */
   public logError(message: string, error?: any, query?: string): void {
+    if (!this.isEnabled()) return;
     try {
       const timeStr = this.formatTimestamp();
       const errDetail = error instanceof Error ? error.stack || error.message : String(error || '');
