@@ -286,17 +286,23 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
     });
   }, [selectedDb, metrics, groups, templates]);
 
-  // Categorize metrics into Types 1, 2, and 3
+  // Categorize metrics into Types 1, 2, and 3 (Sorted A-Z by metric name)
   const type1Metrics = useMemo(() => {
-    return applicableMetrics.filter((m) => !m.metricQueryType || m.metricQueryType === 1);
+    return applicableMetrics
+      .filter((m) => !m.metricQueryType || m.metricQueryType === 1)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
   }, [applicableMetrics]);
 
   const type2Metrics = useMemo(() => {
-    return applicableMetrics.filter((m) => m.metricQueryType === 2);
+    return applicableMetrics
+      .filter((m) => m.metricQueryType === 2)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
   }, [applicableMetrics]);
 
   const type3Metrics = useMemo(() => {
-    return applicableMetrics.filter((m) => m.metricQueryType === 3);
+    return applicableMetrics
+      .filter((m) => m.metricQueryType === 3)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
   }, [applicableMetrics]);
 
   // 5. CHART SELECTION STATE

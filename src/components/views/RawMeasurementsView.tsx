@@ -11,18 +11,34 @@ import {
   Info,
   Calendar,
   RotateCcw,
+  FolderKanban,
+  FileCode2,
+  Box,
+  Tag,
+  SlidersHorizontal,
 } from 'lucide-react';
-import { RawMeasurementEntity, DatabaseEntity, MetricEntity, DatabaseEngineEntity, RawMeasurementFilter } from '../../types';
+import {
+  RawMeasurementEntity,
+  DatabaseEntity,
+  MetricEntity,
+  DatabaseEngineEntity,
+  RawMeasurementFilter,
+  GroupEntity,
+  TemplateEntity,
+} from '../../types';
 import { getDbEngineBadgeClass, getDbEngineHexColor } from '../../config/dbEngines';
 import { useTranslation } from '../../i18n';
 import { api } from '../../lib/api';
 import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
 import { TargetDatabaseFilter } from '../common/TargetDatabaseFilter';
+import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
 
 interface RawMeasurementsViewProps {
   measurements: RawMeasurementEntity[];
   databases: DatabaseEntity[];
   metrics: MetricEntity[];
+  groups?: GroupEntity[];
+  templates?: TemplateEntity[];
   databaseEngines?: DatabaseEngineEntity[];
   timestampFormat?: string;
   onRefresh: () => void;
@@ -34,6 +50,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   measurements,
   databases,
   metrics,
+  groups = [],
+  templates = [],
   databaseEngines = [],
   timestampFormat = 'HH24:MI:SS DD/MM/YYYY',
   onRefresh,
@@ -45,6 +63,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
 
   const [searchTerm, setSearchTerm] = useState('');
   const [engineFilter, setEngineFilter] = useState<string>('ALL');
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('ALL');
+  const [selectedTemplateFilter, setSelectedTemplateFilter] = useState<string>('ALL');
   const [selectedDbFilter, setSelectedDbFilter] = useState<string>('ALL');
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<string>('ALL');
   const [selectedObjectFilter, setSelectedObjectFilter] = useState<string>('ALL');
@@ -110,6 +130,103 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     }
   }, [measurements]);
 
+  // Options for Database Groups filter
+  const groupOptions = useMemo<SearchableOption[]>(() => {
+    return groups.map((g) => {
+      const dbsInGroup = databases.filter(
+        (db) => g.databaseIds?.includes(db.id) || db.groupIds?.includes(g.id)
+      );
+      return {
+        value: g.id,
+        label: g.name,
+        subLabel: g.description || undefined,
+        count: dbsInGroup.length,
+        badge: `${dbsInGroup.length} DB${dbsInGroup.length === 1 ? '' : 's'}`,
+        badgeColor: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+        icon: <FolderKanban className="w-3.5 h-3.5 text-indigo-600" />,
+      };
+    });
+  }, [groups, databases]);
+
+  // Options for Metric Templates filter
+  const templateOptions = useMemo<SearchableOption[]>(() => {
+    return templates.map((t) => {
+      const metricsInTmpl = metrics.filter(
+        (m) => t.metricIds?.includes(m.id) || m.templateId === t.id || m.templateIds?.includes(t.id)
+      );
+      return {
+        value: t.id,
+        label: t.name,
+        subLabel: t.targetDbType ? `Engine: ${t.targetDbType}` : (t.description || undefined),
+        count: metricsInTmpl.length,
+        badge: t.targetDbType && t.targetDbType !== 'ALL' ? t.targetDbType : `${metricsInTmpl.length} Metrics`,
+        badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+        icon: <FileCode2 className="w-3.5 h-3.5 text-emerald-600" />,
+      };
+    });
+  }, [templates, metrics]);
+
+  // Options for Metrics filter
+  const metricOptions = useMemo<SearchableOption[]>(() => {
+    let filtered = metrics;
+    if (engineFilter !== 'ALL') {
+      filtered = filtered.filter(
+        (m) =>
+          !m.databaseEngine?.engineCode ||
+          m.databaseEngine.engineCode.toUpperCase() === engineFilter.toUpperCase()
+      );
+    }
+    if (selectedTemplateFilter !== 'ALL') {
+      const tmpl = templates.find((t) => t.id === selectedTemplateFilter);
+      filtered = filtered.filter(
+        (m) =>
+          tmpl?.metricIds?.includes(m.id) ||
+          m.templateId === selectedTemplateFilter ||
+          m.templateIds?.includes(selectedTemplateFilter)
+      );
+    }
+
+    return filtered.map((m) => {
+      const typeLabel = m.metricQueryType ? `Type ${m.metricQueryType}` : undefined;
+      const engineCode = m.databaseEngine?.engineCode || m.databaseEngineId;
+      return {
+        value: m.id,
+        label: m.name,
+        subLabel: m.sqlQuery ? m.sqlQuery.replace(/\s+/g, ' ').slice(0, 80) : undefined,
+        badge: engineCode ? engineCode : typeLabel,
+        badgeColor: engineCode ? getDbEngineBadgeClass(engineCode) : 'bg-slate-100 text-slate-700 border border-slate-200',
+        icon: <Activity className="w-3.5 h-3.5 text-purple-600" />,
+      };
+    });
+  }, [metrics, engineFilter, selectedTemplateFilter, templates]);
+
+  // Options for Objects filter
+  const objectOptions = useMemo<SearchableOption[]>(() => {
+    return availableObjects.map((obj) => ({
+      value: obj,
+      label: obj,
+      icon: <Box className="w-3.5 h-3.5 text-amber-600" />,
+    }));
+  }, [availableObjects]);
+
+  // Options for Attributes filter
+  const attributeOptions = useMemo<SearchableOption[]>(() => {
+    return availableAttributes.map((attr) => ({
+      value: attr,
+      label: attr,
+      icon: <Tag className="w-3.5 h-3.5 text-cyan-600" />,
+    }));
+  }, [availableAttributes]);
+
+  // Target databases scoped to selected group if active
+  const databasesForFilter = useMemo(() => {
+    if (selectedGroupFilter === 'ALL') return databases;
+    const grp = groups.find((g) => g.id === selectedGroupFilter);
+    return databases.filter(
+      (db) => grp?.databaseIds?.includes(db.id) || db.groupIds?.includes(selectedGroupFilter)
+    );
+  }, [databases, selectedGroupFilter, groups]);
+
   // Execute database query with filter criteria without row limits
   const handleRunQuery = useCallback(async (overrideFilter?: Partial<RawMeasurementFilter>) => {
     setIsSearching(true);
@@ -150,6 +267,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     const defaultTo = new Date().toISOString().slice(0, 10);
     setSearchTerm('');
     setEngineFilter('ALL');
+    setSelectedGroupFilter('ALL');
+    setSelectedTemplateFilter('ALL');
     setSelectedDbFilter('ALL');
     setSelectedMetricFilter('ALL');
     setSelectedObjectFilter('ALL');
@@ -188,8 +307,40 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
 
   // Client-side fallback filter ensure perfect synchronization with view state
   const filteredMeasurements = useMemo(() => {
+    // 1. Get database IDs matching selected group if active
+    let allowedDbIdsByGroup: Set<string> | null = null;
+    if (selectedGroupFilter !== 'ALL') {
+      const grp = groups.find((g) => g.id === selectedGroupFilter);
+      allowedDbIdsByGroup = new Set<string>();
+      if (grp?.databaseIds) {
+        grp.databaseIds.forEach((id) => allowedDbIdsByGroup!.add(id));
+      }
+      databases.forEach((db) => {
+        if (db.groupIds?.includes(selectedGroupFilter)) {
+          allowedDbIdsByGroup!.add(db.id);
+        }
+      });
+    }
+
+    // 2. Get metric IDs matching selected template if active
+    let allowedMetricIdsByTemplate: Set<string> | null = null;
+    if (selectedTemplateFilter !== 'ALL') {
+      const tmpl = templates.find((t) => t.id === selectedTemplateFilter);
+      allowedMetricIdsByTemplate = new Set<string>();
+      if (tmpl?.metricIds) {
+        tmpl.metricIds.forEach((id) => allowedMetricIdsByTemplate!.add(id));
+      }
+      metrics.forEach((m) => {
+        if (m.templateId === selectedTemplateFilter || m.templateIds?.includes(selectedTemplateFilter)) {
+          allowedMetricIdsByTemplate!.add(m.id);
+        }
+      });
+    }
+
     return measurementsData.filter((item) => {
       const matchEngine = engineFilter === 'ALL' || (item.dbType || '').toUpperCase() === engineFilter.toUpperCase();
+      const matchGroup = !allowedDbIdsByGroup || allowedDbIdsByGroup.has(item.dbId);
+      const matchTemplate = !allowedMetricIdsByTemplate || allowedMetricIdsByTemplate.has(item.metricId);
       const matchDb = selectedDbFilter === 'ALL' || item.dbId === selectedDbFilter;
       const matchMetric = selectedMetricFilter === 'ALL' || item.metricId === selectedMetricFilter;
       const matchObject =
@@ -221,15 +372,21 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         (item.value && item.value.toLowerCase().includes(q)) ||
         (item.dbType && item.dbType.toLowerCase().includes(q));
 
-      return matchEngine && matchDb && matchMetric && matchObject && matchAttribute && matchDate && matchSearch;
+      return matchEngine && matchGroup && matchTemplate && matchDb && matchMetric && matchObject && matchAttribute && matchDate && matchSearch;
     });
   }, [
     measurementsData,
     engineFilter,
+    selectedGroupFilter,
+    selectedTemplateFilter,
     selectedDbFilter,
     selectedMetricFilter,
     selectedObjectFilter,
     selectedAttributeFilter,
+    groups,
+    templates,
+    databases,
+    metrics,
     fromDate,
     toDate,
     searchTerm,
@@ -324,6 +481,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   const hasActiveFilters =
     searchTerm.trim() !== '' ||
     engineFilter !== 'ALL' ||
+    selectedGroupFilter !== 'ALL' ||
+    selectedTemplateFilter !== 'ALL' ||
     selectedDbFilter !== 'ALL' ||
     selectedMetricFilter !== 'ALL' ||
     selectedObjectFilter !== 'ALL' ||
@@ -378,7 +537,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       )}
 
       {/* Control Bar: Search Input, Date Range, Filters & Search Trigger */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3.5">
         {/* Row 1: Search Form + Search Button */}
         <form
           onSubmit={(e) => {
@@ -433,162 +592,218 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           </div>
         </form>
 
-        {/* Row 2: Date Range Filter + Select Dropdowns */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-100 text-xs">
-          {/* Date Range Picker with Quick Presets */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <div className="flex items-center gap-1 text-[11px] text-slate-600 font-semibold mr-1">
-              <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-              <span>{t('rawMeasurements.dateRange')}</span>
+        {/* Row 2: Date Range Filter + Filter Dropdowns */}
+        <div className="space-y-3 pt-2.5 border-t border-slate-100 text-xs">
+          {/* Sub-row 1: Date Range Presets */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex items-center gap-1 text-[11px] text-slate-600 font-semibold mr-1">
+                <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{t('rawMeasurements.dateRange')}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-400 font-medium">{t('rawMeasurements.from')}</span>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => {
+                    setFromDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-400 font-medium">{t('rawMeasurements.to')}</span>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => {
+                    setToDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+              {/* Quick Presets */}
+              <div className="flex items-center gap-1 ml-1">
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate(1)}
+                  className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                >
+                  {t('rawMeasurements.last24h')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate(3)}
+                  className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                >
+                  {t('rawMeasurements.last3Days')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate(7)}
+                  className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                >
+                  {t('rawMeasurements.last7Days')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate('ALL')}
+                  className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                >
+                  {t('rawMeasurements.all')}
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-slate-400 font-medium">{t('rawMeasurements.from')}</span>
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(e) => {
-                  setFromDate(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
-              />
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-slate-400 font-medium">{t('rawMeasurements.to')}</span>
-              <input
-                type="date"
-                value={toDate}
-                onChange={(e) => {
-                  setToDate(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
-              />
-            </div>
-            {/* Quick Presets */}
-            <div className="flex items-center gap-1 ml-1">
-              <button
-                type="button"
-                onClick={() => handleSetQuickDate(1)}
-                className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
-              >
-                {t('rawMeasurements.last24h')}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSetQuickDate(3)}
-                className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
-              >
-                {t('rawMeasurements.last3Days')}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSetQuickDate(7)}
-                className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
-              >
-                {t('rawMeasurements.last7Days')}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSetQuickDate('ALL')}
-                className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
-              >
-                {t('rawMeasurements.all')}
-              </button>
-            </div>
+
+            {hasActiveFilters && (
+              <div className="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200 flex items-center gap-1">
+                <SlidersHorizontal className="w-3 h-3" />
+                <span>Filters active</span>
+              </div>
+            )}
           </div>
 
-          {/* Secondary Dropdowns: DB Engine, Database, Metric */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* DB Engine Filter */}
-            <DatabaseEngineFilter
-              value={engineFilter}
-              onChange={(val) => {
-                setEngineFilter(val);
-                setCurrentPage(1);
-                handleRunQuery({ dbType: val });
-              }}
-              databases={databases}
-              databaseEngines={databaseEngines}
-              allLabel={t('rawMeasurements.allEngines')}
-              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
-            />
+          {/* Sub-row 2: Searchable Dropdown Filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+            {/* 1. DB Engine Filter */}
+            <div>
+              <DatabaseEngineFilter
+                value={engineFilter}
+                onChange={(val) => {
+                  setEngineFilter(val);
+                  setCurrentPage(1);
+                  handleRunQuery({ dbType: val });
+                }}
+                databases={databases}
+                databaseEngines={databaseEngines}
+                allLabel={t('rawMeasurements.allEngines')}
+                className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-semibold"
+              />
+            </div>
 
-            {/* Target Database Filter */}
-            <TargetDatabaseFilter
-              value={selectedDbFilter}
-              onChange={(val) => {
-                setSelectedDbFilter(val);
-                setCurrentPage(1);
-                handleRunQuery({ dbId: val });
-              }}
-              databases={databases}
-              selectedEngineType={engineFilter}
-              onEngineChange={(eng) => setEngineFilter(eng)}
-              allLabel={t('rawMeasurements.allDatabases')}
-              variant="compact"
-              className="min-w-[160px] sm:min-w-[180px]"
-            />
+            {/* 2. Database Group Filter (Searchable) */}
+            <div>
+              <SearchableSelect
+                value={selectedGroupFilter}
+                onChange={(val) => {
+                  setSelectedGroupFilter(val);
+                  setCurrentPage(1);
+                }}
+                options={groupOptions}
+                allLabel={t('rawMeasurements.allGroups')}
+                allSubLabel="Show telemetry across all database groups"
+                placeholder={t('rawMeasurements.searchGroup')}
+                title={t('rawMeasurements.databaseGroup')}
+                icon={<FolderKanban className="w-3.5 h-3.5" />}
+                className="w-full"
+                popoverMinWidth="min-w-[260px]"
+                emptyText={t('rawMeasurements.noMatchingItems')}
+              />
+            </div>
 
-            {/* Metric Filter */}
-            <select
-              value={selectedMetricFilter}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedMetricFilter(val);
-                setCurrentPage(1);
-                handleRunQuery({ metricId: val });
-              }}
-              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 max-w-[160px] font-semibold truncate"
-              title={t('rawMeasurements.metricName')}
-            >
-              <option value="ALL">{t('rawMeasurements.allMetrics')}</option>
-              {metrics.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+            {/* 3. Metric Template Filter (Searchable) */}
+            <div>
+              <SearchableSelect
+                value={selectedTemplateFilter}
+                onChange={(val) => {
+                  setSelectedTemplateFilter(val);
+                  setCurrentPage(1);
+                }}
+                options={templateOptions}
+                allLabel={t('rawMeasurements.allTemplates')}
+                allSubLabel="Show telemetry from all metric templates"
+                placeholder={t('rawMeasurements.searchTemplate')}
+                title={t('rawMeasurements.metricTemplate')}
+                icon={<FileCode2 className="w-3.5 h-3.5" />}
+                className="w-full"
+                popoverMinWidth="min-w-[260px]"
+                emptyText={t('rawMeasurements.noMatchingItems')}
+              />
+            </div>
 
-            {/* Object Name Filter */}
-            <select
-              value={selectedObjectFilter}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedObjectFilter(val);
-                setCurrentPage(1);
-                handleRunQuery({ objectName: val });
-              }}
-              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 max-w-[150px] font-semibold truncate"
-              title={t('rawMeasurements.objectName')}
-            >
-              <option value="ALL">{t('rawMeasurements.allObjects')}</option>
-              {availableObjects.map((obj) => (
-                <option key={obj} value={obj}>
-                  {obj}
-                </option>
-              ))}
-            </select>
+            {/* 4. Target Database Filter (Searchable) */}
+            <div>
+              <TargetDatabaseFilter
+                value={selectedDbFilter}
+                onChange={(val) => {
+                  setSelectedDbFilter(val);
+                  setCurrentPage(1);
+                  handleRunQuery({ dbId: val });
+                }}
+                databases={databasesForFilter}
+                selectedEngineType={engineFilter}
+                onEngineChange={(eng) => setEngineFilter(eng)}
+                allLabel={t('rawMeasurements.allDatabases')}
+                variant="compact"
+                className="w-full"
+              />
+            </div>
 
-            {/* Attribute Name Filter */}
-            <select
-              value={selectedAttributeFilter}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedAttributeFilter(val);
-                setCurrentPage(1);
-                handleRunQuery({ attributeName: val });
-              }}
-              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 max-w-[150px] font-semibold truncate"
-              title={t('rawMeasurements.attributeName')}
-            >
-              <option value="ALL">{t('rawMeasurements.allAttributes')}</option>
-              {availableAttributes.map((attr) => (
-                <option key={attr} value={attr}>
-                  {attr}
-                </option>
-              ))}
-            </select>
+            {/* 5. Metric Filter (Searchable) */}
+            <div>
+              <SearchableSelect
+                value={selectedMetricFilter}
+                onChange={(val) => {
+                  setSelectedMetricFilter(val);
+                  setCurrentPage(1);
+                  handleRunQuery({ metricId: val });
+                }}
+                options={metricOptions}
+                allLabel={t('rawMeasurements.allMetrics')}
+                allSubLabel="Show telemetry across all metrics"
+                placeholder={t('rawMeasurements.searchMetric')}
+                title={t('rawMeasurements.metricName')}
+                icon={<Activity className="w-3.5 h-3.5" />}
+                className="w-full"
+                popoverMinWidth="min-w-[300px] sm:min-w-[360px]"
+                emptyText={t('rawMeasurements.noMatchingItems')}
+              />
+            </div>
+
+            {/* 6. Object Name Filter (Searchable) */}
+            <div>
+              <SearchableSelect
+                value={selectedObjectFilter}
+                onChange={(val) => {
+                  setSelectedObjectFilter(val);
+                  setCurrentPage(1);
+                  handleRunQuery({ objectName: val });
+                }}
+                options={objectOptions}
+                allLabel={t('rawMeasurements.allObjects')}
+                allSubLabel="Show telemetry from all objects/entities"
+                placeholder={t('rawMeasurements.searchObject')}
+                title={t('rawMeasurements.objectName')}
+                icon={<Box className="w-3.5 h-3.5" />}
+                className="w-full"
+                popoverMinWidth="min-w-[240px]"
+                emptyText={t('rawMeasurements.noMatchingItems')}
+              />
+            </div>
+
+            {/* 7. Attribute Name Filter (Searchable) */}
+            <div>
+              <SearchableSelect
+                value={selectedAttributeFilter}
+                onChange={(val) => {
+                  setSelectedAttributeFilter(val);
+                  setCurrentPage(1);
+                  handleRunQuery({ attributeName: val });
+                }}
+                options={attributeOptions}
+                allLabel={t('rawMeasurements.allAttributes')}
+                allSubLabel="Show telemetry for all attributes/fields"
+                placeholder={t('rawMeasurements.searchAttribute')}
+                title={t('rawMeasurements.attributeName')}
+                icon={<Tag className="w-3.5 h-3.5" />}
+                className="w-full"
+                popoverMinWidth="min-w-[240px]"
+                emptyText={t('rawMeasurements.noMatchingItems')}
+              />
+            </div>
           </div>
         </div>
 
@@ -782,5 +997,3 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     </div>
   );
 };
-
-

@@ -984,6 +984,8 @@ function MainAppContent() {
               measurements={rawMeasurements}
               databases={databases}
               metrics={metrics}
+              groups={groups}
+              templates={templates}
               databaseEngines={databaseEngines}
               timestampFormat={systemSettings.timestampFormat}
               onRefresh={loadData}

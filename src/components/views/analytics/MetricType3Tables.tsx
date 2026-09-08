@@ -18,35 +18,47 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
 }) => {
   const { t } = useLanguage();
 
+  // Sort Type 3 metrics alphabetically from A to Z
+  const sortedMetrics = React.useMemo(() => {
+    return [...type3Metrics].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
+    );
+  }, [type3Metrics]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-          <Cpu className="w-4 h-4" />
-        </div>
-        <div>
-          <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            {t('analytics.metricType3Title')}
-            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              {t('analytics.metricType3Count', {
-                count: type3Metrics.length,
-                tables: type3Metrics.length === 1 ? t('analytics.table') : t('analytics.tables'),
-              })}
-            </span>
-          </h3>
-          <p className="text-xs text-slate-500">
-            {t('analytics.metricType3Desc')}
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Cpu className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2 flex-wrap">
+              {t('analytics.metricType3Title')}
+              <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                {t('analytics.metricType3Count', {
+                  count: sortedMetrics.length,
+                  tables: sortedMetrics.length === 1 ? t('analytics.table') : t('analytics.tables'),
+                })}
+              </span>
+              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                {t('analytics.sortedAZ')}
+              </span>
+            </h3>
+            <p className="text-xs text-slate-500">
+              {t('analytics.metricType3Desc')}
+            </p>
+          </div>
         </div>
       </div>
 
-      {type3Metrics.length === 0 ? (
+      {sortedMetrics.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-slate-500 text-xs">
           {t('analytics.noType3Metrics')}
         </div>
       ) : (
         <div className="space-y-4">
-          {type3Metrics.map((metric) => {
+          {sortedMetrics.map((metric, idx) => {
             // Discover all attributes and objects for this metric from unified measurements
             const metricMeasurements = unifiedMeasurements.filter((m) => {
               const mId = String(m.metricId || '').trim();
@@ -104,34 +116,42 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
               }
             });
 
-            const objectRows = Array.from(objectRowsMap.values());
+            // Sort object rows alphabetically by objectName A-Z
+            const objectRows = Array.from(objectRowsMap.values()).sort((a, b) =>
+              (a.objectName || '').localeCompare(b.objectName || '', undefined, { sensitivity: 'base', numeric: true })
+            );
 
             return (
               <div
                 key={metric.id}
-                className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3"
+                className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3 relative overflow-hidden"
               >
-                {/* Header */}
+                {/* Header with Step-by-Step Badge */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-slate-900">{metric.name}</h4>
-                      <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-                        {t('analytics.type3MultiAttribute')}
-                      </span>
-                      <span className="text-xs text-slate-500 font-medium">
-                        {t('analytics.objectsCount', {
-                          count: objectRows.length,
-                          objects: objectRows.length === 1 ? t('analytics.object') : t('analytics.objects'),
-                        })}
-                      </span>
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-md bg-emerald-600 text-white font-mono font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                      {idx + 1}
                     </div>
-                    <p className="text-xs text-slate-500 font-medium">
-                      {t('analytics.columnsAndCycle', {
-                        cols: attributeColumns.join(', ') || 'Dynamic',
-                        cycle: metric.cycle ?? 1,
-                      })}
-                    </p>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-bold text-slate-900">{metric.name}</h4>
+                        <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                          {t('analytics.stepIndicator', { current: idx + 1, total: sortedMetrics.length })}
+                        </span>
+                        <span className="text-xs text-slate-500 font-medium">
+                          {t('analytics.objectsCount', {
+                            count: objectRows.length,
+                            objects: objectRows.length === 1 ? t('analytics.object') : t('analytics.objects'),
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 font-medium">
+                        {t('analytics.columnsAndCycle', {
+                          cols: attributeColumns.join(', ') || 'Dynamic',
+                          cycle: metric.cycle ?? 1,
+                        })}
+                      </p>
+                    </div>
                   </div>
 
                   {attributeColumns.length > 0 && (
