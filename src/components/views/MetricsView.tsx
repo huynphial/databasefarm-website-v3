@@ -55,9 +55,21 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
   const [selectedTemplateFilter, setSelectedTemplateFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [sortField, setSortField] = useState<string>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMetric, setEditingMetric] = useState<MetricEntity | null>(null);
   const [sqlValidationError, setSqlValidationError] = useState<string | null>(null);
+
+  const handleSortChange = (field: string) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+    setCurrentPage(1);
+  };
 
   // Engine metric counts calculation
   const { engineMetricCounts, universalMetricsCount } = useMemo(() => {
@@ -437,6 +449,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     {
       header: t('metrics.colMetricName'),
       accessorKey: 'name',
+      sortable: true,
       cell: (row) => (
         <div>
           <div className="font-semibold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
@@ -458,6 +471,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     {
       header: t('metrics.colTargetEngine'),
       accessorKey: 'databaseEngineId',
+      sortable: true,
       width: '140px',
       cell: (row) => {
         const engine = row.databaseEngine || (row.databaseEngineId ? databaseEngines.find((e) => e.id === row.databaseEngineId) : null);
@@ -483,6 +497,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     {
       header: t('metrics.colMonitoringState'),
       accessorKey: 'isEnabled',
+      sortable: true,
       width: '130px',
       cell: (row) => {
         const isActive = row.isEnabled !== false;
@@ -507,6 +522,8 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     },
     {
       header: t('metrics.colThresholds'),
+      accessorKey: 'metricQueryType',
+      sortable: true,
       width: '260px',
       cell: (row) => {
         const op = row.thresholdOperator || '>=';
@@ -576,6 +593,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
         </span>
       ),
       accessorKey: 'cycle',
+      sortable: true,
       width: '75px',
       align: 'center',
       cell: (row) => (
@@ -589,6 +607,8 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
     },
     {
       header: t('metrics.colBoundTemplates'),
+      accessorKey: 'templateIds',
+      sortable: true,
       width: '110px',
       cell: (row) => {
         const templateCount = row.templateIds?.length || (row.templateId ? 1 : 0);
@@ -683,58 +703,96 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       return null;
     };
 
-    return metrics.filter((m) => {
-      // 1. Target Engine Filter
-      if (selectedEngineFilter !== 'ALL') {
-        const eng = getMetricEng(m);
-        if (selectedEngineFilter === 'UNIVERSAL') {
-          if (eng) return false;
-        } else {
-          if (!eng) return false;
-          const matchById = eng.id === selectedEngineFilter || m.databaseEngineId === selectedEngineFilter;
-          const matchByCode = eng.dbCode.toUpperCase() === selectedEngineFilter.toUpperCase();
-          if (!matchById && !matchByCode) return false;
+    return metrics
+      .filter((m) => {
+        // 1. Target Engine Filter
+        if (selectedEngineFilter !== 'ALL') {
+          const eng = getMetricEng(m);
+          if (selectedEngineFilter === 'UNIVERSAL') {
+            if (eng) return false;
+          } else {
+            if (!eng) return false;
+            const matchById = eng.id === selectedEngineFilter || m.databaseEngineId === selectedEngineFilter;
+            const matchByCode = eng.dbCode.toUpperCase() === selectedEngineFilter.toUpperCase();
+            if (!matchById && !matchByCode) return false;
+          }
         }
-      }
 
-      // 2. Monitoring Template Filter
-      if (selectedTemplateFilter !== 'ALL') {
-        if (selectedTemplateFilter === 'UNASSIGNED') {
-          const hasTemplates = (m.templateIds && m.templateIds.length > 0) || Boolean(m.templateId);
-          if (hasTemplates) return false;
-        } else {
-          const hasTpl = m.templateIds?.includes(selectedTemplateFilter) || m.templateId === selectedTemplateFilter;
-          if (!hasTpl) return false;
+        // 2. Monitoring Template Filter
+        if (selectedTemplateFilter !== 'ALL') {
+          if (selectedTemplateFilter === 'UNASSIGNED') {
+            const hasTemplates = (m.templateIds && m.templateIds.length > 0) || Boolean(m.templateId);
+            if (hasTemplates) return false;
+          } else {
+            const hasTpl = m.templateIds?.includes(selectedTemplateFilter) || m.templateId === selectedTemplateFilter;
+            if (!hasTpl) return false;
+          }
         }
-      }
 
-      // 3. Search Query Filter
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase().trim();
-        const eng = getMetricEng(m);
-        const engineMatch = eng ? (eng.dbName?.toLowerCase().includes(term) || eng.dbCode?.toLowerCase().includes(term)) : false;
-        
-        const templateMatch = (m.templateIds && m.templateIds.length > 0)
-          ? m.templateIds.some((id) => templates.find((t) => t.id === id)?.name.toLowerCase().includes(term))
-          : (m.templateId ? templates.find((t) => t.id === m.templateId)?.name.toLowerCase().includes(term) : false);
+        // 3. Search Query Filter
+        if (searchTerm.trim()) {
+          const term = searchTerm.toLowerCase().trim();
+          const eng = getMetricEng(m);
+          const engineMatch = eng ? (eng.dbName?.toLowerCase().includes(term) || eng.dbCode?.toLowerCase().includes(term)) : false;
+          
+          const templateMatch = (m.templateIds && m.templateIds.length > 0)
+            ? m.templateIds.some((id) => templates.find((t) => t.id === id)?.name.toLowerCase().includes(term))
+            : (m.templateId ? templates.find((t) => t.id === m.templateId)?.name.toLowerCase().includes(term) : false);
 
-        const attributeMatch = m.thresholdsConfig?.perAttribute?.some(
-          (a) => a.attributeName?.toLowerCase().includes(term)
-        );
+          const attributeMatch = m.thresholdsConfig?.perAttribute?.some(
+            (a) => a.attributeName?.toLowerCase().includes(term)
+          );
 
-        const matches =
-          m.name.toLowerCase().includes(term) ||
-          m.sqlQuery.toLowerCase().includes(term) ||
-          engineMatch ||
-          templateMatch ||
-          attributeMatch;
+          const matches =
+            m.name.toLowerCase().includes(term) ||
+            m.sqlQuery.toLowerCase().includes(term) ||
+            engineMatch ||
+            templateMatch ||
+            attributeMatch;
 
-        if (!matches) return false;
-      }
+          if (!matches) return false;
+        }
 
-      return true;
-    });
-  }, [metrics, selectedEngineFilter, selectedTemplateFilter, searchTerm, databaseEngines, templates]);
+        return true;
+      })
+      .sort((a, b) => {
+        let primaryCmp = 0;
+
+        if (sortField === 'name') {
+          primaryCmp = a.name.localeCompare(b.name);
+        } else if (sortField === 'databaseEngineId') {
+          const engA = getMetricEng(a);
+          const engB = getMetricEng(b);
+          const codeA = engA ? engA.dbCode.toUpperCase() : (a.databaseEngineId ? a.databaseEngineId.toUpperCase() : 'ALL');
+          const codeB = engB ? engB.dbCode.toUpperCase() : (b.databaseEngineId ? b.databaseEngineId.toUpperCase() : 'ALL');
+          primaryCmp = codeA.localeCompare(codeB);
+        } else if (sortField === 'isEnabled') {
+          const activeA = a.isEnabled !== false ? 1 : 0;
+          const activeB = b.isEnabled !== false ? 1 : 0;
+          primaryCmp = activeA - activeB;
+        } else if (sortField === 'metricQueryType') {
+          const typeA = a.metricQueryType || 1;
+          const typeB = b.metricQueryType || 1;
+          primaryCmp = typeA - typeB;
+        } else if (sortField === 'cycle') {
+          const cycleA = Number(a.cycle) || 1;
+          const cycleB = Number(b.cycle) || 1;
+          primaryCmp = cycleA - cycleB;
+        } else if (sortField === 'templateIds') {
+          const countA = (a.templateIds && a.templateIds.length > 0) ? a.templateIds.length : (a.templateId ? 1 : 0);
+          const countB = (b.templateIds && b.templateIds.length > 0) ? b.templateIds.length : (b.templateId ? 1 : 0);
+          primaryCmp = countA - countB;
+        }
+
+        if (sortOrder === 'desc') {
+          primaryCmp = -primaryCmp;
+        }
+
+        if (primaryCmp !== 0) return primaryCmp;
+
+        return a.name.localeCompare(b.name);
+      });
+  }, [metrics, selectedEngineFilter, selectedTemplateFilter, searchTerm, databaseEngines, templates, sortField, sortOrder]);
 
   const isFiltered = selectedEngineFilter !== 'ALL' || selectedTemplateFilter !== 'ALL' || searchTerm.trim().length > 0;
 
@@ -946,6 +1004,9 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             setPageSize(newSize);
             setCurrentPage(1);
           }}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          onSortChange={handleSortChange}
           emptyMessage={
             isFiltered ? (
               <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
@@ -1388,18 +1449,31 @@ MongoDB: db.runCommand({"serverStatus": 1}).connections.current
                           </div>
                         );
                       })() : (
-                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                        <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100">
                           <div>
                             <label className="block text-[10px] text-amber-700 font-semibold mb-0.5">{t('metrics.warnPattern')}</label>
                             <input
                               type="text"
-                              placeholder="e.g. DEGRADED"
+                              placeholder="e.g. WARN or DEGRADED"
                               value={attr.warn}
                               onChange={(e) => {
                                 const val = e.target.value;
                                 setType3Attributes(prev => prev.map((item, i) => i === idx ? { ...item, warn: val } : item));
                               }}
-                              className="w-full bg-white border border-slate-300 rounded px-2.5 py-1 text-xs font-mono"
+                              className="w-full bg-white border border-amber-300 rounded px-2.5 py-1 text-xs font-mono focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-orange-700 font-semibold mb-0.5">{t('metrics.highPattern')}</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. HIGH or UNSTABLE"
+                              value={attr.high}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setType3Attributes(prev => prev.map((item, i) => i === idx ? { ...item, high: val } : item));
+                              }}
+                              className="w-full bg-white border border-orange-300 rounded px-2.5 py-1 text-xs font-mono focus:outline-none focus:border-orange-500"
                             />
                           </div>
                           <div>
@@ -1412,7 +1486,7 @@ MongoDB: db.runCommand({"serverStatus": 1}).connections.current
                                 const val = e.target.value;
                                 setType3Attributes(prev => prev.map((item, i) => i === idx ? { ...item, critical: val } : item));
                               }}
-                              className="w-full bg-white border border-rose-300 rounded px-2.5 py-1 text-xs font-mono"
+                              className="w-full bg-white border border-rose-300 rounded px-2.5 py-1 text-xs font-mono focus:outline-none focus:border-rose-500"
                             />
                           </div>
                         </div>
