@@ -132,6 +132,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     })
     .filter((d) => d.count > 0);
 
+  // Filter dbStatuses by severity selection from summary cards
+  const displayedDbStatuses = dbStatuses.filter((db) => {
+    if (severityFilter === 'ALL') return true;
+    const dbAlerts = activeAlerts.filter((a) => a.dbId === db.id);
+    if (severityFilter === 'DOWN') {
+      return db.derivedStatus === 'DOWN' || dbAlerts.some((a) => a.alertLevel === 'DOWN' || a.alertLevel === 'CRITICAL');
+    }
+    if (severityFilter === 'CRITICAL') {
+      return dbAlerts.some((a) => a.alertLevel === 'CRITICAL' || a.alertLevel === 'DOWN');
+    }
+    if (severityFilter === 'HIGH') {
+      return dbAlerts.some((a) => a.alertLevel === 'HIGH');
+    }
+    if (severityFilter === 'WARN') {
+      return db.derivedStatus === 'WARN' || dbAlerts.some((a) => a.alertLevel === 'WARN' || a.alertLevel === 'WARNING');
+    }
+    return true;
+  });
+
   return (
     <div className="p-6 sm:p-8 flex-1 flex flex-col gap-6 overflow-y-auto bg-slate-50/50">
       {/* Compact Top Filter & Control Bar */}
@@ -164,6 +183,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         databases={databases}
         activeAlerts={activeAlerts}
         selectedDbType={selectedDbType}
+        selectedSeverity={severityFilter}
+        onSelectSeverity={(sev) => setSeverityFilter(sev)}
       />
 
       {/* Database Engine Summary Grid */}
@@ -180,30 +201,64 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Database Quick Health Grid */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div>
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 flex-wrap">
               <Server className="w-4 h-4 text-indigo-600" />
-              {t('dashboard.statusGrid')} {selectedDbType !== 'ALL' && `— ${selectedDbType}`}
+              <span>{t('dashboard.statusGrid')} {selectedDbType !== 'ALL' && `— ${selectedDbType}`}</span>
+              {severityFilter !== 'ALL' && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <span>Filtered: {severityFilter}</span>
+                  <button
+                    onClick={() => setSeverityFilter('ALL')}
+                    className="hover:text-rose-600 font-extrabold cursor-pointer ml-1"
+                    title="Clear filter"
+                  >
+                    ✕
+                  </button>
+                </span>
+              )}
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">{t('dashboard.showingInstances', { count: filteredDatabases.length })}</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {t('dashboard.showingInstances', { count: displayedDbStatuses.length })}
+            </p>
           </div>
-          <button
-            onClick={onNavigateToDatabases}
-            className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-semibold cursor-pointer"
-          >
-            {t('dashboard.manageDatabases')}
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </button>
+
+          <div className="flex items-center gap-3">
+            {severityFilter !== 'ALL' && onNavigateToActiveAlerts && (
+              <button
+                onClick={onNavigateToActiveAlerts}
+                className="text-xs text-amber-700 hover:text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1 font-semibold cursor-pointer"
+              >
+                View {severityFilter} in Active Alerts
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              onClick={onNavigateToDatabases}
+              className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-semibold cursor-pointer"
+            >
+              {t('dashboard.manageDatabases')}
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
-        {filteredDatabases.length === 0 ? (
+        {displayedDbStatuses.length === 0 ? (
           <div className="text-center py-8 text-slate-500 text-xs">
-            {t('dashboard.noDatabasesFound')} <span className="font-bold">{selectedDbType}</span>.
+            {t('dashboard.noDatabasesFound')} <span className="font-bold">{selectedDbType !== 'ALL' ? selectedDbType : ''} {severityFilter !== 'ALL' ? `(${severityFilter})` : ''}</span>.
+            {severityFilter !== 'ALL' && (
+              <button
+                onClick={() => setSeverityFilter('ALL')}
+                className="block mx-auto mt-2 text-indigo-600 hover:underline font-semibold cursor-pointer"
+              >
+                Reset severity filter
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            {dbStatuses.map((db) => {
+            {displayedDbStatuses.map((db) => {
               const dbAlerts = activeAlerts.filter((a) => a.dbId === db.id);
               const cCount = dbAlerts.filter((a) => a.alertLevel === 'CRITICAL' || a.alertLevel === 'DOWN').length;
               const hCount = dbAlerts.filter((a) => a.alertLevel === 'HIGH').length;

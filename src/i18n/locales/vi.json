@@ -399,9 +399,22 @@
     "targetSendersTitle": "Người nhận / Đích đến cho từng kênh:",
     "selectAtLeastOneChannel": "Hãy chọn ít nhất một kênh gửi thông báo phía trên để cấu hình đích nhận tin.",
     "saveGroupConfiguration": "Lưu cấu hình nhóm",
+    "createGroup": "Tạo nhóm mới",
     "assignDatabases": "Gán cơ sở dữ liệu",
     "assignTemplates": "Gán mẫu giám sát (Templates)",
-    "deleteGroupConfirm": "Bạn có chắc chắn muốn xóa nhóm cơ sở dữ liệu này không? Các cơ sở dữ liệu được gán cho nhóm này vẫn sẽ được lưu trữ nhưng sẽ bị hủy liên kết khỏi nhóm."
+    "deleteGroupConfirm": "Bạn có chắc chắn muốn xóa nhóm cơ sở dữ liệu này không? Các cơ sở dữ liệu được gán cho nhóm này vẫn sẽ được lưu trữ nhưng sẽ bị hủy liên kết khỏi nhóm.",
+    "filterByTag": "Lọc theo Thẻ (Tag)",
+    "allTags": "Tất cả Thẻ (Tags)",
+    "sortBy": "Sắp xếp theo",
+    "sortNewest": "Cơ sở dữ liệu mới tạo nhất",
+    "sortOldest": "Cơ sở dữ liệu tạo cũ nhất",
+    "sortNameAsc": "Tên (A → Z)",
+    "sortNameDesc": "Tên (Z → A)",
+    "sectionManagedDbs": "1. Cơ sở dữ liệu Quản lý",
+    "sectionTemplates": "2. Mẫu Giám sát Áp dụng",
+    "sectionDispatchers": "3. Kênh Gửi Thông báo Cảnh báo",
+    "prevSection": "Phần trước",
+    "nextSection": "Phần tiếp theo"
   },
   "rawMeasurements": {
     "title": "Lịch sử truy vấn thô & Luồng đo lường",

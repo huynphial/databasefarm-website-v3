@@ -85,7 +85,14 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
     .filter((alert) => {
       const dbObj = databases.find((d) => d.id === alert.dbId);
       const matchesDbType = selectedDbType === 'ALL' || (dbObj && dbObj.dbType === selectedDbType);
-      const matchesSeverity = severityFilter === 'ALL' || alert.alertLevel === severityFilter;
+      
+      let matchesSeverity = severityFilter === 'ALL' || alert.alertLevel === severityFilter;
+      if (severityFilter === 'DOWN') {
+        matchesSeverity = alert.alertLevel === 'DOWN' || alert.alertLevel === 'CRITICAL' || (dbObj?.status || '').toUpperCase() === 'DOWN';
+      } else if (severityFilter === 'CRITICAL') {
+        matchesSeverity = alert.alertLevel === 'CRITICAL' || alert.alertLevel === 'DOWN';
+      }
+
       const term = searchTerm.toLowerCase();
       const matchesSearch =
         alert.dbName.toLowerCase().includes(term) ||
@@ -538,6 +545,11 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
         databases={databases}
         activeAlerts={activeAlerts}
         selectedDbType={selectedDbType}
+        selectedSeverity={severityFilter}
+        onSelectSeverity={(sev) => {
+          setSeverityFilter(sev);
+          setCurrentPage(1);
+        }}
       />
 
       {/* Compact Filter Controls Bar */}
@@ -569,7 +581,8 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
             className="bg-slate-50 border border-slate-300 text-xs px-2.5 py-1 rounded-lg text-slate-800 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
           >
             <option value="ALL">{t('common.allSeverities')}</option>
-            <option value="CRITICAL">{t('common.critical')} & Down</option>
+            <option value="DOWN">{t('dashboard.databasesDown')}</option>
+            <option value="CRITICAL">{t('common.critical')}</option>
             <option value="HIGH">{t('common.high')}</option>
             <option value="WARN">{t('common.warning')}</option>
           </select>

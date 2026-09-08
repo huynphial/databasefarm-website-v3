@@ -399,9 +399,22 @@
     "targetSendersTitle": "Target Senders / Destinations per Channel:",
     "selectAtLeastOneChannel": "Select at least one active dispatch channel above to configure target destinations.",
     "saveGroupConfiguration": "Save Group Configuration",
+    "createGroup": "Create Group",
     "assignDatabases": "Assign Databases",
     "assignTemplates": "Assign Templates",
-    "deleteGroupConfirm": "Are you sure you want to delete this database group? Databases assigned to this group will remain in storage but will be unmapped from this group."
+    "deleteGroupConfirm": "Are you sure you want to delete this database group? Databases assigned to this group will remain in storage but will be unmapped from this group.",
+    "filterByTag": "Filter by Tag",
+    "allTags": "All Tags",
+    "sortBy": "Sort By",
+    "sortNewest": "Newest Created Database",
+    "sortOldest": "Oldest Created Database",
+    "sortNameAsc": "Name (A → Z)",
+    "sortNameDesc": "Name (Z → A)",
+    "sectionManagedDbs": "1. Managed Databases",
+    "sectionTemplates": "2. Applied Templates",
+    "sectionDispatchers": "3. Alert Dispatchers",
+    "prevSection": "Previous Section",
+    "nextSection": "Next Section"
   },
   "rawMeasurements": {
     "title": "Raw Query History & Telemetry Stream",
