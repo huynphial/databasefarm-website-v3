@@ -1052,6 +1052,7 @@ function MainAppContent() {
               rawMeasurements={rawMeasurements}
               metricHistory={metricHistory}
               activeAlerts={activeAlerts}
+              alertHistory={alertHistory}
               databaseEngines={databaseEngines}
               systemSettings={systemSettings}
               userRole={currentUser.role}

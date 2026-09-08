@@ -5,6 +5,7 @@ import {
   RawMeasurementEntity,
   MetricHistoryEntity,
   ActiveAlertEntity,
+  AlertHistoryEntity,
   DatabaseEngineEntity,
   SystemSettingsEntity,
   UserRole,
@@ -22,6 +23,7 @@ import { MetricType2Tables } from './analytics/MetricType2Tables';
 import { MetricType3Tables } from './analytics/MetricType3Tables';
 import { TelemetryVisualizer } from './analytics/TelemetryVisualizer';
 import { DatabaseAlertsList } from './analytics/DatabaseAlertsList';
+import { DatabaseAlertHistoryList } from './analytics/DatabaseAlertHistoryList';
 
 interface AnalyticsDatabaseViewProps {
   databases: DatabaseEntity[];
@@ -31,6 +33,7 @@ interface AnalyticsDatabaseViewProps {
   rawMeasurements: RawMeasurementEntity[];
   metricHistory?: MetricHistoryEntity[];
   activeAlerts: ActiveAlertEntity[];
+  alertHistory?: AlertHistoryEntity[];
   databaseEngines?: DatabaseEngineEntity[];
   systemSettings?: SystemSettingsEntity;
   userRole?: UserRole;
@@ -49,6 +52,7 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
   rawMeasurements,
   metricHistory = [],
   activeAlerts,
+  alertHistory = [],
   databaseEngines = [],
   systemSettings,
   userRole = 'VIEWER',
@@ -373,6 +377,13 @@ export const AnalyticsDatabaseView: React.FC<AnalyticsDatabaseViewProps> = ({
           onAcknowledgeAlert={onAcknowledgeAlert}
         />
       )}
+
+      {/* 5. Alert History Panel */}
+      <DatabaseAlertHistoryList
+        alertHistory={alertHistory}
+        selectedDb={selectedDb}
+        selectedDbName={selectedDb?.name}
+      />
 
       {/* 4. Metric Type 1: Single Attribute of Single Object */}
       <MetricType1Table

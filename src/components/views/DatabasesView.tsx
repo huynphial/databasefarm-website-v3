@@ -857,6 +857,129 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       });
   }, [databases, activeAlerts, searchTerm, selectedEngine, selectedStatus, selectedSeverity, sortField, sortOrder]);
 
+  // ----------------------------------------------------
+  // EXPORT FILTERED DATABASES TO CSV (FOR STATS)
+  // Excludes passwords, splits all tags into separate columns with 'x' / ''
+  // ----------------------------------------------------
+  const handleExportFilteredCsv = () => {
+    if (!processedDatabases || processedDatabases.length === 0) {
+      toast({
+        title: t('alertHistory.noDataToExport') || 'No Data to Export',
+        description: 'No databases match the current search and filter criteria to export.',
+        type: 'warning',
+      });
+      return;
+    }
+
+    // Collect all unique tags across all databases in workspace
+    const allUniqueTags = Array.from(
+      new Set(
+        databases.flatMap((db) => db.tags || [])
+      )
+    )
+      .filter((tag): tag is string => Boolean(tag))
+      .sort((a, b) => a.localeCompare(b));
+
+    // CSV Cell Escape helper
+    const escapeCsv = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    // Base info headers (All info EXCEPT passwords / secrets)
+    const baseHeaders = [
+      'Database ID',
+      'Database Name',
+      'Engine Type',
+      'Host',
+      'Port',
+      'Database Name / SID',
+      'Username',
+      'Auth Method',
+      'Environment',
+      'Status',
+      'Is Enabled',
+      'Poll ID',
+      'Poll Interval (Min)',
+      'Assigned Groups',
+      'Last Check At',
+      'Created At',
+      'Updated At',
+      'Total Alerts',
+      'Down Alerts',
+      'Critical Alerts',
+      'High Alerts',
+      'Warning Alerts',
+      'Notes',
+    ];
+
+    // Tag column headers (e.g., "Tag: PRODUCTION", "Tag: LAB")
+    const tagHeaders = allUniqueTags.map((tag) => `Tag: ${tag}`);
+
+    const fullHeaders = [...baseHeaders, ...tagHeaders];
+
+    // Rows mapping
+    const rows = processedDatabases.map((db) => {
+      const groupNames = (groups || [])
+        .filter((g) => db.groupIds?.includes(g.id))
+        .map((g) => g.name)
+        .join('; ');
+
+      const dbTags = new Set(db.tags || []);
+
+      const baseValues = [
+        escapeCsv(db.id),
+        escapeCsv(db.name),
+        escapeCsv(db.dbType),
+        escapeCsv(db.host),
+        escapeCsv(db.port),
+        escapeCsv(db.databaseName || ''),
+        escapeCsv(db.username || ''),
+        escapeCsv(db.authMethod || 'PASSWORD'),
+        escapeCsv(db.environment || 'PRODUCTION'),
+        escapeCsv(db.statusLabel || db.status || 'UP'),
+        escapeCsv(db.isEnabled !== false ? 'Yes' : 'No'),
+        escapeCsv(db.pollId ?? 0),
+        escapeCsv(db.pollIntervalMinutes ?? 5),
+        escapeCsv(groupNames),
+        escapeCsv(db.lastCheckAt || ''),
+        escapeCsv(db.createdAt || ''),
+        escapeCsv(db.updatedAt || ''),
+        escapeCsv(db.totalAlerts ?? 0),
+        escapeCsv(db.downCount ?? 0),
+        escapeCsv(db.criticalCount ?? 0),
+        escapeCsv(db.highCount ?? 0),
+        escapeCsv(db.warnCount ?? 0),
+        escapeCsv(db.note || ''),
+      ];
+
+      // Tag columns: 'x' if database has tag, '' if not
+      const tagValues = allUniqueTags.map((tag) => escapeCsv(dbTags.has(tag) ? 'x' : ''));
+
+      return [...baseValues, ...tagValues];
+    });
+
+    // Add UTF-8 BOM so Excel opens non-ASCII characters cleanly
+    const csvContent = '\uFEFF' + [fullHeaders.join(','), ...rows.map((r) => r.join(','))].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.setAttribute('download', `monitored_databases_stats_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: t('alertHistory.exportedTitle') || 'Export Successful',
+      description: `Exported ${processedDatabases.length} database(s) to CSV with tag statistics matrix.`,
+      type: 'success',
+    });
+  };
+
   const totalPages = Math.ceil(processedDatabases.length / pageSize) || 1;
   const paginatedDatabases = processedDatabases.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
@@ -1219,6 +1342,15 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 justify-end shrink-0">
+          <button
+            onClick={handleExportFilteredCsv}
+            title="Export filtered database list and tag statistics matrix to CSV"
+            className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer shadow-2xs"
+          >
+            <FileDown className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+            <span>{t('databases.exportCsv')}</span>
+          </button>
+
           {userRole === 'ADMIN' && (
             <button
               onClick={handleExportAllDatabases}
