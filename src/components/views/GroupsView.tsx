@@ -141,9 +141,21 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [sortField, setSortField] = useState<string>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<GroupEntity | null>(null);
   const [testingNotification, setTestingNotification] = useState<string | null>(null);
+
+  const handleSortChange = (field: string) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+    setCurrentPage(1);
+  };
 
   // Import/Export Modal State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -960,6 +972,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     {
       header: t('groups.groupNameAndPurpose'),
       accessorKey: 'name',
+      sortable: true,
       cell: (row) => (
         <div>
           <div className="font-semibold text-slate-900 text-sm flex items-center gap-1.5">
@@ -974,6 +987,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     },
     {
       header: t('groups.totalDbs'),
+      accessorKey: 'totalDbs',
+      sortable: true,
       width: '100px',
       cell: (row) => {
         const assignedDbs = databases.filter((db) => row.databaseIds?.includes(db.id));
@@ -988,6 +1003,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     },
     {
       header: t('groups.up'),
+      accessorKey: 'up',
+      sortable: true,
       width: '90px',
       cell: (row) => {
         const assignedDbs = databases.filter((db) => row.databaseIds?.includes(db.id));
@@ -1008,6 +1025,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     },
     {
       header: t('groups.down'),
+      accessorKey: 'down',
+      sortable: true,
       width: '95px',
       cell: (row) => {
         const assignedDbs = databases.filter((db) => row.databaseIds?.includes(db.id));
@@ -1034,6 +1053,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     },
     {
       header: t('groups.activeAlerts'),
+      accessorKey: 'activeAlerts',
+      sortable: true,
       width: '150px',
       cell: (row) => {
         const assignedDbIds = row.databaseIds || [];
@@ -1082,6 +1103,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     },
     {
       header: t('groups.appliedTemplates'),
+      accessorKey: 'appliedTemplates',
+      sortable: true,
       width: '180px',
       cell: (row) => {
         const appliedTpls = templates.filter((t) => row.templateIds?.includes(t.id));
@@ -1110,6 +1133,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     },
     {
       header: t('groups.notificationDispatchers'),
+      accessorKey: 'notificationDispatchers',
+      sortable: true,
       width: '180px',
       cell: (row) => {
         const mappings = extractGroupMappings(row);
@@ -1158,36 +1183,89 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
   // Filter groups by search term, engine type, and specific database
   const filteredGroups = useMemo(() => {
-    return groups.filter((g) => {
-      // 1. Database Engine Filter
-      if (selectedEngineType !== 'ALL') {
-        const groupDbs = databases.filter((d) => g.databaseIds.includes(d.id));
-        const hasMatchingEngine = groupDbs.some(
-          (d) => d.dbType.toUpperCase() === selectedEngineType.toUpperCase()
-        );
-        if (!hasMatchingEngine) return false;
-      }
+    return groups
+      .filter((g) => {
+        // 1. Database Engine Filter
+        if (selectedEngineType !== 'ALL') {
+          const groupDbs = databases.filter((d) => g.databaseIds.includes(d.id));
+          const hasMatchingEngine = groupDbs.some(
+            (d) => d.dbType.toUpperCase() === selectedEngineType.toUpperCase()
+          );
+          if (!hasMatchingEngine) return false;
+        }
 
-      // 2. Specific Database Filter
-      if (selectedDbId !== 'ALL') {
-        if (!g.databaseIds.includes(selectedDbId)) return false;
-      }
+        // 2. Specific Database Filter
+        if (selectedDbId !== 'ALL') {
+          if (!g.databaseIds.includes(selectedDbId)) return false;
+        }
 
-      // 3. Text Search
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase().trim();
-        const groupDbs = databases.filter((d) => g.databaseIds.includes(d.id));
-        const matchesName = g.name.toLowerCase().includes(term);
-        const matchesDesc = g.description && g.description.toLowerCase().includes(term);
-        const matchesContainedDb = groupDbs.some(
-          (d) => d.name.toLowerCase().includes(term) || d.host.toLowerCase().includes(term)
-        );
-        if (!matchesName && !matchesDesc && !matchesContainedDb) return false;
-      }
+        // 3. Text Search
+        if (searchTerm.trim()) {
+          const term = searchTerm.toLowerCase().trim();
+          const groupDbs = databases.filter((d) => g.databaseIds.includes(d.id));
+          const matchesName = g.name.toLowerCase().includes(term);
+          const matchesDesc = g.description && g.description.toLowerCase().includes(term);
+          const matchesContainedDb = groupDbs.some(
+            (d) => d.name.toLowerCase().includes(term) || d.host.toLowerCase().includes(term)
+          );
+          if (!matchesName && !matchesDesc && !matchesContainedDb) return false;
+        }
 
-      return true;
-    });
-  }, [groups, searchTerm, selectedEngineType, selectedDbId, databases]);
+        return true;
+      })
+      .sort((a, b) => {
+        let primaryCmp = 0;
+
+        if (sortField === 'name') {
+          primaryCmp = a.name.localeCompare(b.name);
+        } else if (sortField === 'totalDbs') {
+          const countA = a.databaseIds?.length || 0;
+          const countB = b.databaseIds?.length || 0;
+          primaryCmp = countA - countB;
+        } else if (sortField === 'up') {
+          const getUpCount = (g: GroupEntity) => {
+            const assigned = databases.filter((db) => g.databaseIds?.includes(db.id));
+            return assigned.filter((db) => db.isEnabled !== false && (db.status || '').toUpperCase() !== 'DOWN').length;
+          };
+          primaryCmp = getUpCount(a) - getUpCount(b);
+        } else if (sortField === 'down') {
+          const getDownCount = (g: GroupEntity) => {
+            const assigned = databases.filter((db) => g.databaseIds?.includes(db.id));
+            return assigned.filter((db) => db.isEnabled !== false && (db.status || '').toUpperCase() === 'DOWN').length;
+          };
+          primaryCmp = getDownCount(a) - getDownCount(b);
+        } else if (sortField === 'activeAlerts') {
+          const getAlertWeight = (g: GroupEntity) => {
+            const assigned = g.databaseIds || [];
+            const gAlerts = activeAlerts.filter((al) => assigned.includes(al.dbId));
+            return gAlerts.reduce((acc, al) => {
+              if (al.alertLevel === 'DOWN' || al.alertLevel === 'CRITICAL') return acc + 1000;
+              if (al.alertLevel === 'HIGH') return acc + 100;
+              if (al.alertLevel === 'WARN') return acc + 10;
+              return acc + 1;
+            }, 0);
+          };
+          primaryCmp = getAlertWeight(a) - getAlertWeight(b);
+        } else if (sortField === 'appliedTemplates') {
+          const countA = a.templateIds?.length || 0;
+          const countB = b.templateIds?.length || 0;
+          primaryCmp = countA - countB;
+        } else if (sortField === 'notificationDispatchers') {
+          const countA = extractGroupMappings(a).length;
+          const countB = extractGroupMappings(b).length;
+          primaryCmp = countA - countB;
+        }
+
+        if (sortOrder === 'desc') {
+          primaryCmp = -primaryCmp;
+        }
+
+        if (primaryCmp !== 0) return primaryCmp;
+
+        // Secondary tie breaker: name asc
+        return a.name.localeCompare(b.name);
+      });
+  }, [groups, searchTerm, selectedEngineType, selectedDbId, databases, sortField, sortOrder, activeAlerts, templates]);
 
   const activeFiltersCount =
     (selectedEngineType !== 'ALL' ? 1 : 0) +
@@ -1473,6 +1551,9 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             setPageSize(newSize);
             setCurrentPage(1);
           }}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          onSortChange={handleSortChange}
           emptyMessage={
             searchTerm
               ? t('groups.noGroupsFound')

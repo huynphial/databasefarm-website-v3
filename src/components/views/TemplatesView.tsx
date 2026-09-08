@@ -62,8 +62,20 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
   const [selectedMonitorTypeFilter, setSelectedMonitorTypeFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [sortField, setSortField] = useState<string>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<TemplateEntity | null>(null);
+
+  const handleSortChange = (field: string) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+    setCurrentPage(1);
+  };
 
   // Import JSON Modal State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -417,6 +429,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
     {
       header: t('templates.templateName'),
       accessorKey: 'name',
+      sortable: true,
       cell: (row) => (
         <div>
           <div className="font-semibold text-slate-900 text-sm flex items-center gap-1.5">
@@ -432,6 +445,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
     {
       header: t('templates.targetEngine'),
       accessorKey: 'targetDbType',
+      sortable: true,
       width: '150px',
       cell: (row) => {
         const engine = row.databaseEngine || databaseEngines.find((e) => e.id === row.databaseEngineId || e.dbCode.toUpperCase() === row.targetDbType?.toUpperCase());
@@ -456,6 +470,8 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
     },
     {
       header: t('templates.metricCount'),
+      accessorKey: 'metricCount',
+      sortable: true,
       width: '240px',
       cell: (row) => {
         const templateMetrics = metrics.filter((m) => m.templateIds?.includes(row.id) || m.templateId === row.id);
@@ -537,37 +553,61 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
   // Filter templates by search term, database engine, and monitor type
   const filteredTemplates = useMemo(() => {
-    return templates.filter((t) => {
-      // 1. Text search
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase().trim();
-        const matchesSearch =
-          t.name.toLowerCase().includes(term) ||
-          (t.description && t.description.toLowerCase().includes(term)) ||
-          (t.targetDbType && t.targetDbType.toLowerCase().includes(term));
-        if (!matchesSearch) return false;
-      }
-
-      // 2. Database Engine Filter
-      if (selectedEngineFilter !== 'ALL') {
-        const engine = t.databaseEngine || databaseEngines.find((e) => e.id === t.databaseEngineId || e.dbCode.toUpperCase() === t.targetDbType?.toUpperCase());
-        const tplEngineCode = engine ? engine.dbCode.toUpperCase() : (t.targetDbType?.toUpperCase() || 'ALL');
-        if (tplEngineCode !== selectedEngineFilter.toUpperCase() && tplEngineCode !== 'ALL') {
-          return false;
+    return templates
+      .filter((t) => {
+        // 1. Text search
+        if (searchTerm.trim()) {
+          const term = searchTerm.toLowerCase().trim();
+          const matchesSearch =
+            t.name.toLowerCase().includes(term) ||
+            (t.description && t.description.toLowerCase().includes(term)) ||
+            (t.targetDbType && t.targetDbType.toLowerCase().includes(term));
+          if (!matchesSearch) return false;
         }
-      }
 
-      // 3. Monitor Type Filter
-      if (selectedMonitorTypeFilter !== 'ALL') {
-        const targetType = parseInt(selectedMonitorTypeFilter, 10);
-        const linkedMetrics = metrics.filter((m) => m.templateIds?.includes(t.id) || m.templateId === t.id);
-        const hasMatchingType = linkedMetrics.some((m) => (m.metricQueryType || 1) === targetType);
-        if (!hasMatchingType) return false;
-      }
+        // 2. Database Engine Filter
+        if (selectedEngineFilter !== 'ALL') {
+          const engine = t.databaseEngine || databaseEngines.find((e) => e.id === t.databaseEngineId || e.dbCode.toUpperCase() === t.targetDbType?.toUpperCase());
+          const tplEngineCode = engine ? engine.dbCode.toUpperCase() : (t.targetDbType?.toUpperCase() || 'ALL');
+          if (tplEngineCode !== selectedEngineFilter.toUpperCase() && tplEngineCode !== 'ALL') {
+            return false;
+          }
+        }
 
-      return true;
-    });
-  }, [templates, searchTerm, selectedEngineFilter, selectedMonitorTypeFilter, databaseEngines, metrics]);
+        // 3. Monitor Type Filter
+        if (selectedMonitorTypeFilter !== 'ALL') {
+          const targetType = parseInt(selectedMonitorTypeFilter, 10);
+          const linkedMetrics = metrics.filter((m) => m.templateIds?.includes(t.id) || m.templateId === t.id);
+          const hasMatchingType = linkedMetrics.some((m) => (m.metricQueryType || 1) === targetType);
+          if (!hasMatchingType) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        let primaryCmp = 0;
+
+        if (sortField === 'name') {
+          primaryCmp = a.name.localeCompare(b.name);
+        } else if (sortField === 'targetDbType') {
+          const engineA = a.databaseEngine?.dbCode || a.targetDbType || 'ALL';
+          const engineB = b.databaseEngine?.dbCode || b.targetDbType || 'ALL';
+          primaryCmp = engineA.localeCompare(engineB);
+        } else if (sortField === 'metricCount') {
+          const countA = metrics.filter((m) => m.templateIds?.includes(a.id) || m.templateId === a.id).length;
+          const countB = metrics.filter((m) => m.templateIds?.includes(b.id) || m.templateId === b.id).length;
+          primaryCmp = countA - countB;
+        }
+
+        if (sortOrder === 'desc') {
+          primaryCmp = -primaryCmp;
+        }
+
+        if (primaryCmp !== 0) return primaryCmp;
+
+        return a.name.localeCompare(b.name);
+      });
+  }, [templates, searchTerm, selectedEngineFilter, selectedMonitorTypeFilter, databaseEngines, metrics, sortField, sortOrder]);
 
   const totalPages = Math.ceil(filteredTemplates.length / pageSize) || 1;
   const paginatedTemplates = filteredTemplates.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -760,6 +800,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
             setPageSize(newSize);
             setCurrentPage(1);
           }}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          onSortChange={handleSortChange}
           emptyMessage={
             searchTerm
               ? `No templates found matching "${searchTerm}".`

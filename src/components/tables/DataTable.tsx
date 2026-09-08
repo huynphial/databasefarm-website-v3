@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { Skeleton } from '../ui/Skeleton';
 import { cn } from '../../lib/utils';
 
@@ -61,10 +61,15 @@ export function DataTable<T extends Record<string, any>>({
                   key={idx}
                   style={{ width: col.width }}
                   className={cn(
-                    'px-6 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none',
+                    'px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider select-none transition-colors',
                     col.align === 'right' && 'text-right',
                     col.align === 'center' && 'text-center',
-                    col.sortable && 'cursor-pointer hover:text-slate-800 transition-colors'
+                    col.sortable
+                      ? 'cursor-pointer hover:bg-slate-100/90 group'
+                      : 'text-slate-500',
+                    col.sortable && col.accessorKey && sortField === col.accessorKey
+                      ? 'text-indigo-700 bg-indigo-50/50'
+                      : 'text-slate-500 hover:text-slate-900'
                   )}
                   onClick={() => {
                     if (col.sortable && col.accessorKey && onSortChange) {
@@ -74,10 +79,16 @@ export function DataTable<T extends Record<string, any>>({
                 >
                   <div className={cn('flex items-center gap-1.5', col.align === 'right' && 'justify-end', col.align === 'center' && 'justify-center')}>
                     <span>{col.header}</span>
-                    {col.sortable && col.accessorKey && sortField === col.accessorKey && (
-                      <span className="text-indigo-600">
-                        {sortOrder === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                      </span>
+                    {col.sortable && col.accessorKey && (
+                      sortField === col.accessorKey ? (
+                        <span className="text-indigo-600 bg-indigo-100/80 p-0.5 rounded shrink-0">
+                          {sortOrder === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 group-hover:text-slate-500 opacity-60 group-hover:opacity-100 transition-opacity shrink-0">
+                          <ArrowUpDown className="w-3 h-3" />
+                        </span>
+                      )
                     )}
                   </div>
                 </th>
