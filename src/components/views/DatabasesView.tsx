@@ -180,7 +180,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const RECOMMENDED_TAGS = ['PRODUCTION', 'STAGING', 'LAB', 'DEV', 'CRITICAL', 'ANALYTICS', 'PRIMARY', 'STANDBY', 'REPLICA', 'FINANCE'];
+  const RECOMMENDED_TAGS = ['PRODUCTION', 'PRIMARY', 'STANDBY', 'STAGING', 'LAB', 'DEV', 'CRITICAL', 'ANALYTICS', 'REPLICA', 'FINANCE', 'RAC', 'DATAGUARD','OS', 'SERVER','WINDOWS','UBUNTU','CENTOS','ORACLELINUX','REDHAT','OPENSUSE'];
 
   const [customTagInput, setCustomTagInput] = useState('');
 
