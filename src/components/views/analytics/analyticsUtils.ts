@@ -36,6 +36,22 @@ export const parseNumericValue = (val: string | number | undefined | null): numb
   return isNaN(num) ? 0 : num;
 };
 
+export const parseTimestampMs = (val?: string | number | Date | null): number => {
+  if (!val) return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (val instanceof Date) {
+    const t = val.getTime();
+    return isNaN(t) ? 0 : t;
+  }
+  const s = String(val).trim();
+  if (!s) return 0;
+  let t = new Date(s).getTime();
+  if (isNaN(t) && s.includes(' ') && !s.includes('T')) {
+    t = new Date(s.replace(' ', 'T')).getTime();
+  }
+  return isNaN(t) ? 0 : t;
+};
+
 export function combineTelemetryDataPoints(
   rawMeasurements: RawMeasurementEntity[],
   metricHistory: MetricHistoryEntity[],
@@ -81,7 +97,7 @@ export function combineTelemetryDataPoints(
   );
   relevantHistory.forEach((h) => {
     const timeVal = (h as any).measuredAt || h.createdAt || new Date().toISOString();
-    const hTime = new Date(timeVal).getTime();
+    const hTime = parseTimestampMs(timeVal);
     const objName = h.objectName || 'INSTANCE';
     const attrName = h.attributeName || 'value';
 
@@ -91,7 +107,7 @@ export function combineTelemetryDataPoints(
         (p.metricId === h.metricId || (p.metricName && h.metricName && p.metricName.toLowerCase() === h.metricName.toLowerCase())) &&
         p.objectName === objName &&
         p.attributeName === attrName &&
-        Math.abs(new Date(p.measuredAt).getTime() - hTime) < 2000
+        Math.abs(parseTimestampMs(p.measuredAt) - hTime) < 2000
     );
 
     if (!isDuplicate) {
@@ -111,7 +127,7 @@ export function combineTelemetryDataPoints(
   });
 
   // Sort chronologically descending (newest first) by default
-  points.sort((a, b) => new Date(b.measuredAt).getTime() - new Date(a.measuredAt).getTime());
+  points.sort((a, b) => parseTimestampMs(b.measuredAt) - parseTimestampMs(a.measuredAt));
 
   return points;
 }

@@ -340,10 +340,16 @@ export const api = {
       const params = new URLSearchParams();
       if (filterOrLimit.limit !== undefined) params.append('limit', String(filterOrLimit.limit));
       if (filterOrLimit.dbId) params.append('dbId', filterOrLimit.dbId);
+      if (filterOrLimit.dbIds && filterOrLimit.dbIds.length > 0) params.append('dbIds', filterOrLimit.dbIds.join(','));
       if (filterOrLimit.metricId) params.append('metricId', filterOrLimit.metricId);
+      if (filterOrLimit.metricIds && filterOrLimit.metricIds.length > 0) params.append('metricIds', filterOrLimit.metricIds.join(','));
       if (filterOrLimit.dbType) params.append('dbType', filterOrLimit.dbType);
+      if (filterOrLimit.groupId) params.append('groupId', filterOrLimit.groupId);
+      if (filterOrLimit.templateId) params.append('templateId', filterOrLimit.templateId);
       if (filterOrLimit.objectName) params.append('objectName', filterOrLimit.objectName);
       if (filterOrLimit.attributeName) params.append('attributeName', filterOrLimit.attributeName);
+      if (filterOrLimit.status) params.append('status', filterOrLimit.status);
+      if (filterOrLimit.pollStatus) params.append('pollStatus', filterOrLimit.pollStatus);
       if (filterOrLimit.fromDate) params.append('fromDate', filterOrLimit.fromDate);
       if (filterOrLimit.toDate) params.append('toDate', filterOrLimit.toDate);
       if (filterOrLimit.searchTerm) params.append('searchTerm', filterOrLimit.searchTerm);

@@ -47,7 +47,9 @@ interface PollChartPoint {
   latencyMs: number;
   status: string;
   isSuccess: boolean;
-  uptimeStatus: number; // 100 for UP, 0 for DOWN
+  isPartial: boolean;
+  isUp: boolean;
+  uptimeStatus: number; // 100 for UP (both success & partial_failed), 0 for DOWN
   uptimeRatio: number; // 0-100%
   errorMessage?: string | null;
 }
@@ -133,6 +135,8 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
       return {
         totalPolls: 0,
         successPolls: 0,
+        partialPolls: 0,
+        upPolls: 0,
         failedPolls: 0,
         uptimePercentage: 100,
         avgLatencyMs: 0,
@@ -143,12 +147,19 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
     }
 
     let successCount = 0;
+    let partialCount = 0;
     let failedCount = 0;
     const latencies: number[] = [];
 
     filteredLogs.forEach((log) => {
-      const isSuccess = (log.status || '').toLowerCase() === 'success';
-      if (isSuccess) {
+      const rawStatus = String(log.status || '').toLowerCase().trim();
+      const isPartial = rawStatus === 'partial_failed' || rawStatus === 'partial' || rawStatus === 'warning';
+      const isSuccess = rawStatus === 'success' || rawStatus === 'ok' || rawStatus === 'up';
+      const isUp = isSuccess || isPartial;
+
+      if (isPartial) {
+        partialCount++;
+      } else if (isSuccess) {
         successCount++;
       } else {
         failedCount++;
@@ -164,7 +175,9 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
     });
 
     const total = filteredLogs.length;
-    const uptimePct = total > 0 ? (successCount / total) * 100 : 100;
+    // CRITICAL: partial_failed is resolved to UP (online with warning)
+    const upCount = successCount + partialCount;
+    const uptimePct = total > 0 ? (upCount / total) * 100 : 100;
 
     let avgLatency = 0;
     let minLatency = 0;
@@ -185,6 +198,8 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
     return {
       totalPolls: total,
       successPolls: successCount,
+      partialPolls: partialCount,
+      upPolls: upCount,
       failedPolls: failedCount,
       uptimePercentage: uptimePct,
       avgLatencyMs: avgLatency,
@@ -203,7 +218,7 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
       (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
     );
 
-    let rollingSuccess = 0;
+    let rollingUp = 0;
     let rollingTotal = 0;
 
     // Direct mapping of all poll log points to preserve high-fidelity filter representation
@@ -213,11 +228,15 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
       const latency = !isNaN(startMs) && !isNaN(finishMs) && finishMs >= startMs
         ? finishMs - startMs
         : 0;
-      const isSuccess = (log.status || '').toLowerCase() === 'success';
+      
+      const rawStatus = String(log.status || '').toLowerCase().trim();
+      const isPartial = rawStatus === 'partial_failed' || rawStatus === 'partial' || rawStatus === 'warning';
+      const isSuccess = rawStatus === 'success' || rawStatus === 'ok' || rawStatus === 'up';
+      const isUp = isSuccess || isPartial; // Resolved to UP!
 
       rollingTotal++;
-      if (isSuccess) rollingSuccess++;
-      const currentUptime = Number(((rollingSuccess / rollingTotal) * 100).toFixed(2));
+      if (isUp) rollingUp++;
+      const currentUptime = Number(((rollingUp / rollingTotal) * 100).toFixed(2));
 
       // Friendly time label depending on timePreset span
       const d = new Date(startMs);
@@ -237,9 +256,11 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
         fullTimeLabel: formatTimeVN(log.startedAt),
         dbName: log.dbName || selectedDb?.name || 'Database',
         latencyMs: latency,
-        status: log.status || (isSuccess ? 'success' : 'failed'),
+        status: isPartial ? 'partial_failed' : (isSuccess ? 'success' : 'failed'),
         isSuccess,
-        uptimeStatus: isSuccess ? 100 : 0,
+        isPartial,
+        isUp,
+        uptimeStatus: isUp ? 100 : 0, // Both full success and partial_failed resolve to 100 (UP)
         uptimeRatio: currentUptime,
         errorMessage: log.errorMessage,
       };
@@ -274,15 +295,32 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
           pct: 100,
           label: formatTimeVN(new Date(sliceStart).toISOString()),
           total: 0,
+          upCount: 0,
           success: 0,
+          partial: 0,
         };
       }
 
-      const success = inSlice.filter((l) => (l.status || '').toLowerCase() === 'success').length;
-      const pct = (success / inSlice.length) * 100;
-      let status: 'UP' | 'DEGRADED' | 'DOWN' = 'UP';
-      if (pct < 50) status = 'DOWN';
-      else if (pct < 100) status = 'DEGRADED';
+      const upCount = inSlice.filter((l) => {
+        const s = String(l.status || '').toLowerCase().trim();
+        return s === 'success' || s === 'partial_failed' || s === 'partial' || s === 'warning' || s === 'ok' || s === 'up';
+      }).length;
+      const partialCount = inSlice.filter((l) => {
+        const s = String(l.status || '').toLowerCase().trim();
+        return s === 'partial_failed' || s === 'partial' || s === 'warning';
+      }).length;
+      const successCount = inSlice.filter((l) => {
+        const s = String(l.status || '').toLowerCase().trim();
+        return s === 'success' || s === 'ok' || s === 'up';
+      }).length;
+
+      const pct = (upCount / inSlice.length) * 100;
+      let status: 'UP' | 'WARNING' | 'DOWN' = 'UP';
+      if (pct < 50) {
+        status = 'DOWN';
+      } else if (partialCount > 0 || pct < 100) {
+        status = 'WARNING'; // Warning ORANGE
+      }
 
       return {
         id: i,
@@ -290,7 +328,9 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
         pct: Math.round(pct),
         label: formatTimeVN(new Date(sliceStart).toISOString()),
         total: inSlice.length,
-        success,
+        upCount,
+        success: successCount,
+        partial: partialCount,
       };
     });
 
@@ -400,6 +440,15 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
               </button>
             </div>
 
+            {metrics.partialPolls > 0 && (
+              <div
+                className="px-2.5 py-1 rounded-full text-xs font-bold border border-orange-200 bg-orange-50 text-orange-700 flex items-center gap-1.5 shadow-2xs"
+                title={`${metrics.partialPolls} poll logs have partial failures, resolved to UP with warning`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                <span>{metrics.partialPolls} Warning (UP)</span>
+              </div>
+            )}
             <div className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${uptimeClass}`}>
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>{metrics.uptimePercentage.toFixed(2)}% Uptime</span>
@@ -408,22 +457,36 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
         </div>
 
         {/* Metric Counter Summary Cards */}
-        <div className="grid grid-cols-4 gap-2 my-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 my-3">
           <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-2.5 text-center">
             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Uptime Ratio</div>
             <div className="text-lg font-black text-slate-900">{metrics.uptimePercentage.toFixed(1)}%</div>
+            <div className="text-[10px] font-medium text-slate-400">Target ≥ 99.9%</div>
           </div>
           <div className="bg-emerald-50/60 border border-emerald-200/60 rounded-xl p-2.5 text-center">
             <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Successful</div>
             <div className="text-lg font-black text-emerald-700">{metrics.successPolls.toLocaleString()}</div>
+            <div className="text-[10px] font-medium text-emerald-600">UP (100%)</div>
+          </div>
+          <div className="bg-orange-50/70 border border-orange-200/80 rounded-xl p-2.5 text-center relative overflow-hidden">
+            <div className="text-[11px] font-bold text-orange-700 uppercase tracking-wider flex items-center justify-center gap-1">
+              <AlertTriangle className="w-3 h-3 text-orange-500" />
+              Partial / Warning
+            </div>
+            <div className="text-lg font-black text-orange-600">{metrics.partialPolls.toLocaleString()}</div>
+            <div className="text-[10px] font-bold text-orange-700/90 bg-orange-100/80 rounded px-1 inline-block">
+              Resolved to UP
+            </div>
           </div>
           <div className="bg-rose-50/60 border border-rose-200/60 rounded-xl p-2.5 text-center">
             <div className="text-[11px] font-bold text-rose-700 uppercase tracking-wider">Failed / Down</div>
             <div className="text-lg font-black text-rose-700">{metrics.failedPolls.toLocaleString()}</div>
+            <div className="text-[10px] font-medium text-rose-600">DOWN (0%)</div>
           </div>
           <div className="bg-indigo-50/60 border border-indigo-200/60 rounded-xl p-2.5 text-center">
-            <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Filter Data Points</div>
+            <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Total Poll Logs</div>
             <div className="text-lg font-black text-indigo-900">{timeSeriesData.length.toLocaleString()}</div>
+            <div className="text-[10px] font-medium text-indigo-600">database_poll_log</div>
           </div>
         </div>
 
@@ -441,14 +504,14 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
           <div className="flex items-center gap-1 w-full bg-slate-100 p-1.5 rounded-lg border border-slate-200">
             {timelineSlices.map((slice) => {
               let bg = 'bg-emerald-500 hover:bg-emerald-600';
-              if (slice.status === 'DEGRADED') bg = 'bg-amber-400 hover:bg-amber-500';
+              if (slice.status === 'WARNING') bg = 'bg-orange-500 hover:bg-orange-600'; // Warning ORANGE
               else if (slice.status === 'DOWN') bg = 'bg-rose-500 hover:bg-rose-600';
               else if (slice.status === 'NO_DATA') bg = 'bg-slate-300';
 
               return (
                 <div
                   key={slice.id}
-                  title={`${slice.label}: ${slice.pct}% success (${slice.success || 0}/${slice.total || 0})`}
+                  title={`${slice.label}: ${slice.pct}% Uptime (${slice.upCount || 0}/${slice.total || 0})${slice.partial ? ` - ${slice.partial} Partial (Warning - UP)` : ''}`}
                   className={`flex-1 h-5 rounded-xs transition-all duration-150 cursor-pointer ${bg}`}
                 />
               );
@@ -456,8 +519,27 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
           </div>
         </div>
 
+        {/* Status Legend & Guidance */}
+        <div className="flex flex-wrap items-center justify-between text-[11px] px-1 mt-2.5 mb-1 gap-2">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 font-semibold text-slate-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-xs"></span>
+              UP (Success)
+            </span>
+            <span className="flex items-center gap-1.5 font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">
+              <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block shadow-xs"></span>
+              UP (Partial Failed - Warning)
+            </span>
+            <span className="flex items-center gap-1.5 font-semibold text-slate-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-xs"></span>
+              DOWN (Failed)
+            </span>
+          </div>
+          <span className="text-[10px] font-mono text-slate-400">Y-Axis: UP = 100% | DOWN = 0%</span>
+        </div>
+
         {/* Interactive Uptime Ratio Line Chart (Linear Up/Down, not smooth) */}
-        <div className="mt-2 h-44 w-full">
+        <div className="mt-1 h-44 w-full">
           {timeSeriesData.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 p-4 text-center">
               <Activity className="w-8 h-8 mb-1.5 text-slate-300" />
@@ -491,28 +573,60 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       const data = payload[0].payload as PollChartPoint;
+                      const isPartial = data.isPartial || data.status === 'partial_failed';
+                      const isUp = data.isUp ?? (data.isSuccess || isPartial);
                       return (
                         <div className="bg-slate-900/95 text-white p-2.5 rounded-xl shadow-xl text-xs backdrop-blur-xs border border-slate-800 space-y-1 z-50">
                           <div className="font-bold text-slate-200 border-b border-slate-700/60 pb-1 flex items-center justify-between gap-3">
                             <span>{data.fullTimeLabel}</span>
                             <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
-                                data.isSuccess
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold flex items-center gap-1 ${
+                                isPartial
+                                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40'
+                                  : isUp
                                   ? 'bg-emerald-500/20 text-emerald-300'
                                   : 'bg-rose-500/20 text-rose-300'
                               }`}
                             >
-                              {data.isSuccess ? '● UP (100%)' : '▼ DOWN (0%)'}
+                              {isPartial ? (
+                                <>
+                                  <AlertTriangle className="w-3 h-3 text-orange-400" />
+                                  UP - Warning (Partial)
+                                </>
+                              ) : isUp ? (
+                                '● UP (100%)'
+                              ) : (
+                                '▼ DOWN (0%)'
+                              )}
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-slate-300 pt-0.5">
                             <div>Database: <span className="font-bold text-white">{data.dbName}</span></div>
                             <div>Response Time: <span className="font-bold text-blue-400">{data.latencyMs} ms</span></div>
-                            <div>Status: <span className={`font-bold ${data.isSuccess ? 'text-emerald-400' : 'text-rose-400'}`}>{data.isSuccess ? 'UP (Online)' : 'DOWN (Offline)'}</span></div>
-                            <div>Cumulative: <span className="font-bold text-indigo-300">{data.uptimeRatio}%</span></div>
+                            <div>
+                              Status:{' '}
+                              <span
+                                className={`font-bold ${
+                                  isPartial
+                                    ? 'text-orange-400'
+                                    : isUp
+                                    ? 'text-emerald-400'
+                                    : 'text-rose-400'
+                                }`}
+                              >
+                                {isPartial
+                                  ? 'UP (Partial Failed - Warning)'
+                                  : isUp
+                                  ? 'UP (Online)'
+                                  : 'DOWN (Offline)'}
+                              </span>
+                            </div>
+                            <div>Cumulative Uptime: <span className="font-bold text-indigo-300">{data.uptimeRatio}%</span></div>
                             {data.errorMessage && (
-                              <div className="col-span-2 text-rose-300 font-mono text-[10px] break-words pt-1 border-t border-slate-800">
-                                Error: {data.errorMessage}
+                              <div className={`col-span-2 font-mono text-[10px] break-words pt-1 border-t border-slate-800 ${
+                                isPartial ? 'text-orange-300' : 'text-rose-300'
+                              }`}>
+                                {isPartial ? 'Warning: ' : 'Error: '}{data.errorMessage}
                               </div>
                             )}
                           </div>
@@ -536,14 +650,27 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                     dot={(props: any) => {
                       const { cx, cy, payload } = props;
                       if (cx == null || cy == null) return null;
-                      const isDown = !payload.isSuccess;
+                      const isPartial = payload.isPartial || payload.status === 'partial_failed';
+                      const isDown = !payload.isUp && !payload.isSuccess && !isPartial;
+
+                      let fill = '#10b981'; // Green for normal UP
+                      let r = 2.5;
+
+                      if (isPartial) {
+                        fill = '#f97316'; // Warning ORANGE for partial_failed resolved to UP!
+                        r = 4.5;
+                      } else if (isDown) {
+                        fill = '#f43f5e'; // Red for DOWN
+                        r = 4.5;
+                      }
+
                       return (
                         <circle
                           key={`uptime-dot-${payload.id || props.index}`}
                           cx={cx}
                           cy={cy}
-                          r={isDown ? 4.5 : 2.5}
-                          fill={isDown ? '#f43f5e' : '#10b981'}
+                          r={r}
+                          fill={fill}
                           stroke="#ffffff"
                           strokeWidth={1.5}
                         />
@@ -698,25 +825,44 @@ export const DatabaseUptimePerformanceCharts: React.FC<DatabaseUptimePerformance
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       const data = payload[0].payload as PollChartPoint;
+                      const isPartial = data.isPartial || data.status === 'partial_failed';
+                      const isUp = data.isUp ?? (data.isSuccess || isPartial);
                       return (
                         <div className="bg-slate-900/95 text-white p-2.5 rounded-xl shadow-xl text-xs backdrop-blur-xs border border-slate-800 space-y-1 z-50">
                           <div className="font-bold text-slate-200 border-b border-slate-700/60 pb-1 flex items-center justify-between gap-3">
                             <span>{data.fullTimeLabel}</span>
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
-                              data.isSuccess
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold flex items-center gap-1 ${
+                              isPartial
+                                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                                : data.isSuccess
                                 ? 'bg-blue-500/20 text-blue-300'
                                 : 'bg-rose-500/20 text-rose-300'
                             }`}>
-                              {data.latencyMs} ms {data.isSuccess ? '' : '(FAILED)'}
+                              {isPartial ? (
+                                <>
+                                  <AlertTriangle className="w-3 h-3 text-orange-400" />
+                                  {data.latencyMs} ms (WARNING - UP)
+                                </>
+                              ) : (
+                                `${data.latencyMs} ms ${!isUp ? '(FAILED)' : ''}`
+                              )}
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-slate-300 pt-0.5">
                             <div>Database: <span className="font-bold text-white">{data.dbName}</span></div>
-                            <div>Status: <span className={`font-bold ${data.isSuccess ? 'text-emerald-400' : 'text-rose-400'}`}>{data.status}</span></div>
+                            <div>Status: <span className={`font-bold ${
+                              isPartial
+                                ? 'text-orange-400'
+                                : data.isSuccess
+                                ? 'text-emerald-400'
+                                : 'text-rose-400'
+                            }`}>{isPartial ? 'partial_failed (Warning - UP)' : data.status}</span></div>
                             <div className="col-span-2">Point Latency: <span className="font-bold text-blue-300">{data.latencyMs} ms</span></div>
                             {data.errorMessage && (
-                              <div className="col-span-2 text-rose-300 font-mono text-[10px] break-words pt-1 border-t border-slate-800">
-                                Error: {data.errorMessage}
+                              <div className={`col-span-2 font-mono text-[10px] break-words pt-1 border-t border-slate-800 ${
+                                isPartial ? 'text-orange-300' : 'text-rose-300'
+                              }`}>
+                                {isPartial ? 'Warning: ' : 'Error: '}{data.errorMessage}
                               </div>
                             )}
                           </div>

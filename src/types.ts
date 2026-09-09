@@ -226,8 +226,12 @@ export interface RawMeasurementEntity {
 export interface RawMeasurementFilter {
   limit?: number;
   dbId?: string;
+  dbIds?: string[];
   metricId?: string;
+  metricIds?: string[];
   dbType?: string;
+  groupId?: string;
+  templateId?: string;
   objectName?: string;
   attributeName?: string;
   status?: string;
@@ -396,7 +400,7 @@ export interface DatabasePollLogEntity {
   id: string;
   dbId: string;
   dbName: string;
-  status: 'success' | 'failed';
+  status: 'success' | 'failed' | 'partial_failed' | string;
   errorMessage?: string | null;
   startedAt: string;
   finishedAt: string;

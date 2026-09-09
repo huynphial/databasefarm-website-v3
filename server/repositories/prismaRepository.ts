@@ -1946,40 +1946,112 @@ export class PrismaRepository implements IStorageRepository {
     try {
       const client = (this.prisma as any).metricDataPoint;
       if (client) {
-        let limit = 1500;
+        let limit = 0;
         const where: any = {};
+        let filterObj: RawMeasurementFilter | null = null;
 
         if (typeof filterOrLimit === 'number') {
           if (filterOrLimit > 0) limit = filterOrLimit;
         } else if (filterOrLimit) {
+          filterObj = filterOrLimit;
           if (filterOrLimit.limit !== undefined && filterOrLimit.limit > 0) {
             limit = filterOrLimit.limit;
           }
+
+          // Database filtering
           if (filterOrLimit.dbId && filterOrLimit.dbId !== 'ALL') {
             where.dbId = filterOrLimit.dbId;
+          } else if (filterOrLimit.dbIds && filterOrLimit.dbIds.length > 0) {
+            where.dbId = { in: filterOrLimit.dbIds };
+          } else if (filterOrLimit.dbType && filterOrLimit.dbType !== 'ALL') {
+            try {
+              const matchingTypeDbs = await (this.prisma as any).database.findMany({
+                where: { dbType: filterOrLimit.dbType as any },
+                select: { id: true },
+              });
+              const matchingIds = matchingTypeDbs.map((d: any) => d.id);
+              where.dbId = { in: matchingIds };
+            } catch (e) {
+              // ignore if enum mismatch
+            }
           }
+
+          // Metric filtering
           if (filterOrLimit.metricId && filterOrLimit.metricId !== 'ALL') {
             where.metricId = filterOrLimit.metricId;
+          } else if (filterOrLimit.metricIds && filterOrLimit.metricIds.length > 0) {
+            where.metricId = { in: filterOrLimit.metricIds };
           }
-          if (filterOrLimit.pollStatus && filterOrLimit.pollStatus !== 'ALL') {
-            where.pollStatus = filterOrLimit.pollStatus;
+
+          // Status / PollStatus filtering
+          const statusVal = filterOrLimit.status || filterOrLimit.pollStatus;
+          if (statusVal && statusVal !== 'ALL') {
+            const sUpper = statusVal.toUpperCase();
+            if (sUpper === 'FAIL') {
+              where.pollStatus = { in: ['FAIL', 'FAILED', 'ERROR', 'DOWN', 'TIMEOUT'] };
+            } else if (sUpper === 'SUCCESS') {
+              where.pollStatus = { in: ['SUCCESS', 'OK', 'NORMAL'] };
+            } else {
+              where.pollStatus = statusVal;
+            }
           }
+
+          // Object Name filtering
           if (filterOrLimit.objectName && filterOrLimit.objectName !== 'ALL') {
             where.objectName = filterOrLimit.objectName;
           }
+
+          // Attribute Name filtering
           if (filterOrLimit.attributeName && filterOrLimit.attributeName !== 'ALL') {
             where.attributeName = filterOrLimit.attributeName;
           }
+
+          // Timestamp date range filtering
           if (filterOrLimit.fromDate || filterOrLimit.toDate) {
             where.measuredAt = {};
             if (filterOrLimit.fromDate) {
-              where.measuredAt.gte = new Date(filterOrLimit.fromDate);
+              const fromDateStr = filterOrLimit.fromDate.includes('T') ? filterOrLimit.fromDate : `${filterOrLimit.fromDate}T00:00:00.000Z`;
+              where.measuredAt.gte = new Date(fromDateStr);
             }
             if (filterOrLimit.toDate) {
-              const toDateObj = filterOrLimit.toDate.length === 10
-                ? new Date(`${filterOrLimit.toDate}T23:59:59.999Z`)
-                : new Date(filterOrLimit.toDate);
-              where.measuredAt.lte = toDateObj;
+              const toDateStr = filterOrLimit.toDate.length === 10 ? `${filterOrLimit.toDate}T23:59:59.999Z` : new Date(filterOrLimit.toDate).toISOString();
+              where.measuredAt.lte = new Date(toDateStr);
+            }
+          }
+
+          // Search term across DB names, Metric names, Objects, Attributes, Values and Responses
+          if (filterOrLimit.searchTerm && filterOrLimit.searchTerm.trim()) {
+            const q = filterOrLimit.searchTerm.trim();
+            try {
+              const [matchingDbRows, matchingMetricRows] = await Promise.all([
+                (this.prisma as any).database.findMany({
+                  where: { name: { contains: q, mode: 'insensitive' } },
+                  select: { id: true },
+                }).catch(() => []),
+                (this.prisma as any).metric.findMany({
+                  where: { name: { contains: q, mode: 'insensitive' } },
+                  select: { id: true },
+                }).catch(() => []),
+              ]);
+              const matchedDbIds = matchingDbRows.map((d: any) => d.id);
+              const matchedMetricIds = matchingMetricRows.map((m: any) => m.id);
+
+              const orConds: any[] = [
+                { objectName: { contains: q, mode: 'insensitive' } },
+                { attributeName: { contains: q, mode: 'insensitive' } },
+                { value: { contains: q, mode: 'insensitive' } },
+                { pollResponse: { contains: q, mode: 'insensitive' } },
+                { pollStatus: { contains: q, mode: 'insensitive' } },
+              ];
+              if (matchedDbIds.length > 0) {
+                orConds.push({ dbId: { in: matchedDbIds } });
+              }
+              if (matchedMetricIds.length > 0) {
+                orConds.push({ metricId: { in: matchedMetricIds } });
+              }
+              where.OR = orConds;
+            } catch (searchErr) {
+              // fallback
             }
           }
         }
@@ -1990,14 +2062,20 @@ export class PrismaRepository implements IStorageRepository {
         let metricMap = new Map<string, { name: string; valueType: string; thresholdOperator: string; thresholdsConfig: any; cycle: number }>();
 
         try {
+          const queryArgs: any = {
+            where,
+            orderBy: { measuredAt: 'desc' },
+          };
+          if (limit > 0) {
+            queryArgs.take = limit;
+          } else {
+            queryArgs.take = 10000;
+          }
+
           const [dbs, metrics, rawPoints] = await Promise.all([
             (this.prisma as any).database.findMany({ select: { id: true, name: true, dbType: true } }).catch(() => []),
             (this.prisma as any).metric.findMany({ select: { id: true, name: true, valueType: true, relationalOperator: true, thresholdsConfig: true, cycle: true } }).catch(() => []),
-            client.findMany({
-              where,
-              orderBy: { measuredAt: 'desc' },
-              take: limit,
-            }),
+            client.findMany(queryArgs),
           ]);
 
           dbs.forEach((d: any) => dbMap.set(d.id, { name: d.name, dbType: d.dbType || 'ORACLE' }));
@@ -2017,6 +2095,60 @@ export class PrismaRepository implements IStorageRepository {
 
         if (!hasLoaded) {
           try {
+            const whereClauses: string[] = [];
+            if (filterObj?.dbId && filterObj.dbId !== 'ALL') {
+              whereClauses.push(`(mdp.database_id = '${filterObj.dbId}' OR mdp.dbId = '${filterObj.dbId}')`);
+            } else if (filterObj?.dbIds && filterObj.dbIds.length > 0) {
+              const idsList = filterObj.dbIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+              whereClauses.push(`(mdp.database_id IN (${idsList}) OR mdp.dbId IN (${idsList}))`);
+            }
+            if (filterObj?.metricId && filterObj.metricId !== 'ALL') {
+              whereClauses.push(`(mdp.metric_id = '${filterObj.metricId}' OR mdp.metricId = '${filterObj.metricId}')`);
+            } else if (filterObj?.metricIds && filterObj.metricIds.length > 0) {
+              const idsList = filterObj.metricIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+              whereClauses.push(`(mdp.metric_id IN (${idsList}) OR mdp.metricId IN (${idsList}))`);
+            }
+            const statusVal = filterObj?.status || filterObj?.pollStatus;
+            if (statusVal && statusVal !== 'ALL') {
+              const sUpper = statusVal.toUpperCase();
+              if (sUpper === 'FAIL') {
+                whereClauses.push(`UPPER(COALESCE(mdp.poll_status, mdp.pollStatus, '')) IN ('FAIL', 'FAILED', 'ERROR', 'DOWN', 'TIMEOUT')`);
+              } else if (sUpper === 'SUCCESS') {
+                whereClauses.push(`UPPER(COALESCE(mdp.poll_status, mdp.pollStatus, '')) IN ('SUCCESS', 'OK', 'NORMAL')`);
+              } else {
+                whereClauses.push(`UPPER(COALESCE(mdp.poll_status, mdp.pollStatus, '')) = '${sUpper.replace(/'/g, "''")}'`);
+              }
+            }
+            if (filterObj?.objectName && filterObj.objectName !== 'ALL') {
+              whereClauses.push(`LOWER(COALESCE(mdp.object_name, mdp.objectName, '')) = '${filterObj.objectName.toLowerCase().replace(/'/g, "''")}'`);
+            }
+            if (filterObj?.attributeName && filterObj.attributeName !== 'ALL') {
+              whereClauses.push(`LOWER(COALESCE(mdp.attribute_name, mdp.attributeName, '')) = '${filterObj.attributeName.toLowerCase().replace(/'/g, "''")}'`);
+            }
+            if (filterObj?.fromDate) {
+              const fromDateIso = filterObj.fromDate.includes('T') ? filterObj.fromDate : `${filterObj.fromDate}T00:00:00.000Z`;
+              whereClauses.push(`mdp.measured_at >= '${new Date(fromDateIso).toISOString()}'`);
+            }
+            if (filterObj?.toDate) {
+              const toDateIso = filterObj.toDate.length === 10 ? `${filterObj.toDate}T23:59:59.999Z` : new Date(filterObj.toDate).toISOString();
+              whereClauses.push(`mdp.measured_at <= '${toDateIso}'`);
+            }
+            if (filterObj?.searchTerm && filterObj.searchTerm.trim()) {
+              const qSql = filterObj.searchTerm.trim().toLowerCase().replace(/'/g, "''");
+              whereClauses.push(`(
+                LOWER(COALESCE(d.name, '')) LIKE '%${qSql}%' OR
+                LOWER(COALESCE(m.name, '')) LIKE '%${qSql}%' OR
+                LOWER(COALESCE(mdp.object_name, mdp.objectName, '')) LIKE '%${qSql}%' OR
+                LOWER(COALESCE(mdp.attribute_name, mdp.attributeName, '')) LIKE '%${qSql}%' OR
+                LOWER(COALESCE(mdp.value, '')) LIKE '%${qSql}%' OR
+                LOWER(COALESCE(mdp.poll_response, mdp.pollResponse, '')) LIKE '%${qSql}%' OR
+                LOWER(COALESCE(mdp.poll_status, mdp.pollStatus, '')) LIKE '%${qSql}%'
+              )`);
+            }
+
+            const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+            const takeLimit = limit > 0 ? limit : 10000;
+
             const rawSql = `
               SELECT 
                 mdp.id,
@@ -2038,8 +2170,9 @@ export class PrismaRepository implements IStorageRepository {
               FROM metric_data_points mdp
               LEFT JOIN databases d ON d.id = mdp.database_id OR d.id = mdp.dbId
               LEFT JOIN metrics m ON m.id = mdp.metric_id OR m.id = mdp.metricId
+              ${whereSql}
               ORDER BY mdp.measured_at DESC
-              LIMIT ${limit}
+              LIMIT ${takeLimit}
             `;
             const rawRows: any[] = await (this.prisma as any).$queryRawUnsafe(rawSql);
             if (rawRows && rawRows.length > 0) {
@@ -2593,15 +2726,25 @@ export class PrismaRepository implements IStorageRepository {
       }
 
       if (records && records.length > 0) {
-        return records.map((r: any) => ({
-          id: String(r.id),
-          dbId: r.dbId || r.db_id || '',
-          dbName: r.dbName || r.db_name || '',
-          status: (r.status || 'success').toLowerCase() === 'success' ? 'success' : 'failed',
-          errorMessage: r.errorMessage || r.error_message || null,
-          startedAt: r.startedAt || r.started_at ? new Date(r.startedAt || r.started_at).toISOString() : new Date().toISOString(),
-          finishedAt: r.finishedAt || r.finished_at ? new Date(r.finishedAt || r.finished_at).toISOString() : new Date().toISOString(),
-        }));
+        return records.map((r: any) => {
+          const rawStatus = String(r.status || 'success').toLowerCase().trim();
+          let resolvedStatus: 'success' | 'failed' | 'partial_failed' = 'failed';
+          if (rawStatus === 'success' || rawStatus === 'ok' || rawStatus === 'up') {
+            resolvedStatus = 'success';
+          } else if (rawStatus === 'partial_failed' || rawStatus === 'partial' || rawStatus === 'warning') {
+            resolvedStatus = 'partial_failed';
+          }
+
+          return {
+            id: String(r.id),
+            dbId: r.dbId || r.db_id || '',
+            dbName: r.dbName || r.db_name || '',
+            status: resolvedStatus,
+            errorMessage: r.errorMessage || r.error_message || null,
+            startedAt: r.startedAt || r.started_at ? new Date(r.startedAt || r.started_at).toISOString() : new Date().toISOString(),
+            finishedAt: r.finishedAt || r.finished_at ? new Date(r.finishedAt || r.finished_at).toISOString() : new Date().toISOString(),
+          };
+        });
       }
     } catch (e) {
       console.warn('Prisma getDatabasePollLogs failed:', e);

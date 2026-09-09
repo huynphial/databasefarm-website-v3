@@ -1,7 +1,7 @@
 import React from 'react';
 import { Gauge, TrendingUp } from 'lucide-react';
 import { MetricEntity } from '../../../types';
-import { UnifiedMeasurement } from './analyticsUtils';
+import { UnifiedMeasurement, parseTimestampMs } from './analyticsUtils';
 import { formatTimeVN } from '../../../lib/utils';
 import { useLanguage } from '../../../i18n/LanguageContext';
 
@@ -59,8 +59,8 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {type1Metrics.map((metric) => {
-                // Find most recent measurement for this metric from metric_data_points / unified Measurements
-                const latestMeasurement = unifiedMeasurements.find((m) => {
+                // Find all measurements for this metric and select the newest one
+                const metricMeasurements = unifiedMeasurements.filter((m) => {
                   const mId = String(m.metricId || '').trim();
                   const targetId = String(metric.id || '').trim();
                   if (mId && targetId && mId === targetId) return true;
@@ -69,6 +69,10 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
                   }
                   return false;
                 });
+
+                const latestMeasurement = metricMeasurements.length > 0
+                  ? [...metricMeasurements].sort((a, b) => parseTimestampMs(b.measuredAt) - parseTimestampMs(a.measuredAt))[0]
+                  : undefined;
 
                 const hasData = Boolean(
                   latestMeasurement &&

@@ -136,7 +136,10 @@ export class MemoryRepository implements IStorageRepository {
       dbConfigs.forEach((db) => {
         // Special case: db-05 recently is DOWN (last 2 hours)
         const isDb5RecentDown = db.id === 'db-05' && minAgo <= 120;
-        const isFailed = isDb5RecentDown || Math.random() < db.failRate;
+        const roll = Math.random();
+        const isFailed = isDb5RecentDown || roll < db.failRate * 0.6;
+        const isPartial = !isFailed && !isDb5RecentDown && roll < db.failRate;
+        const status: 'success' | 'failed' | 'partial_failed' = isFailed ? 'failed' : (isPartial ? 'partial_failed' : 'success');
         
         // Random duration in ms
         const durationMs = isFailed && isDb5RecentDown
@@ -149,12 +152,14 @@ export class MemoryRepository implements IStorageRepository {
           id: String(logIdCounter++),
           dbId: db.id,
           dbName: db.name,
-          status: isFailed ? 'failed' : 'success',
+          status,
           errorMessage: isFailed
             ? (isDb5RecentDown
                 ? 'Connection refused: TCP handshake timed out after 5000ms on 10.0.40.72:3306'
                 : 'Probe query execution timed out or returned connection error')
-            : null,
+            : (isPartial
+                ? 'Partial query execution warning: 2 of 10 metrics timed out (threshold warning)'
+                : null),
           startedAt: new Date(startedTimeMs).toISOString(),
           finishedAt: new Date(finishedTimeMs).toISOString(),
         });
@@ -165,7 +170,10 @@ export class MemoryRepository implements IStorageRepository {
     for (let hourAgo = 25; hourAgo <= 7 * 24; hourAgo += 1) {
       const startedTimeMs = nowMs - hourAgo * 3600000;
       dbConfigs.forEach((db) => {
-        const isFailed = Math.random() < db.failRate;
+        const roll = Math.random();
+        const isFailed = roll < db.failRate * 0.6;
+        const isPartial = !isFailed && roll < db.failRate;
+        const status: 'success' | 'failed' | 'partial_failed' = isFailed ? 'failed' : (isPartial ? 'partial_failed' : 'success');
         const durationMs = isFailed
           ? Math.floor(4000 + Math.random() * 2000)
           : Math.max(20, Math.floor(db.baseLatency + (Math.random() * db.jitter * 2 - db.jitter)));
@@ -174,8 +182,10 @@ export class MemoryRepository implements IStorageRepository {
           id: String(logIdCounter++),
           dbId: db.id,
           dbName: db.name,
-          status: isFailed ? 'failed' : 'success',
-          errorMessage: isFailed ? 'Transient socket timeout' : null,
+          status,
+          errorMessage: isFailed
+            ? 'Transient socket timeout'
+            : (isPartial ? 'Partial probe warning: some telemetry counters delayed' : null),
           startedAt: new Date(startedTimeMs).toISOString(),
           finishedAt: new Date(startedTimeMs + durationMs).toISOString(),
         });
@@ -2196,18 +2206,29 @@ FROM pg_tablespace`,
 
     if (filter.dbId && filter.dbId !== 'ALL') {
       list = list.filter((m) => m.dbId === filter.dbId);
+    } else if (filter.dbIds && filter.dbIds.length > 0) {
+      const allowed = new Set(filter.dbIds);
+      list = list.filter((m) => allowed.has(m.dbId));
     }
     if (filter.metricId && filter.metricId !== 'ALL') {
       list = list.filter((m) => m.metricId === filter.metricId);
+    } else if (filter.metricIds && filter.metricIds.length > 0) {
+      const allowed = new Set(filter.metricIds);
+      list = list.filter((m) => allowed.has(m.metricId));
     }
     if (filter.dbType && filter.dbType !== 'ALL') {
       list = list.filter((m) => (m.dbType || '').toUpperCase() === filter.dbType!.toUpperCase());
     }
-    if (filter.status && filter.status !== 'ALL') {
-      list = list.filter((m) => (m.status || '').toUpperCase() === filter.status!.toUpperCase() || (m.pollStatus || '').toUpperCase() === filter.status!.toUpperCase());
-    }
-    if (filter.pollStatus && filter.pollStatus !== 'ALL') {
-      list = list.filter((m) => (m.pollStatus || '').toUpperCase() === filter.pollStatus!.toUpperCase());
+    const statusVal = filter.status || filter.pollStatus;
+    if (statusVal && statusVal !== 'ALL') {
+      const sUpper = statusVal.toUpperCase();
+      if (sUpper === 'FAIL') {
+        list = list.filter((m) => ['FAIL', 'FAILED', 'ERROR', 'DOWN', 'TIMEOUT'].includes((m.pollStatus || m.status || '').toUpperCase()));
+      } else if (sUpper === 'SUCCESS') {
+        list = list.filter((m) => ['SUCCESS', 'OK', 'NORMAL'].includes((m.pollStatus || m.status || 'SUCCESS').toUpperCase()));
+      } else {
+        list = list.filter((m) => (m.status || '').toUpperCase() === sUpper || (m.pollStatus || '').toUpperCase() === sUpper);
+      }
     }
     if (filter.objectName && filter.objectName !== 'ALL') {
       const targetObj = filter.objectName.toLowerCase().trim();

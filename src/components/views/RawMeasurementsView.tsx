@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Activity,
   Search,
@@ -127,12 +127,16 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [measurementsData, measurements, metrics, selectedMetricFilter, selectedDbFilter]);
 
-  // Sync with prop updates or trigger query
+  const hasCustomQueryRef = useRef(false);
+
+  // Sync with prop updates or trigger initial query
   useEffect(() => {
-    if (measurements && measurements.length > 0) {
-      setMeasurementsData(measurements);
-    } else {
-      handleRunQuery();
+    if (!hasCustomQueryRef.current) {
+      if (measurements && measurements.length > 0) {
+        setMeasurementsData(measurements);
+      } else {
+        handleRunQuery();
+      }
     }
   }, [measurements]);
 
@@ -242,11 +246,14 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   }, [databases, selectedGroupFilter, groups]);
 
   // Execute database query with filter criteria without row limits
-  const handleRunQuery = useCallback(async (overrideFilter?: Partial<RawMeasurementFilter>) => {
+  const handleRunQuery = useCallback(async (overrideFilter?: Partial<RawMeasurementFilter> & { groupFilter?: string; templateFilter?: string }) => {
     setIsSearching(true);
+    hasCustomQueryRef.current = true;
     try {
       const activeDb = overrideFilter?.dbId !== undefined ? overrideFilter.dbId : selectedDbFilter;
+      const activeGroup = overrideFilter?.groupFilter !== undefined ? overrideFilter.groupFilter : selectedGroupFilter;
       const activeMetric = overrideFilter?.metricId !== undefined ? overrideFilter.metricId : selectedMetricFilter;
+      const activeTemplate = overrideFilter?.templateFilter !== undefined ? overrideFilter.templateFilter : selectedTemplateFilter;
       const activeEngine = overrideFilter?.dbType !== undefined ? overrideFilter.dbType : engineFilter;
       const activeObject = overrideFilter?.objectName !== undefined ? overrideFilter.objectName : selectedObjectFilter;
       const activeAttribute = overrideFilter?.attributeName !== undefined ? overrideFilter.attributeName : selectedAttributeFilter;
@@ -255,27 +262,76 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       const activeTo = overrideFilter?.toDate !== undefined ? overrideFilter.toDate : toDate;
       const activeSearch = overrideFilter?.searchTerm !== undefined ? overrideFilter.searchTerm : searchTerm;
 
-      const data = await api.getRawMeasurements({
+      // 1. Resolve database IDs from group filter if active
+      let targetDbIds: string[] | undefined = undefined;
+      if (activeGroup !== 'ALL') {
+        const grp = groups.find((g) => g.id === activeGroup);
+        const ids = new Set<string>();
+        if (grp?.databaseIds) grp.databaseIds.forEach((id) => ids.add(id));
+        databases.forEach((db) => {
+          if (db.groupIds?.includes(activeGroup)) ids.add(db.id);
+        });
+        targetDbIds = Array.from(ids);
+      }
+
+      // 2. Resolve metric IDs from template filter if active
+      let targetMetricIds: string[] | undefined = undefined;
+      if (activeTemplate !== 'ALL') {
+        const tmpl = templates.find((t) => t.id === activeTemplate);
+        const ids = new Set<string>();
+        if (tmpl?.metricIds) tmpl.metricIds.forEach((id) => ids.add(id));
+        metrics.forEach((m) => {
+          if (m.templateId === activeTemplate || m.templateIds?.includes(activeTemplate)) {
+            ids.add(m.id);
+          }
+        });
+        targetMetricIds = Array.from(ids);
+      }
+
+      const queryFilter: RawMeasurementFilter = {
         dbId: activeDb !== 'ALL' ? activeDb : undefined,
+        dbIds: targetDbIds && targetDbIds.length > 0 ? targetDbIds : undefined,
+        groupId: activeGroup !== 'ALL' ? activeGroup : undefined,
         metricId: activeMetric !== 'ALL' ? activeMetric : undefined,
+        metricIds: targetMetricIds && targetMetricIds.length > 0 ? targetMetricIds : undefined,
+        templateId: activeTemplate !== 'ALL' ? activeTemplate : undefined,
         dbType: activeEngine !== 'ALL' ? activeEngine : undefined,
         status: activeStatus !== 'ALL' ? activeStatus : undefined,
+        pollStatus: activeStatus !== 'ALL' ? activeStatus : undefined,
         objectName: activeObject !== 'ALL' ? activeObject : undefined,
         attributeName: activeAttribute !== 'ALL' ? activeAttribute : undefined,
         fromDate: activeFrom || undefined,
         toDate: activeTo || undefined,
         searchTerm: activeSearch?.trim() || undefined,
-        limit: 0, // 0 indicates unlimited: return all database rows matching criteria
-      });
+        limit: 0, // 0 indicates unlimited: return all database rows matching criteria from Prisma
+      };
+
+      const data = await api.getRawMeasurements(queryFilter);
 
       setMeasurementsData(data || []);
       setCurrentPage(1);
     } catch (err) {
-      console.error('Failed to query raw measurements:', err);
+      console.error('Failed to query raw measurements from database:', err);
     } finally {
       setIsSearching(false);
     }
-  }, [selectedDbFilter, selectedMetricFilter, engineFilter, selectedObjectFilter, selectedAttributeFilter, selectedStatusFilter, fromDate, toDate, searchTerm]);
+  }, [
+    selectedDbFilter,
+    selectedGroupFilter,
+    selectedMetricFilter,
+    selectedTemplateFilter,
+    engineFilter,
+    selectedObjectFilter,
+    selectedAttributeFilter,
+    selectedStatusFilter,
+    fromDate,
+    toDate,
+    searchTerm,
+    groups,
+    databases,
+    templates,
+    metrics,
+  ]);
 
   // Reset all filters to default state and execute search (default to 24h)
   const handleResetFilters = async () => {
@@ -297,9 +353,12 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     await handleRunQuery({
       searchTerm: '',
       dbType: 'ALL',
+      groupFilter: 'ALL',
+      templateFilter: 'ALL',
       dbId: 'ALL',
       metricId: 'ALL',
       status: 'ALL',
+      pollStatus: 'ALL',
       objectName: 'ALL',
       attributeName: 'ALL',
       fromDate: defaultFrom,
@@ -374,16 +433,9 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         (item.attributeName || 'value').trim().toLowerCase() === selectedAttributeFilter.trim().toLowerCase();
 
       let matchDate = true;
-      if (fromDate) {
-        const itemTime = new Date(item.measuredAt).getTime();
-        const startOfDay = new Date(`${fromDate}T00:00:00`).getTime();
-        if (itemTime < startOfDay) matchDate = false;
-      }
-      if (toDate && matchDate) {
-        const itemTime = new Date(item.measuredAt).getTime();
-        const endOfDay = new Date(`${toDate}T23:59:59.999`).getTime();
-        if (itemTime > endOfDay) matchDate = false;
-      }
+      const itemDateStr = item.measuredAt ? item.measuredAt.slice(0, 10) : '';
+      if (fromDate && itemDateStr && itemDateStr < fromDate) matchDate = false;
+      if (toDate && itemDateStr && itemDateStr > toDate) matchDate = false;
 
       const q = searchTerm.toLowerCase().trim();
       const matchSearch =
@@ -732,6 +784,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 onChange={(val) => {
                   setSelectedGroupFilter(val);
                   setCurrentPage(1);
+                  handleRunQuery({ groupFilter: val });
                 }}
                 options={groupOptions}
                 allLabel={t('rawMeasurements.allGroups')}
@@ -752,6 +805,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 onChange={(val) => {
                   setSelectedTemplateFilter(val);
                   setCurrentPage(1);
+                  handleRunQuery({ templateFilter: val });
                 }}
                 options={templateOptions}
                 allLabel={t('rawMeasurements.allTemplates')}

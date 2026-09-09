@@ -715,10 +715,16 @@ async function startServer() {
     try {
       const limit = req.query.limit !== undefined ? parseInt(req.query.limit as string, 10) : 0;
       const dbId = req.query.dbId as string | undefined;
+      const dbIds = req.query.dbIds ? (req.query.dbIds as string).split(',').map((s) => s.trim()).filter(Boolean) : undefined;
       const metricId = req.query.metricId as string | undefined;
+      const metricIds = req.query.metricIds ? (req.query.metricIds as string).split(',').map((s) => s.trim()).filter(Boolean) : undefined;
       const dbType = req.query.dbType as string | undefined;
+      const groupId = req.query.groupId as string | undefined;
+      const templateId = req.query.templateId as string | undefined;
       const objectName = req.query.objectName as string | undefined;
       const attributeName = req.query.attributeName as string | undefined;
+      const status = (req.query.status || req.query.pollStatus) as string | undefined;
+      const pollStatus = req.query.pollStatus as string | undefined;
       const fromDate = req.query.fromDate as string | undefined;
       const toDate = req.query.toDate as string | undefined;
       const searchTerm = req.query.searchTerm as string | undefined;
@@ -726,10 +732,16 @@ async function startServer() {
       const measurements = await repo.getRawMeasurements({
         limit,
         dbId,
+        dbIds,
         metricId,
+        metricIds,
         dbType,
+        groupId,
+        templateId,
         objectName,
         attributeName,
+        status,
+        pollStatus,
         fromDate,
         toDate,
         searchTerm,

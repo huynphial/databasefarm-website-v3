@@ -1,7 +1,7 @@
 import React from 'react';
 import { Cpu, TrendingUp } from 'lucide-react';
 import { MetricEntity } from '../../../types';
-import { UnifiedMeasurement } from './analyticsUtils';
+import { UnifiedMeasurement, parseTimestampMs } from './analyticsUtils';
 import { formatTimeVN } from '../../../lib/utils';
 import { useLanguage } from '../../../i18n/LanguageContext';
 
@@ -70,16 +70,41 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
               return false;
             });
 
+            // Find newest measurement timestamp for THIS specific metric to respect its individual cycle schedule
+            const latestMetricTime = metricMeasurements.reduce((max, m) => {
+              const t = parseTimestampMs(m.measuredAt);
+              return t > max ? t : max;
+            }, 0);
+
+            // Compute cycle tolerance window (minimum 2 minutes, or 40% of the metric's multi-cycle interval)
+            const cycleMultiplier = Math.max(1, Number(metric.cycle) || 1);
+            const cycleToleranceMs = Math.max(120000, cycleMultiplier * 60000 * 0.4);
+
+            // Filter measurements to only those belonging to the latest execution cycle of this metric
+            const latestCycleMeasurements = latestMetricTime > 0
+              ? metricMeasurements.filter((m) => Math.abs(latestMetricTime - parseTimestampMs(m.measuredAt)) <= cycleToleranceMs)
+              : metricMeasurements;
+
             // Extract dynamic list of attribute names
             const attributeNamesSet = new Set<string>();
             if (metric.thresholdsConfig?.perAttribute) {
               metric.thresholdsConfig.perAttribute.forEach((a) => attributeNamesSet.add(a.attributeName));
             }
-            metricMeasurements.forEach((m) => {
+            latestCycleMeasurements.forEach((m) => {
               if (m.attributeName) attributeNamesSet.add(m.attributeName);
             });
+            if (attributeNamesSet.size === 0) {
+              metricMeasurements.forEach((m) => {
+                if (m.attributeName) attributeNamesSet.add(m.attributeName);
+              });
+            }
 
             const attributeColumns = Array.from(attributeNamesSet);
+
+            // Sort newest first so freshest values are processed first
+            const sortedMeasurements = [...latestCycleMeasurements].sort(
+              (a, b) => parseTimestampMs(b.measuredAt) - parseTimestampMs(a.measuredAt)
+            );
 
             // Group by objectName -> object row with attribute key-values
             const objectRowsMap = new Map<
@@ -87,24 +112,38 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
               {
                 objectName: string;
                 attributes: Record<string, string>;
+                attributeTimes: Record<string, number>;
                 measuredAt: string;
+                latestTime: number;
               }
             >();
 
-            metricMeasurements.forEach((m) => {
+            sortedMeasurements.forEach((m) => {
               const objName = m.objectName || 'GLOBAL';
+              const mTime = parseTimestampMs(m.measuredAt);
+              const attrName = m.attributeName || 'value';
+
               if (!objectRowsMap.has(objName)) {
                 objectRowsMap.set(objName, {
                   objectName: objName,
                   attributes: {},
+                  attributeTimes: {},
                   measuredAt: m.measuredAt,
+                  latestTime: mTime,
                 });
               }
+
               const item = objectRowsMap.get(objName)!;
-              if (m.attributeName) {
-                item.attributes[m.attributeName] = m.value;
+              const existingAttrTime = item.attributeTimes[attrName];
+
+              // Only set attribute value if not set yet, or if this measurement is strictly newer
+              if (existingAttrTime === undefined || mTime > existingAttrTime) {
+                item.attributes[attrName] = String(m.value !== undefined && m.value !== null ? m.value : '');
+                item.attributeTimes[attrName] = mTime;
               }
-              if (new Date(m.measuredAt).getTime() > new Date(item.measuredAt).getTime()) {
+
+              if (mTime > item.latestTime) {
+                item.latestTime = mTime;
                 item.measuredAt = m.measuredAt;
               }
             });

@@ -341,6 +341,7 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
   const stats = useMemo(() => {
     const totalLogs = filteredLogs.length;
     const successLogs = filteredLogs.filter((l) => l.status === 'success').length;
+    const partialLogs = filteredLogs.filter((l) => l.status === 'partial_failed').length;
     const failedLogs = filteredLogs.filter((l) => l.status === 'failed').length;
     const pendingQueue = filteredQueue.filter((q) => q.status === 'pending').length;
     const processingQueue = filteredQueue.filter((q) => q.status === 'processing').length;
@@ -354,6 +355,7 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
     return {
       totalLogs,
       successLogs,
+      partialLogs,
       failedLogs,
       pendingQueue,
       processingQueue,
@@ -856,8 +858,9 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
                 }}
                 className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
               >
-                <option value="ALL">Status: All (Success & Failed)</option>
+                <option value="ALL">Status: All (Success, Warning & Failed)</option>
                 <option value="success">Success Only</option>
+                <option value="partial_failed">Partial / Warning Only</option>
                 <option value="failed">Failed Only</option>
               </select>
             </div>
@@ -926,6 +929,11 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                               SUCCESS
+                            </span>
+                          ) : log.status === 'partial_failed' ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full" title="Partial failure: Resolved to UP (Warning)">
+                              <AlertTriangle className="w-3 h-3 text-orange-600" />
+                              PARTIAL (WARNING)
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
@@ -1078,15 +1086,23 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">Status</span>
                 <span
                   className={`font-bold inline-flex items-center gap-1 mt-0.5 ${
-                    selectedLog.status === 'success' ? 'text-emerald-700' : 'text-rose-700'
+                    selectedLog.status === 'success'
+                      ? 'text-emerald-700'
+                      : selectedLog.status === 'partial_failed'
+                      ? 'text-orange-700'
+                      : 'text-rose-700'
                   }`}
                 >
                   {selectedLog.status === 'success' ? (
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : selectedLog.status === 'partial_failed' ? (
+                    <AlertTriangle className="w-3.5 h-3.5 text-orange-600" />
                   ) : (
                     <XCircle className="w-3.5 h-3.5 text-rose-600" />
                   )}
-                  {selectedLog.status.toUpperCase()}
+                  {selectedLog.status === 'partial_failed'
+                    ? 'PARTIAL_FAILED (RESOLVED TO UP WITH WARNING)'
+                    : selectedLog.status.toUpperCase()}
                 </span>
               </div>
               <div>

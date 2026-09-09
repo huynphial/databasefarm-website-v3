@@ -1,7 +1,7 @@
 import React from 'react';
 import { Layers, TrendingUp } from 'lucide-react';
 import { MetricEntity } from '../../../types';
-import { UnifiedMeasurement } from './analyticsUtils';
+import { UnifiedMeasurement, parseTimestampMs } from './analyticsUtils';
 import { formatTimeVN } from '../../../lib/utils';
 import { useLanguage } from '../../../i18n/LanguageContext';
 
@@ -70,12 +70,34 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
               return false;
             });
 
-            // Group by objectName to get latest measurement per object
+            // Find newest measurement timestamp for THIS specific metric to respect its individual cycle schedule
+            const latestMetricTime = metricMeasurements.reduce((max, m) => {
+              const t = parseTimestampMs(m.measuredAt);
+              return t > max ? t : max;
+            }, 0);
+
+            // Compute cycle tolerance window (minimum 2 minutes, or 40% of the metric's multi-cycle interval)
+            const cycleMultiplier = Math.max(1, Number(metric.cycle) || 1);
+            const cycleToleranceMs = Math.max(120000, cycleMultiplier * 60000 * 0.4);
+
+            // Filter measurements to only those belonging to the latest execution cycle of this metric
+            const latestCycleMeasurements = latestMetricTime > 0
+              ? metricMeasurements.filter((m) => Math.abs(latestMetricTime - parseTimestampMs(m.measuredAt)) <= cycleToleranceMs)
+              : metricMeasurements;
+
+            // Sort newest first
+            const sortedCycleMeasurements = [...latestCycleMeasurements].sort(
+              (a, b) => parseTimestampMs(b.measuredAt) - parseTimestampMs(a.measuredAt)
+            );
+
+            // Group by objectName to get latest measurement per object in the latest cycle
             const objectMap = new Map<string, UnifiedMeasurement>();
-            metricMeasurements.forEach((m) => {
+            sortedCycleMeasurements.forEach((m) => {
               const objName = m.objectName || 'GLOBAL';
               const existing = objectMap.get(objName);
-              if (!existing || new Date(m.measuredAt).getTime() > new Date(existing.measuredAt).getTime()) {
+              const mTime = parseTimestampMs(m.measuredAt);
+              const exTime = existing ? parseTimestampMs(existing.measuredAt) : -1;
+              if (!existing || mTime > exTime) {
                 objectMap.set(objName, m);
               }
             });
