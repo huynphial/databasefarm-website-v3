@@ -1,5 +1,5 @@
 import React from 'react';
-import { Gauge, Check, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Gauge, TrendingUp } from 'lucide-react';
 import { MetricEntity } from '../../../types';
 import { UnifiedMeasurement } from './analyticsUtils';
 import { formatTimeVN } from '../../../lib/utils';
@@ -51,7 +51,6 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
                 <th className="py-2.5 px-3.5">{t('analytics.colMetricCheckName')}</th>
                 <th className="py-2.5 px-3.5">{t('analytics.colValueType')}</th>
                 <th className="py-2.5 px-3.5">{t('analytics.colLatestMeasuredValue')}</th>
-                <th className="py-2.5 px-3.5">{t('analytics.colEvaluationStatus')}</th>
                 <th className="py-2.5 px-3.5">{t('analytics.colThresholdRule')}</th>
                 <th className="py-2.5 px-3.5">{t('analytics.colFrequency')}</th>
                 <th className="py-2.5 px-3.5">{t('analytics.colLastMeasured')}</th>
@@ -80,37 +79,6 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
 
                 const rawVal = hasData ? String(latestMeasurement!.value).trim() : '';
                 const value = hasData ? rawVal : 'N/A';
-
-                // Determine evaluation status
-                let status = latestMeasurement?.status || 'NORMAL';
-                if (hasData && (!status || status === 'NORMAL')) {
-                  const numVal = parseFloat(rawVal.replace(/[^0-9.-]/g, ''));
-                  if (!isNaN(numVal)) {
-                    const warnVal = metric.thresholdWarn ? parseFloat(metric.thresholdWarn) : NaN;
-                    const highVal = metric.thresholdHigh ? parseFloat(metric.thresholdHigh) : NaN;
-                    const critVal = metric.thresholdCritical ? parseFloat(metric.thresholdCritical) : NaN;
-                    const op = String(metric.thresholdOperator || metric.relationalOperator || '>=');
-
-                    if (op === '>=' || op === '>') {
-                      if (!isNaN(critVal) && numVal >= critVal) status = 'CRITICAL';
-                      else if (!isNaN(highVal) && numVal >= highVal) status = 'HIGH';
-                      else if (!isNaN(warnVal) && numVal >= warnVal) status = 'WARN';
-                    } else if (op === '<=' || op === '<') {
-                      if (!isNaN(critVal) && numVal <= critVal) status = 'CRITICAL';
-                      else if (!isNaN(highVal) && numVal <= highVal) status = 'HIGH';
-                      else if (!isNaN(warnVal) && numVal <= warnVal) status = 'WARN';
-                    }
-                  }
-                }
-
-                const statusBadge =
-                  status === 'CRITICAL' || status === 'FATAL' || status === 'DOWN'
-                    ? 'bg-rose-50 text-rose-700 border-rose-200'
-                    : status === 'HIGH'
-                    ? 'bg-orange-50 text-orange-700 border-orange-200'
-                    : status === 'WARNING' || status === 'WARN'
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
 
                 const thresholdText =
                   metric.thresholdWarn || metric.thresholdHigh || metric.thresholdCritical
@@ -142,12 +110,6 @@ export const MetricType1Table: React.FC<MetricType1TableProps> = ({
                     <td className="py-3 px-3.5">
                       <span className={`font-mono font-bold text-sm ${hasData ? 'text-slate-900' : 'text-slate-400 italic'}`}>
                         {value}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3.5">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadge}`}>
-                        {status === 'NORMAL' ? <Check className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                        {status}
                       </span>
                     </td>
                     <td className="py-3 px-3.5 font-mono text-[11px] text-slate-600">

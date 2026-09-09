@@ -16,6 +16,11 @@ import {
   Box,
   Tag,
   SlidersHorizontal,
+  ShieldAlert,
+  Terminal,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import {
   RawMeasurementEntity,
@@ -69,6 +74,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   const [selectedMetricFilter, setSelectedMetricFilter] = useState<string>('ALL');
   const [selectedObjectFilter, setSelectedObjectFilter] = useState<string>('ALL');
   const [selectedAttributeFilter, setSelectedAttributeFilter] = useState<string>('ALL');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
 
   // Date Range Filter (Default: Last 24 Hours)
   const [fromDate, setFromDate] = useState<string>(() => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
@@ -218,6 +224,14 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     }));
   }, [availableAttributes]);
 
+  // Options for Status filter (Poll Status)
+  const statusOptions = useMemo<SearchableOption[]>(() => {
+    return [
+      { value: 'SUCCESS', label: 'SUCCESS (OK)', badge: 'SUCCESS', badgeColor: 'bg-emerald-100 text-emerald-800 border border-emerald-300', icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> },
+      { value: 'FAIL', label: 'FAIL (Error)', badge: 'FAIL', badgeColor: 'bg-red-100 text-red-800 border border-red-300', icon: <XCircle className="w-3.5 h-3.5 text-red-600" /> },
+    ];
+  }, []);
+
   // Target databases scoped to selected group if active
   const databasesForFilter = useMemo(() => {
     if (selectedGroupFilter === 'ALL') return databases;
@@ -236,6 +250,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       const activeEngine = overrideFilter?.dbType !== undefined ? overrideFilter.dbType : engineFilter;
       const activeObject = overrideFilter?.objectName !== undefined ? overrideFilter.objectName : selectedObjectFilter;
       const activeAttribute = overrideFilter?.attributeName !== undefined ? overrideFilter.attributeName : selectedAttributeFilter;
+      const activeStatus = overrideFilter?.status !== undefined ? overrideFilter.status : selectedStatusFilter;
       const activeFrom = overrideFilter?.fromDate !== undefined ? overrideFilter.fromDate : fromDate;
       const activeTo = overrideFilter?.toDate !== undefined ? overrideFilter.toDate : toDate;
       const activeSearch = overrideFilter?.searchTerm !== undefined ? overrideFilter.searchTerm : searchTerm;
@@ -244,6 +259,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         dbId: activeDb !== 'ALL' ? activeDb : undefined,
         metricId: activeMetric !== 'ALL' ? activeMetric : undefined,
         dbType: activeEngine !== 'ALL' ? activeEngine : undefined,
+        status: activeStatus !== 'ALL' ? activeStatus : undefined,
         objectName: activeObject !== 'ALL' ? activeObject : undefined,
         attributeName: activeAttribute !== 'ALL' ? activeAttribute : undefined,
         fromDate: activeFrom || undefined,
@@ -259,7 +275,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     } finally {
       setIsSearching(false);
     }
-  }, [selectedDbFilter, selectedMetricFilter, engineFilter, selectedObjectFilter, selectedAttributeFilter, fromDate, toDate, searchTerm]);
+  }, [selectedDbFilter, selectedMetricFilter, engineFilter, selectedObjectFilter, selectedAttributeFilter, selectedStatusFilter, fromDate, toDate, searchTerm]);
 
   // Reset all filters to default state and execute search (default to 24h)
   const handleResetFilters = async () => {
@@ -273,6 +289,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     setSelectedMetricFilter('ALL');
     setSelectedObjectFilter('ALL');
     setSelectedAttributeFilter('ALL');
+    setSelectedStatusFilter('ALL');
     setFromDate(defaultFrom);
     setToDate(defaultTo);
     setCurrentPage(1);
@@ -282,6 +299,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       dbType: 'ALL',
       dbId: 'ALL',
       metricId: 'ALL',
+      status: 'ALL',
       objectName: 'ALL',
       attributeName: 'ALL',
       fromDate: defaultFrom,
@@ -343,6 +361,11 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       const matchTemplate = !allowedMetricIdsByTemplate || allowedMetricIdsByTemplate.has(item.metricId);
       const matchDb = selectedDbFilter === 'ALL' || item.dbId === selectedDbFilter;
       const matchMetric = selectedMetricFilter === 'ALL' || item.metricId === selectedMetricFilter;
+      const matchStatus =
+        selectedStatusFilter === 'ALL' ||
+        (selectedStatusFilter === 'FAIL'
+          ? ((item.pollStatus || '').toUpperCase() === 'FAIL' || (item.pollStatus || '').toUpperCase() === 'FAILED' || (item.pollStatus || '').toUpperCase() === 'ERROR')
+          : (item.pollStatus || 'SUCCESS').toUpperCase() === selectedStatusFilter.toUpperCase());
       const matchObject =
         selectedObjectFilter === 'ALL' ||
         (item.objectName || 'INSTANCE').trim().toLowerCase() === selectedObjectFilter.trim().toLowerCase();
@@ -370,9 +393,11 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         (item.objectName && item.objectName.toLowerCase().includes(q)) ||
         (item.attributeName && item.attributeName.toLowerCase().includes(q)) ||
         (item.value && item.value.toLowerCase().includes(q)) ||
+        (item.pollStatus && item.pollStatus.toLowerCase().includes(q)) ||
+        (item.pollResponse && item.pollResponse.toLowerCase().includes(q)) ||
         (item.dbType && item.dbType.toLowerCase().includes(q));
 
-      return matchEngine && matchGroup && matchTemplate && matchDb && matchMetric && matchObject && matchAttribute && matchDate && matchSearch;
+      return matchEngine && matchGroup && matchTemplate && matchDb && matchMetric && matchStatus && matchObject && matchAttribute && matchDate && matchSearch;
     });
   }, [
     measurementsData,
@@ -381,6 +406,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     selectedTemplateFilter,
     selectedDbFilter,
     selectedMetricFilter,
+    selectedStatusFilter,
     selectedObjectFilter,
     selectedAttributeFilter,
     groups,
@@ -408,10 +434,11 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       'Metric Name',
       'Object Name',
       'Attribute Name',
+      'Poll Status',
       'Measured Value',
+      'Poll Response / Error',
       'Triggered Threshold',
       'Cycle',
-      'Health Status',
       'Timestamp (UTC+7)',
     ];
 
@@ -422,10 +449,11 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       `"${(m.metricName || '').replace(/"/g, '""')}"`,
       `"${(m.objectName || '').replace(/"/g, '""')}"`,
       `"${(m.attributeName || 'value').replace(/"/g, '""')}"`,
+      m.pollStatus || (m.status === 'ERROR' || m.status === 'FAIL' || m.status === 'DOWN' ? 'FAIL' : 'SUCCESS'),
       `"${String(m.value || '').replace(/"/g, '""')}"`,
+      `"${String(m.pollResponse || m.response || '').replace(/"/g, '""')}"`,
       `"${(m.triggeredThreshold || 'Normal / In Bounds').replace(/"/g, '""')}"`,
       m.cycle ?? 1,
-      m.status || 'NORMAL',
       formatExactTime(m.measuredAt),
     ]);
 
@@ -478,6 +506,18 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     }
   }
 
+  const getStatusBadgeMeta = (pollStatus?: string) => {
+    const ps = (pollStatus || 'SUCCESS').toUpperCase();
+
+    if (ps === 'FAIL' || ps === 'FAILED' || ps === 'ERROR') {
+      return { badge: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500', label: 'FAIL', isFail: true };
+    }
+    if (ps === 'TIMEOUT') {
+      return { badge: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500', label: 'TIMEOUT', isFail: true };
+    }
+    return { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500', label: 'SUCCESS', isFail: false };
+  };
+
   const hasActiveFilters =
     searchTerm.trim() !== '' ||
     engineFilter !== 'ALL' ||
@@ -485,6 +525,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     selectedTemplateFilter !== 'ALL' ||
     selectedDbFilter !== 'ALL' ||
     selectedMetricFilter !== 'ALL' ||
+    selectedStatusFilter !== 'ALL' ||
     selectedObjectFilter !== 'ALL' ||
     selectedAttributeFilter !== 'ALL';
 
@@ -667,7 +708,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           </div>
 
           {/* Sub-row 2: Searchable Dropdown Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2">
             {/* 1. DB Engine Filter */}
             <div>
               <DatabaseEngineFilter
@@ -763,7 +804,28 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
               />
             </div>
 
-            {/* 6. Object Name Filter (Searchable) */}
+            {/* 6. Poll Status Filter (Searchable) */}
+            <div>
+              <SearchableSelect
+                value={selectedStatusFilter}
+                onChange={(val) => {
+                  setSelectedStatusFilter(val);
+                  setCurrentPage(1);
+                  handleRunQuery({ status: val });
+                }}
+                options={statusOptions}
+                allLabel={t('rawMeasurements.allStatuses')}
+                allSubLabel="Filter by poll metric status"
+                placeholder="Filter status..."
+                title={t('rawMeasurements.pollStatus')}
+                icon={<ShieldAlert className="w-3.5 h-3.5" />}
+                className="w-full"
+                popoverMinWidth="min-w-[200px]"
+                emptyText={t('rawMeasurements.noMatchingItems')}
+              />
+            </div>
+
+            {/* 7. Object Name Filter (Searchable) */}
             <div>
               <SearchableSelect
                 value={selectedObjectFilter}
@@ -784,7 +846,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
               />
             </div>
 
-            {/* 7. Attribute Name Filter (Searchable) */}
+            {/* 8. Attribute Name Filter (Searchable) */}
             <div>
               <SearchableSelect
                 value={selectedAttributeFilter}
@@ -822,18 +884,19 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-2.5 px-3.5 w-[160px] whitespace-nowrap">{t('rawMeasurements.timestamp')}</th>
-                <th className="py-2.5 px-3.5 w-[200px]">{t('rawMeasurements.database')}</th>
-                <th className="py-2.5 px-3.5 w-[200px]">{t('rawMeasurements.metricName')}</th>
-                <th className="py-2.5 px-3.5 w-[180px]">{t('rawMeasurements.objectAttribute')}</th>
-                <th className="py-2.5 px-3.5 min-w-[280px]">{t('rawMeasurements.measuredValue')}</th>
-                <th className="py-2.5 px-3.5 w-[90px] text-center whitespace-nowrap">{t('rawMeasurements.cycle')}</th>
+                <th className="py-2.5 px-3.5 w-[150px] whitespace-nowrap">{t('rawMeasurements.timestamp')}</th>
+                <th className="py-2.5 px-3.5 w-[180px]">{t('rawMeasurements.database')}</th>
+                <th className="py-2.5 px-3.5 w-[180px]">{t('rawMeasurements.metricName')}</th>
+                <th className="py-2.5 px-3.5 w-[160px]">{t('rawMeasurements.objectAttribute')}</th>
+                <th className="py-2.5 px-3.5 w-[120px]">{t('rawMeasurements.pollStatus')}</th>
+                <th className="py-2.5 px-3.5 min-w-[260px]">{t('rawMeasurements.measuredValue')}</th>
+                <th className="py-2.5 px-3.5 w-[80px] text-center whitespace-nowrap">{t('rawMeasurements.cycle')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
+                  <td colSpan={7} className="py-12 text-center text-slate-500">
                     <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="font-semibold text-slate-700">{t('rawMeasurements.noMeasurementsFound')}</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
@@ -847,6 +910,9 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                   const ipPort = db ? `${db.host}:${db.port}` : '127.0.0.1:3306';
                   const badgeClass = getDbEngineBadgeClass(item.dbType);
                   const hexColor = getDbEngineHexColor(item.dbType, databaseEngines);
+                  const statusMeta = getStatusBadgeMeta(item.pollStatus);
+                  const displayPollStatus = item.pollStatus || 'SUCCESS';
+                  const serverResponse = item.pollResponse || item.response;
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
@@ -867,7 +933,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                           {/* Line 1: Database Name */}
                           <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                             <Database className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            <span className="truncate max-w-[160px]" title={item.dbName}>{item.dbName}</span>
+                            <span className="truncate max-w-[150px]" title={item.dbName}>{item.dbName}</span>
                           </div>
                           {/* Line 2: IP Address : Port */}
                           <div className="text-[10px] text-slate-400 font-mono">
@@ -909,14 +975,45 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 5. Measured Value (Expansive width) */}
+                      {/* 5. Poll Status Column */}
                       <td className="py-2.5 px-3.5 align-top">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusMeta.badge}`}>
+                          {statusMeta.isFail ? (
+                            <XCircle className="w-3 h-3 text-red-600 shrink-0" />
+                          ) : (
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                          )}
+                          {displayPollStatus}
+                        </span>
+                      </td>
+
+                      {/* 6. Measured Value & Poll Response */}
+                      <td className="py-2.5 px-3.5 align-top space-y-1.5">
                         <div className="font-mono text-xs font-semibold text-slate-900 bg-slate-50/80 border border-slate-200/80 rounded-md px-2.5 py-1.5 break-all max-h-[120px] overflow-y-auto">
                           {item.value !== undefined && item.value !== null && item.value !== '' ? item.value : '0'}
                         </div>
+                        {serverResponse && (
+                          statusMeta.isFail || displayPollStatus === 'FAIL' || displayPollStatus === 'ERROR' ? (
+                            <div className="text-[11px] font-mono text-red-800 bg-red-50 border border-red-200 rounded p-1.5 break-all max-h-[120px] overflow-y-auto flex items-start gap-1.5 shadow-2xs">
+                              <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0 mt-0.5" />
+                              <div className="min-w-0">
+                                <span className="text-[9px] font-bold text-red-700 uppercase mr-1">{t('rawMeasurements.serverError')}:</span>
+                                <span className="font-medium">{serverResponse}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] font-mono text-slate-600 bg-slate-100/70 border border-slate-200 rounded p-1.5 break-all max-h-[90px] overflow-y-auto flex items-start gap-1">
+                              <Terminal className="w-3 h-3 text-slate-400 shrink-0 mt-0.5" />
+                              <div className="min-w-0">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase mr-1">{t('rawMeasurements.response')}:</span>
+                                <span>{serverResponse}</span>
+                              </div>
+                            </div>
+                          )
+                        )}
                       </td>
 
-                      {/* 6. Cycle */}
+                      {/* 7. Cycle */}
                       <td className="py-2.5 px-3.5 text-center whitespace-nowrap font-mono text-[11px] text-slate-600 align-top">
                         <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-700 font-bold">
                           {t('rawMeasurements.cycle')} {item.cycle ?? 1}

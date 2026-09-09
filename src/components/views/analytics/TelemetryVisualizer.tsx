@@ -282,8 +282,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
           (m) =>
             (m.objectName && m.objectName.toLowerCase().includes(q)) ||
             (m.attributeName && m.attributeName.toLowerCase().includes(q)) ||
-            (m.value && m.value.toLowerCase().includes(q)) ||
-            (m.status && m.status.toLowerCase().includes(q))
+            (m.value && m.value.toLowerCase().includes(q))
         );
       }
 
@@ -301,14 +300,13 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
 
     const handleExportCSV = () => {
       if (historyTableItems.length === 0) return;
-      const headers = ['Measured At (UTC+7)', 'Metric Name', 'Object Identifier', 'Attribute Name', 'Measured Value', 'Status'];
+      const headers = ['Measured At (UTC+7)', 'Metric Name', 'Object Identifier', 'Attribute Name', 'Measured Value'];
       const rows = historyTableItems.map((item) => [
         `"${formatTimeVN(item.measuredAt)}"`,
         `"${item.metricName || selectedMetric?.name || ''}"`,
         `"${item.objectName}"`,
         `"${item.attributeName}"`,
         `"${item.value}"`,
-        `"${item.status}"`,
       ]);
       const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
       const encodedUri = encodeURI(csvContent);
@@ -537,14 +535,13 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
                     </th>
                     <th className="py-2.5 px-3.5">{t('analytics.colObjectIdentifier')}</th>
                     <th className="py-2.5 px-3.5">{t('analytics.colAttributeName')}</th>
-                    <th className="py-2.5 px-3.5">{t('analytics.colMeasuredValue')}</th>
-                    <th className="py-2.5 px-3.5 text-right">{t('analytics.colStatus')}</th>
+                    <th className="py-2.5 px-3.5 text-right">{t('analytics.colMeasuredValue')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {paginatedHistory.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-6 text-center text-slate-400 text-xs">
+                      <td colSpan={4} className="py-6 text-center text-slate-400 text-xs">
                         {t('analytics.noTelemetryHistory')}
                       </td>
                     </tr>
@@ -554,18 +551,7 @@ export const TelemetryVisualizer = React.forwardRef<HTMLDivElement, TelemetryVis
                         <td className="py-2.5 px-3.5 font-mono text-slate-600">{formatTimeVN(row.measuredAt)}</td>
                         <td className="py-2.5 px-3.5 font-bold font-mono text-slate-900">{row.objectName}</td>
                         <td className="py-2.5 px-3.5 font-mono text-slate-600">{row.attributeName}</td>
-                        <td className="py-2.5 px-3.5 font-mono font-bold text-slate-900">{row.value}</td>
-                        <td className="py-2.5 px-3.5 text-right">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            row.status === 'CRITICAL' || row.status === 'DOWN'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : row.status === 'WARNING'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          }`}>
-                            {row.status}
-                          </span>
-                        </td>
+                        <td className="py-2.5 px-3.5 font-mono font-bold text-slate-900 text-right">{row.value}</td>
                       </tr>
                     ))
                   )}

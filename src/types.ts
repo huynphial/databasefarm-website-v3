@@ -197,6 +197,8 @@ export interface MetricDataPointEntity {
   objectName?: string | null;
   attributeName?: string | null;
   value: string;
+  pollStatus?: 'SUCCESS' | 'FAIL' | 'FAILED' | 'ERROR' | 'TIMEOUT' | string | null;
+  pollResponse?: string | null;
   measuredAt: string;
 }
 
@@ -214,7 +216,10 @@ export interface RawMeasurementEntity {
   thresholdOperator?: string;
   triggeredThreshold?: string | null; // e.g. "Warn: 80 / High: 90 / Crit: 95"
   cycle?: number;
-  status: 'NORMAL' | 'WARN' | 'WARNING' | 'HIGH' | 'CRITICAL' | 'FATAL' | 'DOWN' | string;
+  status?: string;
+  response?: string | null;
+  pollStatus?: 'SUCCESS' | 'FAIL' | 'FAILED' | 'ERROR' | 'TIMEOUT' | string | null;
+  pollResponse?: string | null; // Server fail response, error stack, or query result details
   measuredAt: string;
 }
 
@@ -225,6 +230,8 @@ export interface RawMeasurementFilter {
   dbType?: string;
   objectName?: string;
   attributeName?: string;
+  status?: string;
+  pollStatus?: string;
   fromDate?: string;
   toDate?: string;
   searchTerm?: string;
@@ -358,6 +365,8 @@ export interface MetricHistoryEntity {
   objectName: string; // Target object identifier (e.g. tablespace name, mount point, replica, or instance/total)
   attributeName?: string | null; // Redesigned attribute name for multi-attribute support
   value: string;
+  pollStatus?: string | null;
+  pollResponse?: string | null;
   createdAt: string;
 }
 

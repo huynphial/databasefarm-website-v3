@@ -1403,6 +1403,9 @@ FROM pg_tablespace`,
       triggeredThreshold: 'Connection refused on TCP port 3306',
       cycle: 1,
       status: 'DOWN',
+      pollStatus: 'FAIL',
+      pollResponse: 'ERROR 2003 (HY000): Can\'t connect to MySQL server on \'10.0.40.72:3306\' (111 Connection refused)',
+      response: 'ERROR 2003 (HY000): Can\'t connect to MySQL server on \'10.0.40.72:3306\' (111 Connection refused)',
       measuredAt: new Date(Date.now() - 12 * 60000).toISOString(),
     },
     {
@@ -1420,7 +1423,50 @@ FROM pg_tablespace`,
       triggeredThreshold: null,
       cycle: 1,
       status: 'NORMAL',
+      pollStatus: 'SUCCESS',
+      pollResponse: 'Query executed in 14ms: returned 1 row [threads_connected: 45]',
+      response: 'Query executed in 14ms: returned 1 row [threads_connected: 45]',
       measuredAt: new Date(Date.now() - 60 * 60000).toISOString(),
+    },
+    {
+      id: 'raw-ora-err-1',
+      dbId: 'db-01',
+      dbName: 'ERP_PROD_ORA',
+      dbType: 'ORACLE',
+      metricId: 'met-02',
+      metricName: 'Active Sessions Count',
+      objectName: 'SYSDBA',
+      attributeName: 'active_sessions',
+      value: '0',
+      valueType: 'NUMBER',
+      thresholdOperator: '>=',
+      triggeredThreshold: null,
+      cycle: 1,
+      status: 'ERROR',
+      pollStatus: 'FAIL',
+      pollResponse: 'ORA-01017: invalid username/password; logon denied (probe auth token expired)',
+      response: 'ORA-01017: invalid username/password; logon denied (probe auth token expired)',
+      measuredAt: new Date(Date.now() - 18 * 60000).toISOString(),
+    },
+    {
+      id: 'raw-pg-err-1',
+      dbId: 'db-02',
+      dbName: 'PAYMENT_API_PG',
+      dbType: 'POSTGRES',
+      metricId: 'met-04',
+      metricName: 'Replication Lag (Seconds)',
+      objectName: 'replica_standby_01',
+      attributeName: 'lag_seconds',
+      value: '0',
+      valueType: 'NUMBER',
+      thresholdOperator: '>=',
+      triggeredThreshold: null,
+      cycle: 1,
+      status: 'ERROR',
+      pollStatus: 'FAIL',
+      pollResponse: 'canceling statement due to statement timeout (timeout=5000ms reached on pg_stat_replication)',
+      response: 'canceling statement due to statement timeout (timeout=5000ms reached on pg_stat_replication)',
+      measuredAt: new Date(Date.now() - 22 * 60000).toISOString(),
     },
   ];
 
@@ -2124,6 +2170,8 @@ FROM pg_tablespace`,
       objectName: historyData.objectName || 'INSTANCE',
       attributeName: historyData.attributeName || 'value',
       value: historyData.value || '0',
+      pollStatus: historyData.pollStatus || 'SUCCESS',
+      pollResponse: historyData.pollResponse || null,
       createdAt: historyData.createdAt || new Date().toISOString(),
     };
     this.metricHistory = [entry, ...this.metricHistory];
@@ -2155,6 +2203,12 @@ FROM pg_tablespace`,
     if (filter.dbType && filter.dbType !== 'ALL') {
       list = list.filter((m) => (m.dbType || '').toUpperCase() === filter.dbType!.toUpperCase());
     }
+    if (filter.status && filter.status !== 'ALL') {
+      list = list.filter((m) => (m.status || '').toUpperCase() === filter.status!.toUpperCase() || (m.pollStatus || '').toUpperCase() === filter.status!.toUpperCase());
+    }
+    if (filter.pollStatus && filter.pollStatus !== 'ALL') {
+      list = list.filter((m) => (m.pollStatus || '').toUpperCase() === filter.pollStatus!.toUpperCase());
+    }
     if (filter.objectName && filter.objectName !== 'ALL') {
       const targetObj = filter.objectName.toLowerCase().trim();
       list = list.filter((m) => (m.objectName || '').toLowerCase().trim() === targetObj);
@@ -2181,6 +2235,10 @@ FROM pg_tablespace`,
         (m.objectName && m.objectName.toLowerCase().includes(q)) ||
         (m.attributeName && m.attributeName.toLowerCase().includes(q)) ||
         (m.value && m.value.toLowerCase().includes(q)) ||
+        (m.status && m.status.toLowerCase().includes(q)) ||
+        (m.pollStatus && m.pollStatus.toLowerCase().includes(q)) ||
+        (m.response && m.response.toLowerCase().includes(q)) ||
+        (m.pollResponse && m.pollResponse.toLowerCase().includes(q)) ||
         (m.dbType && m.dbType.toLowerCase().includes(q))
       );
     }
@@ -2206,6 +2264,9 @@ FROM pg_tablespace`,
       triggeredThreshold: data.triggeredThreshold || null,
       cycle: data.cycle || 1,
       status: data.status || 'NORMAL',
+      response: data.response || data.pollResponse || null,
+      pollStatus: data.pollStatus || (data.status === 'ERROR' || data.status === 'FAIL' || data.status === 'DOWN' ? 'FAIL' : 'SUCCESS'),
+      pollResponse: data.pollResponse || data.response || null,
       measuredAt: data.measuredAt || new Date().toISOString(),
     };
     this.rawMeasurements = [entry, ...this.rawMeasurements];

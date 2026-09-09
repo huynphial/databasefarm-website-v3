@@ -149,7 +149,6 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
                         <tr>
                           <th className="py-2.5 px-3.5">{t('analytics.colObjectIdentifier')}</th>
                           <th className="py-2.5 px-3.5">{t('analytics.colMeasuredValue')}</th>
-                          <th className="py-2.5 px-3.5">{t('analytics.colStatus')}</th>
                           <th className="py-2.5 px-3.5">{t('analytics.colThresholdEval')}</th>
                           <th className="py-2.5 px-3.5">{t('analytics.colLastMeasured')}</th>
                           <th className="py-2.5 px-3.5 text-right">{t('analytics.colAction')}</th>
@@ -157,13 +156,6 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {objectRows.map((row) => {
-                          const statusBadge =
-                            row.status === 'CRITICAL' || row.status === 'DOWN'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : row.status === 'WARNING'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-
                           return (
                             <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
                               <td className="py-2.5 px-3.5 font-bold font-mono text-slate-900 flex items-center gap-1.5">
@@ -173,11 +165,6 @@ export const MetricType2Tables: React.FC<MetricType2TablesProps> = ({
                               <td className="py-2.5 px-3.5">
                                 <span className="font-mono font-bold text-slate-900 text-sm">
                                   {row.value}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3.5">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadge}`}>
-                                  {row.status}
                                 </span>
                               </td>
                               <td className="py-2.5 px-3.5 font-mono text-[11px] text-slate-500">

@@ -87,7 +87,6 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
               {
                 objectName: string;
                 attributes: Record<string, string>;
-                status: string;
                 measuredAt: string;
               }
             >();
@@ -98,18 +97,12 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
                 objectRowsMap.set(objName, {
                   objectName: objName,
                   attributes: {},
-                  status: 'NORMAL',
                   measuredAt: m.measuredAt,
                 });
               }
               const item = objectRowsMap.get(objName)!;
               if (m.attributeName) {
                 item.attributes[m.attributeName] = m.value;
-              }
-              if (m.status === 'CRITICAL' || m.status === 'DOWN') {
-                item.status = m.status;
-              } else if (m.status === 'WARNING' && item.status !== 'CRITICAL') {
-                item.status = 'WARNING';
               }
               if (new Date(m.measuredAt).getTime() > new Date(item.measuredAt).getTime()) {
                 item.measuredAt = m.measuredAt;
@@ -193,13 +186,6 @@ export const MetricType3Tables: React.FC<MetricType3TablesProps> = ({
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {objectRows.map((row) => {
-                          const statusBadge =
-                            row.status === 'CRITICAL' || row.status === 'DOWN'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : row.status === 'WARNING'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-
                           return (
                             <tr key={row.objectName} className="hover:bg-slate-50/80 transition-colors">
                               <td className="py-2.5 px-3.5 font-bold font-mono text-slate-900 flex items-center gap-1.5">

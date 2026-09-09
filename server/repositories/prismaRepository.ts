@@ -1304,93 +1304,75 @@ export class PrismaRepository implements IStorageRepository {
     }
 
     try {
-      const list = await (this.prisma as any).metricDataPoint.findMany({
-        where: whereDataPoint,
-        include: { database: true, metric: true },
-        orderBy: { measuredAt: 'desc' },
-        take: 5000,
+      const [dbs, metrics, rawList] = await Promise.all([
+        (this.prisma as any).database.findMany({ select: { id: true, name: true } }).catch(() => []),
+        (this.prisma as any).metric.findMany({ select: { id: true, name: true } }).catch(() => []),
+        (this.prisma as any).metricDataPoint.findMany({
+          where: whereDataPoint,
+          orderBy: { measuredAt: 'desc' },
+          take: 5000,
+        }),
+      ]);
+
+      const dbMap = new Map<string, string>(dbs.map((d: any) => [d.id, d.name]));
+      const metricMap = new Map<string, string>(metrics.map((m: any) => [m.id, m.name]));
+
+      return rawList.map((m: any) => {
+        const dId = m.dbId || m.databaseId || '';
+        const mId = m.metricId || '';
+        return {
+          id: String(m.id),
+          dbId: dId,
+          dbName: dbMap.get(dId) || '',
+          metricId: mId,
+          metricName: metricMap.get(mId) || '',
+          objectName: m.objectName || 'INSTANCE',
+          attributeName: m.attributeName || 'value',
+          value: m.value != null ? String(m.value) : '0',
+          pollStatus: m.pollStatus || 'SUCCESS',
+          pollResponse: m.pollResponse || null,
+          createdAt: (m.measuredAt instanceof Date ? m.measuredAt : new Date(m.measuredAt || Date.now())).toISOString(),
+        };
       });
-
-      return list.map((m: any) => ({
-        id: String(m.id),
-        dbId: m.dbId || m.databaseId || '',
-        dbName: m.database?.name || m.dbName || '',
-        metricId: m.metricId || '',
-        metricName: m.metric?.name || m.metricName || '',
-        objectName: m.objectName || 'INSTANCE',
-        attributeName: m.attributeName || 'value',
-        value: m.value != null ? String(m.value) : '0',
-        createdAt: (m.measuredAt instanceof Date ? m.measuredAt : new Date(m.measuredAt || Date.now())).toISOString(),
-      }));
     } catch (prismaErr) {
-      // Fallback 1: Query without include and map names in memory
+      // Fallback: Raw SQL with LEFT JOIN
       try {
-        const [dbs, metrics, rawList] = await Promise.all([
-          (this.prisma as any).database.findMany({ select: { id: true, name: true } }).catch(() => []),
-          (this.prisma as any).metric.findMany({ select: { id: true, name: true } }).catch(() => []),
-          (this.prisma as any).metricDataPoint.findMany({
-            where: whereDataPoint,
-            orderBy: { measuredAt: 'desc' },
-            take: 5000,
-          }),
-        ]);
-
-        const dbMap = new Map<string, string>(dbs.map((d: any) => [d.id, d.name]));
-        const metricMap = new Map<string, string>(metrics.map((m: any) => [m.id, m.name]));
-
-        return rawList.map((m: any) => {
-          const dId = m.dbId || m.databaseId || '';
-          const mId = m.metricId || '';
-          return {
-            id: String(m.id),
-            dbId: dId,
-            dbName: dbMap.get(dId) || '',
-            metricId: mId,
-            metricName: metricMap.get(mId) || '',
-            objectName: m.objectName || 'INSTANCE',
-            attributeName: m.attributeName || 'value',
-            value: m.value != null ? String(m.value) : '0',
-            createdAt: (m.measuredAt instanceof Date ? m.measuredAt : new Date(m.measuredAt || Date.now())).toISOString(),
-          };
-        });
-      } catch (rawErr) {
-        // Fallback 2: Raw SQL with LEFT JOIN
-        try {
-          const conditions: string[] = [];
-          if (dbId && dbId !== 'ALL') conditions.push(`mdp.database_id = '${dbId.replace(/'/g, "''")}'`);
-          if (metricId && metricId !== 'ALL') conditions.push(`mdp.metric_id = '${metricId.replace(/'/g, "''")}'`);
-          if (fromDate) conditions.push(`mdp.measured_at >= '${new Date(fromDate).toISOString().slice(0, 19).replace('T', ' ')}'`);
-          if (toDate) {
-            const toDateObj = toDate.length === 10 ? new Date(`${toDate}T23:59:59.999Z`) : new Date(toDate);
-            conditions.push(`mdp.measured_at <= '${toDateObj.toISOString().slice(0, 19).replace('T', ' ')}'`);
-          }
-          const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-          const sql = `
-            SELECT mdp.id, mdp.database_id, mdp.metric_id, mdp.object_name, mdp.attribute_name, mdp.value, mdp.measured_at,
-                   d.name as db_name, m.name as metric_name
-            FROM metric_data_points mdp
-            LEFT JOIN databases d ON mdp.database_id = d.id
-            LEFT JOIN metrics m ON mdp.metric_id = m.id
-            ${whereClause}
-            ORDER BY mdp.measured_at DESC
-            LIMIT 5000
-          `;
-          const sqlRes: any[] = await (this.prisma as any).$queryRawUnsafe(sql);
-          return (sqlRes || []).map((r: any) => ({
-            id: String(r.id),
-            dbId: r.database_id || r.dbId || '',
-            dbName: r.db_name || r.dbName || '',
-            metricId: r.metric_id || r.metricId || '',
-            metricName: r.metric_name || r.metricName || '',
-            objectName: r.object_name || r.objectName || 'INSTANCE',
-            attributeName: r.attribute_name || r.attributeName || 'value',
-            value: r.value != null ? String(r.value) : '0',
-            createdAt: (r.measured_at instanceof Date ? r.measured_at : new Date(r.measured_at || Date.now())).toISOString(),
-          }));
-        } catch (finalErr) {
-          console.error('getMetricHistory error:', finalErr);
-          return [];
+        const conditions: string[] = [];
+        if (dbId && dbId !== 'ALL') conditions.push(`mdp.database_id = '${dbId.replace(/'/g, "''")}'`);
+        if (metricId && metricId !== 'ALL') conditions.push(`mdp.metric_id = '${metricId.replace(/'/g, "''")}'`);
+        if (fromDate) conditions.push(`mdp.measured_at >= '${new Date(fromDate).toISOString().slice(0, 19).replace('T', ' ')}'`);
+        if (toDate) {
+          const toDateObj = toDate.length === 10 ? new Date(`${toDate}T23:59:59.999Z`) : new Date(toDate);
+          conditions.push(`mdp.measured_at <= '${toDateObj.toISOString().slice(0, 19).replace('T', ' ')}'`);
         }
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+        const sql = `
+          SELECT mdp.id, mdp.database_id, mdp.metric_id, mdp.object_name, mdp.attribute_name, mdp.value, mdp.poll_status, mdp.poll_response, mdp.measured_at,
+                 d.name as db_name, m.name as metric_name
+          FROM metric_data_points mdp
+          LEFT JOIN databases d ON mdp.database_id = d.id
+          LEFT JOIN metrics m ON mdp.metric_id = m.id
+          ${whereClause}
+          ORDER BY mdp.measured_at DESC
+          LIMIT 5000
+        `;
+        const sqlRes: any[] = await (this.prisma as any).$queryRawUnsafe(sql);
+        return (sqlRes || []).map((r: any) => ({
+          id: String(r.id),
+          dbId: r.database_id || r.dbId || '',
+          dbName: r.db_name || r.dbName || '',
+          metricId: r.metric_id || r.metricId || '',
+          metricName: r.metric_name || r.metricName || '',
+          objectName: r.object_name || r.objectName || 'INSTANCE',
+          attributeName: r.attribute_name || r.attributeName || 'value',
+          value: r.value != null ? String(r.value) : '0',
+          pollStatus: r.poll_status || 'SUCCESS',
+          pollResponse: r.poll_response || null,
+          createdAt: (r.measured_at instanceof Date ? r.measured_at : new Date(r.measured_at || Date.now())).toISOString(),
+        }));
+      } catch (finalErr) {
+        console.error('getMetricHistory error:', finalErr);
+        return [];
       }
     }
   }
@@ -1403,20 +1385,28 @@ export class PrismaRepository implements IStorageRepository {
         objectName: historyData.objectName,
         attributeName: historyData.attributeName || 'value',
         value: historyData.value || '0',
+        pollStatus: historyData.pollStatus || 'SUCCESS',
+        pollResponse: historyData.pollResponse || null,
         measuredAt: historyData.createdAt ? new Date(historyData.createdAt) : new Date(),
       },
-      include: { database: true, metric: true },
     });
+
+    const [db, metric] = await Promise.all([
+      (this.prisma as any).database.findUnique({ where: { id: historyData.dbId } }).catch(() => null),
+      (this.prisma as any).metric.findUnique({ where: { id: historyData.metricId } }).catch(() => null),
+    ]);
 
     return {
       id: String(entry.id),
       dbId: entry.dbId || entry.databaseId,
-      dbName: entry.database?.name || '',
+      dbName: db?.name || historyData.dbName || '',
       metricId: entry.metricId,
-      metricName: entry.metric?.name || '',
+      metricName: metric?.name || historyData.metricName || '',
       objectName: entry.objectName || 'INSTANCE',
       attributeName: entry.attributeName || 'value',
       value: entry.value,
+      pollStatus: entry.pollStatus || historyData.pollStatus || 'SUCCESS',
+      pollResponse: entry.pollResponse || historyData.pollResponse || null,
       createdAt: (entry.measuredAt instanceof Date ? entry.measuredAt : new Date(entry.measuredAt || Date.now())).toISOString(),
     };
   }
@@ -1971,10 +1961,8 @@ export class PrismaRepository implements IStorageRepository {
           if (filterOrLimit.metricId && filterOrLimit.metricId !== 'ALL') {
             where.metricId = filterOrLimit.metricId;
           }
-          if (filterOrLimit.dbType && filterOrLimit.dbType !== 'ALL') {
-            where.database = {
-              dbType: filterOrLimit.dbType,
-            };
+          if (filterOrLimit.pollStatus && filterOrLimit.pollStatus !== 'ALL') {
+            where.pollStatus = filterOrLimit.pollStatus;
           }
           if (filterOrLimit.objectName && filterOrLimit.objectName !== 'ALL') {
             where.objectName = filterOrLimit.objectName;
@@ -1998,16 +1986,30 @@ export class PrismaRepository implements IStorageRepository {
 
         let dataPoints: any[] = [];
         let hasLoaded = false;
+        let dbMap = new Map<string, { name: string; dbType: string }>();
+        let metricMap = new Map<string, { name: string; valueType: string; thresholdOperator: string; thresholdsConfig: any; cycle: number }>();
+
         try {
-          dataPoints = await client.findMany({
-            where,
-            orderBy: { measuredAt: 'desc' },
-            take: limit,
-            include: {
-              database: true,
-              metric: true,
-            },
-          });
+          const [dbs, metrics, rawPoints] = await Promise.all([
+            (this.prisma as any).database.findMany({ select: { id: true, name: true, dbType: true } }).catch(() => []),
+            (this.prisma as any).metric.findMany({ select: { id: true, name: true, valueType: true, relationalOperator: true, thresholdsConfig: true, cycle: true } }).catch(() => []),
+            client.findMany({
+              where,
+              orderBy: { measuredAt: 'desc' },
+              take: limit,
+            }),
+          ]);
+
+          dbs.forEach((d: any) => dbMap.set(d.id, { name: d.name, dbType: d.dbType || 'ORACLE' }));
+          metrics.forEach((m: any) => metricMap.set(m.id, {
+            name: m.name,
+            valueType: m.valueType || 'NUMBER',
+            thresholdOperator: m.relationalOperator || '>=',
+            thresholdsConfig: m.thresholdsConfig,
+            cycle: m.cycle ?? 1,
+          }));
+
+          dataPoints = rawPoints;
           hasLoaded = true;
         } catch (findErr) {
           console.warn('Prisma metricDataPoint.findMany error, trying raw SQL:', findErr);
@@ -2023,6 +2025,8 @@ export class PrismaRepository implements IStorageRepository {
                 COALESCE(mdp.object_name, mdp.objectName, 'INSTANCE') as objectName,
                 COALESCE(mdp.attribute_name, mdp.attributeName, 'value') as attributeName,
                 COALESCE(mdp.value, '') as value,
+                COALESCE(mdp.poll_status, mdp.pollStatus, 'SUCCESS') as pollStatus,
+                COALESCE(mdp.poll_response, mdp.pollResponse) as pollResponse,
                 COALESCE(mdp.measured_at, mdp.measuredAt, NOW()) as measuredAt,
                 d.name as database_name,
                 COALESCE(d.dbType, d.db_type, 'ORACLE') as database_dbType,
@@ -2046,12 +2050,14 @@ export class PrismaRepository implements IStorageRepository {
                 objectName: r.objectName,
                 attributeName: r.attributeName,
                 value: r.value,
+                pollStatus: r.pollStatus,
+                pollResponse: r.pollResponse,
                 measuredAt: r.measuredAt,
-                database: {
+                _database: {
                   name: r.database_name,
                   dbType: r.database_dbType,
                 },
-                metric: {
+                _metric: {
                   name: r.metric_name,
                   valueType: r.metric_valueType,
                   thresholdOperator: r.metric_thresholdOperator,
@@ -2068,15 +2074,18 @@ export class PrismaRepository implements IStorageRepository {
 
         if (dataPoints && dataPoints.length > 0) {
           let list: RawMeasurementEntity[] = dataPoints.map((dp: any) => {
+            const dInfo = dp._database || dbMap.get(dp.dbId || dp.databaseId);
+            const mInfo = dp._metric || metricMap.get(dp.metricId);
+
             let triggeredThreshold: string | null = null;
-            let status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'DOWN' = 'NORMAL';
+            let status: 'NORMAL' | 'WARNING' | 'CRITICAL' | 'DOWN' | 'HIGH' | 'FATAL' | 'SUCCESS' | 'ERROR' = dp.status || 'NORMAL';
             const valNum = parseFloat(dp.value);
 
             let warnNum: number | null = null;
             let critNum: number | null = null;
-            if (dp.metric?.thresholdsConfig) {
+            if (mInfo?.thresholdsConfig) {
               try {
-                const config = typeof dp.metric.thresholdsConfig === 'string' ? JSON.parse(dp.metric.thresholdsConfig) : dp.metric.thresholdsConfig;
+                const config = typeof mInfo.thresholdsConfig === 'string' ? JSON.parse(mInfo.thresholdsConfig) : mInfo.thresholdsConfig;
                 if (config?.type === 'GLOBAL' && config?.global) {
                   warnNum = config.global.warn !== undefined && config.global.warn !== '' ? parseFloat(config.global.warn) : null;
                   critNum = config.global.critical !== undefined && config.global.critical !== '' ? parseFloat(config.global.critical) : null;
@@ -2097,40 +2106,61 @@ export class PrismaRepository implements IStorageRepository {
                 status = 'CRITICAL';
                 triggeredThreshold = `Crit: ${critNum} (>=)`;
               } else if (warnNum !== null && !isNaN(warnNum) && valNum >= warnNum) {
-                status = 'WARNING';
+                if (status === 'NORMAL') status = 'WARNING';
                 triggeredThreshold = `Warn: ${warnNum} (>=)`;
               }
             }
 
+            const pStatus = dp.pollStatus || dp.poll_status || (dp.status === 'ERROR' || dp.status === 'DOWN' || dp.status === 'FAIL' ? 'FAIL' : 'SUCCESS');
+            const pResponse = dp.pollResponse || dp.poll_response || dp.response || null;
+
             return {
-              id: dp.id,
+              id: String(dp.id),
               dbId: dp.dbId || dp.databaseId,
-              dbName: dp.database?.name || dp.dbId || 'Unknown DB',
-              dbType: dp.database?.dbType || 'ORACLE',
+              dbName: dInfo?.name || dp.dbId || 'Unknown DB',
+              dbType: dInfo?.dbType || 'ORACLE',
               metricId: dp.metricId,
-              metricName: dp.metric?.name || dp.metricId || 'Metric Probe',
+              metricName: mInfo?.name || dp.metricId || 'Metric Probe',
               objectName: dp.objectName || 'INSTANCE',
               attributeName: dp.attributeName || 'value',
               value: dp.value,
-              valueType: (dp.metric?.valueType as any) || 'NUMBER',
-              thresholdOperator: dp.metric?.thresholdOperator || '>=',
+              valueType: (mInfo?.valueType as any) || 'NUMBER',
+              thresholdOperator: mInfo?.thresholdOperator || '>=',
               triggeredThreshold,
-              cycle: (dp.metric as any)?.cycle ?? 1,
-              status,
+              cycle: mInfo?.cycle ?? 1,
+              status: dp.status || status,
+              response: dp.response || pResponse || null,
+              pollStatus: pStatus,
+              pollResponse: pResponse,
               measuredAt: dp.measuredAt ? new Date(dp.measuredAt).toISOString() : new Date().toISOString(),
             };
           });
 
-          if (typeof filterOrLimit === 'object' && filterOrLimit?.searchTerm?.trim()) {
-            const q = filterOrLimit.searchTerm.toLowerCase().trim();
-            list = list.filter((m: RawMeasurementEntity) =>
-              (m.dbName && m.dbName.toLowerCase().includes(q)) ||
-              (m.metricName && m.metricName.toLowerCase().includes(q)) ||
-              (m.objectName && m.objectName.toLowerCase().includes(q)) ||
-              (m.attributeName && m.attributeName.toLowerCase().includes(q)) ||
-              (m.value && m.value.toLowerCase().includes(q)) ||
-              (m.dbType && m.dbType.toLowerCase().includes(q))
-            );
+          if (typeof filterOrLimit === 'object') {
+            if (filterOrLimit?.dbType && filterOrLimit.dbType !== 'ALL') {
+              list = list.filter((m) => m.dbType?.toUpperCase() === filterOrLimit.dbType?.toUpperCase());
+            }
+            if (filterOrLimit?.status && filterOrLimit.status !== 'ALL') {
+              list = list.filter((m) => m.status?.toUpperCase() === filterOrLimit.status?.toUpperCase() || (m.pollStatus || '').toUpperCase() === filterOrLimit.status?.toUpperCase());
+            }
+            if (filterOrLimit?.pollStatus && filterOrLimit.pollStatus !== 'ALL') {
+              list = list.filter((m) => (m.pollStatus || '').toUpperCase() === filterOrLimit.pollStatus!.toUpperCase());
+            }
+            if (filterOrLimit?.searchTerm?.trim()) {
+              const q = filterOrLimit.searchTerm.toLowerCase().trim();
+              list = list.filter((m: RawMeasurementEntity) =>
+                (m.dbName && m.dbName.toLowerCase().includes(q)) ||
+                (m.metricName && m.metricName.toLowerCase().includes(q)) ||
+                (m.objectName && m.objectName.toLowerCase().includes(q)) ||
+                (m.attributeName && m.attributeName.toLowerCase().includes(q)) ||
+                (m.value && m.value.toLowerCase().includes(q)) ||
+                (m.status && m.status.toLowerCase().includes(q)) ||
+                (m.pollStatus && m.pollStatus.toLowerCase().includes(q)) ||
+                (m.response && m.response.toLowerCase().includes(q)) ||
+                (m.pollResponse && m.pollResponse.toLowerCase().includes(q)) ||
+                (m.dbType && m.dbType.toLowerCase().includes(q))
+              );
+            }
           }
 
           return list;
@@ -2160,6 +2190,9 @@ export class PrismaRepository implements IStorageRepository {
           valueType: data.valueType || 'NUMBER',
           cycle: data.cycle || 1,
           status: data.status || 'NORMAL',
+          response: data.response || null,
+          pollStatus: data.pollStatus || 'SUCCESS',
+          pollResponse: data.pollResponse || data.response || null,
           triggeredThreshold: data.triggeredThreshold || null,
           measuredAt: data.measuredAt || new Date().toISOString(),
         };
@@ -2171,29 +2204,33 @@ export class PrismaRepository implements IStorageRepository {
           objectName: data.objectName || 'INSTANCE',
           attributeName: data.attributeName || 'value',
           value: data.value || '0',
+          pollStatus: data.pollStatus || (data.status === 'ERROR' || data.status === 'FAIL' || data.status === 'DOWN' ? 'FAIL' : 'SUCCESS'),
+          pollResponse: data.pollResponse || data.response || null,
           measuredAt: data.measuredAt ? new Date(data.measuredAt) : new Date(),
         },
-        include: {
-          database: true,
-          metric: true,
-        },
       });
+
+      const [db, metric] = await Promise.all([
+        (this.prisma as any).database.findUnique({ where: { id: data.dbId } }).catch(() => null),
+        (this.prisma as any).metric.findUnique({ where: { id: data.metricId } }).catch(() => null),
+      ]);
 
       return {
         id: created.id,
         dbId: created.dbId || created.databaseId,
-        dbName: created.database?.name || data.dbName || 'Database',
-        dbType: created.database?.dbType || data.dbType || 'POSTGRES',
+        dbName: db?.name || data.dbName || 'Database',
+        dbType: db?.dbType || data.dbType || 'POSTGRES',
         metricId: created.metricId,
-        metricName: created.metric?.name || data.metricName || 'Metric Probe',
+        metricName: metric?.name || data.metricName || 'Metric Probe',
         objectName: created.objectName || 'INSTANCE',
         attributeName: created.attributeName || 'value',
         value: created.value,
-        valueType: (created.metric?.valueType as any) || 'NUMBER',
-        thresholdOperator: created.metric?.thresholdOperator || '>=',
+        valueType: (metric?.valueType as any) || data.valueType || 'NUMBER',
+        thresholdOperator: metric?.relationalOperator || data.thresholdOperator || '>=',
         triggeredThreshold: data.triggeredThreshold || null,
-        cycle: (created.metric as any)?.cycle ?? data.cycle ?? 1,
-        status: data.status || 'NORMAL',
+        cycle: metric?.cycle ?? data.cycle ?? 1,
+        pollStatus: created.pollStatus || data.pollStatus || 'SUCCESS',
+        pollResponse: created.pollResponse || data.pollResponse || null,
         measuredAt: created.measuredAt.toISOString(),
       };
     } catch (err) {
@@ -2213,6 +2250,7 @@ export class PrismaRepository implements IStorageRepository {
         triggeredThreshold: data.triggeredThreshold || null,
         cycle: data.cycle || 1,
         status: data.status || 'NORMAL',
+        response: data.response || null,
         measuredAt: new Date().toISOString(),
       };
     }

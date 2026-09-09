@@ -166,9 +166,7 @@ model Database {
   metrics          DatabaseMetricMapping[]
   activeAlerts     ActiveAlert[]
   alertHistory     AlertHistory[]
-  metricDataPoints MetricDataPoint[]
   pollQueue        DatabasePollQueue[]
-  pollLogs         DatabasePollLog[]
 
   @@map("databases")
 }
@@ -242,7 +240,6 @@ model Metric {
   databases        DatabaseMetricMapping[]
   activeAlerts     ActiveAlert[]
   alertHistory     AlertHistory[]
-  metricDataPoints MetricDataPoint[]
 
   @@map("metrics")
 }
@@ -388,7 +385,7 @@ model AlertHistory {
   @@map("alert_history")
 }
 
-/// MetricDataPoint Model: Redesigned multidimensional time-series store for monitored tuples.
+/// MetricDataPoint Model: Multidimensional time-series store for monitored tuples (without foreign keys for MySQL partitioning support).
 model MetricDataPoint {
   id            String   @default(uuid())
   dbId          String   @map("database_id")
@@ -396,10 +393,9 @@ model MetricDataPoint {
   objectName    String?  @default("GLOBAL") @map("object_name")
   attributeName String?  @map("attribute_name")
   value         String
+  pollStatus    String?  @default("SUCCESS") @map("poll_status")
+  pollResponse  String?  @map("poll_response") @db.Text
   measuredAt    DateTime @default(now()) @map("measured_at")
-
-  database Database? @relation(fields: [dbId], references: [id], onDelete: Cascade)
-  metric   Metric?   @relation(fields: [metricId], references: [id], onDelete: Cascade)
 
   @@id([id, measuredAt])
   @@index([dbId, metricId, measuredAt(sort: Desc)])
@@ -543,6 +539,7 @@ model DatabasePollQueue {
   @@map("database_poll_queue")
 }
 
+/// DatabasePollLog Model: Historical execution logs of database poll jobs (without foreign keys for MySQL partitioning support).
 model DatabasePollLog {
   id           BigInt   @default(autoincrement()) @db.UnsignedBigInt
   dbId         String   @map("db_id")
@@ -551,8 +548,6 @@ model DatabasePollLog {
   errorMessage String?  @map("error_message") @db.Text
   startedAt    DateTime @map("started_at")
   finishedAt   DateTime @default(now()) @map("finished_at")
-
-  database     Database @relation(fields: [dbId], references: [id], onDelete: Cascade)
 
   @@id([id, finishedAt])
   @@index([dbId, finishedAt(sort: Desc)], map: "idx_db_finished")

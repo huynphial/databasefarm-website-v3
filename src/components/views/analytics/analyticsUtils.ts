@@ -9,7 +9,8 @@ export interface UnifiedMeasurement {
   objectName: string;
   attributeName: string;
   value: string;
-  status: 'NORMAL' | 'WARN' | 'WARNING' | 'HIGH' | 'CRITICAL' | 'FATAL' | 'DOWN' | string;
+  pollStatus?: string;
+  status?: string;
   triggeredThreshold?: string | null;
   measuredAt: string;
 }
@@ -68,7 +69,7 @@ export function combineTelemetryDataPoints(
       objectName: m.objectName || 'INSTANCE',
       attributeName: m.attributeName || 'value',
       value: String(m.value !== undefined && m.value !== null ? m.value : ''),
-      status: m.status || 'NORMAL',
+      pollStatus: m.pollStatus,
       triggeredThreshold: m.triggeredThreshold || null,
       measuredAt: m.measuredAt || new Date().toISOString(),
     });
@@ -102,7 +103,7 @@ export function combineTelemetryDataPoints(
         objectName: objName,
         attributeName: attrName,
         value: String(h.value !== undefined && h.value !== null ? h.value : ''),
-        status: (h as any).status || 'NORMAL',
+        pollStatus: h.pollStatus,
         triggeredThreshold: (h as any).triggeredThreshold || null,
         measuredAt: timeVal,
       });
