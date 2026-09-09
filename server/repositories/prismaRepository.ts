@@ -764,6 +764,9 @@ export class PrismaRepository implements IStorageRepository {
         targetDbType: (t.targetDbType as any) || (dbEngine ? dbEngine.dbCode : undefined),
         databaseEngineId: (t as any).databaseEngineId || null,
         databaseEngine: dbEngine,
+        alertHourMode: (t as any).alertHourMode || 'ALL_DAY',
+        alertHourStart: (t as any).alertHourStart || '07:30',
+        alertHourEnd: (t as any).alertHourEnd || '17:00',
         metricIds: t.metrics.map((m) => m.metricId),
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
@@ -796,6 +799,9 @@ export class PrismaRepository implements IStorageRepository {
       targetDbType: (t.targetDbType as any) || (dbEngine ? dbEngine.dbCode : undefined),
       databaseEngineId: (t as any).databaseEngineId || null,
       databaseEngine: dbEngine,
+      alertHourMode: (t as any).alertHourMode || 'ALL_DAY',
+      alertHourStart: (t as any).alertHourStart || '07:30',
+      alertHourEnd: (t as any).alertHourEnd || '17:00',
       metricIds: t.metrics.map((m) => m.metricId),
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
@@ -813,6 +819,9 @@ export class PrismaRepository implements IStorageRepository {
       }
     }
     const databaseEngineId = tplData.databaseEngineId !== undefined ? tplData.databaseEngineId : null;
+    const alertHourMode = tplData.alertHourMode || 'ALL_DAY';
+    const alertHourStart = tplData.alertHourStart !== undefined ? tplData.alertHourStart : '07:30';
+    const alertHourEnd = tplData.alertHourEnd !== undefined ? tplData.alertHourEnd : '17:00';
 
     let tRecord;
     if (id) {
@@ -823,6 +832,9 @@ export class PrismaRepository implements IStorageRepository {
           description: tplData.description,
           targetDbType,
           databaseEngineId: databaseEngineId || undefined,
+          alertHourMode,
+          alertHourStart,
+          alertHourEnd,
         },
         create: {
           id,
@@ -830,6 +842,9 @@ export class PrismaRepository implements IStorageRepository {
           description: tplData.description || null,
           targetDbType,
           databaseEngineId: databaseEngineId || undefined,
+          alertHourMode,
+          alertHourStart,
+          alertHourEnd,
         },
       });
     } else {
@@ -839,6 +854,9 @@ export class PrismaRepository implements IStorageRepository {
           description: tplData.description || null,
           targetDbType,
           databaseEngineId: databaseEngineId || undefined,
+          alertHourMode,
+          alertHourStart,
+          alertHourEnd,
         },
       });
     }

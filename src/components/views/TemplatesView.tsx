@@ -24,7 +24,9 @@ import {
   ChevronDown,
   AlertTriangle,
   FileText,
-  Cog
+  Cog,
+  Clock,
+  Sun
 } from 'lucide-react';
 import { DbEngine, MetricEntity, TemplateEntity, UserRole, DatabaseEngineEntity } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
@@ -141,6 +143,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
         description: tpl.description || null,
         targetDbType: engineCode,
         databaseEngineCode: engineCode,
+        alertHourMode: tpl.alertHourMode || 'ALL_DAY',
+        alertHourStart: tpl.alertHourStart || '07:30',
+        alertHourEnd: tpl.alertHourEnd || '17:00',
       },
       metrics: linkedMetrics.map((m) => ({
         name: m.name,
@@ -206,6 +211,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
             description: tpl.description || null,
             targetDbType: engineCode,
             databaseEngineCode: engineCode,
+            alertHourMode: tpl.alertHourMode || 'ALL_DAY',
+            alertHourStart: tpl.alertHourStart || '07:30',
+            alertHourEnd: tpl.alertHourEnd || '17:00',
           },
           metrics: linkedMetrics.map((m) => ({
             name: m.name,
@@ -261,6 +269,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
           description: item.template?.description || item.description || null,
           targetDbType: item.template?.targetDbType || item.targetDbType || 'ALL',
           databaseEngineCode: item.template?.databaseEngineCode || item.targetDbType || 'ALL',
+          alertHourMode: item.template?.alertHourMode || item.alertHourMode || 'ALL_DAY',
+          alertHourStart: item.template?.alertHourStart || item.alertHourStart || '07:30',
+          alertHourEnd: item.template?.alertHourEnd || item.alertHourEnd || '17:00',
           metrics: Array.isArray(item.metrics) ? item.metrics : [],
         }));
         setImportPreview({ type: 'BUNDLE', templates: tpls });
@@ -274,6 +285,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
           description: item.template?.description || item.description || null,
           targetDbType: item.template?.targetDbType || item.targetDbType || 'ALL',
           databaseEngineCode: item.template?.databaseEngineCode || item.targetDbType || 'ALL',
+          alertHourMode: item.template?.alertHourMode || item.alertHourMode || 'ALL_DAY',
+          alertHourStart: item.template?.alertHourStart || item.alertHourStart || '07:30',
+          alertHourEnd: item.template?.alertHourEnd || item.alertHourEnd || '17:00',
           metrics: Array.isArray(item.metrics) ? item.metrics : [],
         }));
         setImportPreview({ type: 'BUNDLE', templates: tpls });
@@ -301,6 +315,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
             description: tplObj.description || null,
             targetDbType: tplObj.targetDbType || tplObj.databaseEngineCode || 'ALL',
             databaseEngineCode: tplObj.databaseEngineCode || tplObj.targetDbType || 'ALL',
+            alertHourMode: tplObj.alertHourMode || 'ALL_DAY',
+            alertHourStart: tplObj.alertHourStart || '07:30',
+            alertHourEnd: tplObj.alertHourEnd || '17:00',
             metrics: metricsList,
           },
         ],
@@ -364,6 +381,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
         description: item.description || null,
         databaseEngineId: resolvedEngineId,
         targetDbType: resolvedDbType,
+        alertHourMode: item.alertHourMode || 'ALL_DAY',
+        alertHourStart: item.alertHourStart || '07:30',
+        alertHourEnd: item.alertHourEnd || '17:00',
       });
       totalTemplatesImported++;
 
@@ -446,7 +466,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       header: t('templates.targetEngine'),
       accessorKey: 'targetDbType',
       sortable: true,
-      width: '150px',
+      width: '140px',
       cell: (row) => {
         const engine = row.databaseEngine || databaseEngines.find((e) => e.id === row.databaseEngineId || e.dbCode.toUpperCase() === row.targetDbType?.toUpperCase());
         const dbCode = engine ? engine.dbCode : (row.targetDbType || 'ALL');
@@ -465,6 +485,37 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dbColor }} />
             {dbCode}
           </span>
+        );
+      },
+    },
+    {
+      header: t('templates.alertHour') || 'Alert Hours',
+      accessorKey: 'alertHourMode',
+      sortable: true,
+      width: '180px',
+      cell: (row) => {
+        const isHourRange = row.alertHourMode === 'HOUR_RANGE';
+        const start = row.alertHourStart || '07:30';
+        const end = row.alertHourEnd || '17:00';
+
+        if (isHourRange) {
+          return (
+            <div className="flex items-center gap-1.5" title={`Alerting active daily: ${start} - ${end}`}>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold font-mono bg-amber-50 text-amber-800 border border-amber-200/80 shadow-2xs">
+                <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>{start} – {end}</span>
+              </span>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex items-center gap-1.5" title="Continuous 24/7 alerting without restriction">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-2xs">
+              <Sun className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>{t('templates.allDay') || 'All Day (24/7)'}</span>
+            </span>
+          </div>
         );
       },
     },

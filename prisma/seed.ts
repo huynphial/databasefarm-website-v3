@@ -302,6 +302,9 @@ async function main() {
       name: 'Oracle Enterprise Standard',
       targetDbType: DbType.ORACLE,
       databaseEngineId: 'eng-01',
+      alertHourMode: 'ALL_DAY',
+      alertHourStart: '07:30',
+      alertHourEnd: '17:00',
       description: 'Standard health checks for Oracle Database instances (Tablespace, Active Sessions, Buffer Cache Hit Ratio).',
     },
     {
@@ -309,6 +312,9 @@ async function main() {
       name: 'PostgreSQL Core Health',
       targetDbType: DbType.POSTGRES,
       databaseEngineId: 'eng-03',
+      alertHourMode: 'HOUR_RANGE',
+      alertHourStart: '07:30',
+      alertHourEnd: '17:00',
       description: 'Connection saturation, cache hit ratio, and replication lag metrics for PostgreSQL.',
     },
     {
@@ -316,6 +322,9 @@ async function main() {
       name: 'MySQL Server Metrics',
       targetDbType: DbType.MYSQL,
       databaseEngineId: 'eng-02',
+      alertHourMode: 'ALL_DAY',
+      alertHourStart: '07:30',
+      alertHourEnd: '17:00',
       description: 'Thread concurrency, InnoDB buffer pool, and slow queries.',
     },
     {
@@ -323,6 +332,9 @@ async function main() {
       name: 'SQL Server Enterprise Baseline',
       targetDbType: DbType.MSSQL,
       databaseEngineId: 'eng-04',
+      alertHourMode: 'ALL_DAY',
+      alertHourStart: '07:30',
+      alertHourEnd: '17:00',
       description: 'Page Life Expectancy, buffer cache ratio, and batch requests per second.',
     },
     {
@@ -330,6 +342,9 @@ async function main() {
       name: 'MariaDB Performance Pack',
       targetDbType: DbType.MARIADB,
       databaseEngineId: 'eng-05',
+      alertHourMode: 'ALL_DAY',
+      alertHourStart: '07:30',
+      alertHourEnd: '17:00',
       description: 'Galera replication cluster health, Aria engine status, and query cache performance.',
     },
     {
@@ -337,6 +352,9 @@ async function main() {
       name: 'MongoDB NoSQL Sentinel',
       targetDbType: DbType.MONGODB,
       databaseEngineId: 'eng-07',
+      alertHourMode: 'ALL_DAY',
+      alertHourStart: '07:30',
+      alertHourEnd: '17:00',
       description: 'Replica set lag, memory working set, document operations/sec, and connection pool.',
     },
     {
@@ -344,6 +362,9 @@ async function main() {
       name: 'Redis In-Memory Diagnostics',
       targetDbType: DbType.REDIS,
       databaseEngineId: 'eng-08',
+      alertHourMode: 'ALL_DAY',
+      alertHourStart: '07:30',
+      alertHourEnd: '17:00',
       description: 'Memory fragmentation ratio, connected clients, eviction rate, and ops/sec.',
     },
     {
@@ -351,6 +372,9 @@ async function main() {
       name: 'ClickHouse Columnar Analytics',
       targetDbType: DbType.CLICKHOUSE,
       databaseEngineId: 'eng-10',
+      alertHourMode: 'ALL_DAY',
+      alertHourStart: '07:30',
+      alertHourEnd: '17:00',
       description: 'MergeTree parts, uncompressed cache hit rate, query execution latency, and insertion rates.',
     },
     {
@@ -358,6 +382,9 @@ async function main() {
       name: 'SingleStore Realtime SQL',
       targetDbType: DbType.SINGLESTORE,
       databaseEngineId: 'eng-09',
+      alertHourMode: 'ALL_DAY',
+      alertHourStart: '07:30',
+      alertHourEnd: '17:00',
       description: 'Distributed leaf node memory, pipeline ingestion rate, and query latency.',
     },
   ];

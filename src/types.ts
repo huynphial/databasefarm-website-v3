@@ -237,6 +237,9 @@ export interface TemplateEntity {
   targetDbType?: DbEngine | 'ALL' | string; // Engine Compatibility: strictly matches specific DB engine
   databaseEngineId?: string | null;
   databaseEngine?: DatabaseEngineEntity | null;
+  alertHourMode?: 'ALL_DAY' | 'HOUR_RANGE' | string; // 'ALL_DAY' | 'HOUR_RANGE'
+  alertHourStart?: string | null; // e.g. '07:30'
+  alertHourEnd?: string | null; // e.g. '17:00'
   metricIds?: string[]; // Bound metric IDs in this template
   createdAt: string;
   updatedAt: string;

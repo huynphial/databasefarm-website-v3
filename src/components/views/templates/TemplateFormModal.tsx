@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   Layers,
   CheckCircle2,
+  Clock,
+  Sun,
 } from 'lucide-react';
 import {
   TemplateEntity,
@@ -10,6 +12,7 @@ import {
 } from '../../../types';
 import { Dialog } from '../../ui/Dialog';
 import { useToast } from '../../ui/Toast';
+import { useTranslation } from '../../../i18n';
 
 interface TemplateFormModalProps {
   isOpen: boolean;
@@ -32,6 +35,7 @@ export const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
   onSaveTemplate,
 }) => {
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   // Form fields
   const [formData, setFormData] = useState<{
@@ -40,11 +44,17 @@ export const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
     databaseEngineId: string;
     targetDbType: string;
     description: string;
+    alertHourMode: 'ALL_DAY' | 'HOUR_RANGE';
+    alertHourStart: string;
+    alertHourEnd: string;
   }>({
     name: '',
     databaseEngineId: '',
     targetDbType: 'POSTGRES',
     description: '',
+    alertHourMode: 'ALL_DAY',
+    alertHourStart: '07:30',
+    alertHourEnd: '17:00',
   });
 
   // Initialize form state when opening modal
@@ -64,6 +74,9 @@ export const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
         databaseEngineId: eng ? eng.id : (editingTemplate.databaseEngineId || 'ALL'),
         targetDbType: eng ? eng.dbCode : (editingTemplate.targetDbType || 'POSTGRES'),
         description: editingTemplate.description || '',
+        alertHourMode: (editingTemplate.alertHourMode as any) === 'HOUR_RANGE' ? 'HOUR_RANGE' : 'ALL_DAY',
+        alertHourStart: editingTemplate.alertHourStart || '07:30',
+        alertHourEnd: editingTemplate.alertHourEnd || '17:00',
       });
     } else {
       // Default to first active database engine or POSTGRES
@@ -73,6 +86,9 @@ export const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
         databaseEngineId: firstEng ? firstEng.id : '',
         targetDbType: firstEng ? firstEng.dbCode : 'POSTGRES',
         description: '',
+        alertHourMode: 'ALL_DAY',
+        alertHourStart: '07:30',
+        alertHourEnd: '17:00',
       });
     }
   }, [isOpen, editingTemplate, databaseEngines]);
@@ -87,6 +103,15 @@ export const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
     return databaseEngines.find((e) => e.id === formData.databaseEngineId);
   }, [databaseEngines, formData.databaseEngineId]);
 
+  const handleAlertHourModeChange = (mode: 'ALL_DAY' | 'HOUR_RANGE') => {
+    setFormData((prev) => ({
+      ...prev,
+      alertHourMode: mode,
+      alertHourStart: prev.alertHourStart || '07:30',
+      alertHourEnd: prev.alertHourEnd || '17:00',
+    }));
+  };
+
   // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,6 +119,13 @@ export const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
     if (!formData.name.trim()) {
       toast({ title: 'Validation Error', description: 'Template Name is required.', type: 'error' });
       return;
+    }
+
+    if (formData.alertHourMode === 'HOUR_RANGE') {
+      if (!formData.alertHourStart || !formData.alertHourEnd) {
+        toast({ title: 'Validation Error', description: 'Please provide both Start and End hours for the alerting window.', type: 'error' });
+        return;
+      }
     }
 
     const resolvedDbType = currentEngine
@@ -113,6 +145,9 @@ export const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
           ? formData.databaseEngineId || null
           : null,
       targetDbType: resolvedDbType,
+      alertHourMode: formData.alertHourMode,
+      alertHourStart: formData.alertHourMode === 'HOUR_RANGE' ? (formData.alertHourStart || '07:30') : '07:30',
+      alertHourEnd: formData.alertHourMode === 'HOUR_RANGE' ? (formData.alertHourEnd || '17:00') : '17:00',
     };
 
     try {
@@ -140,7 +175,7 @@ export const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={editingTemplate ? `Edit Template: ${editingTemplate.name}` : 'Create Monitoring Template'}
-      description="Configure template name, target database engine, and description."
+      description="Configure template name, target database engine, alerting hours, and description."
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -195,6 +230,138 @@ export const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
             ))}
             <option value="ALL">Universal (Compatible with all engines)</option>
           </select>
+        </div>
+
+        {/* Alert Hour Configuration */}
+        <div className="pt-2 border-t border-slate-100">
+          <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+            <span>{t('templates.alertHour') || 'Alert Hours'}</span>
+          </label>
+          <p className="text-[11px] text-slate-500 mb-2.5">
+            {t('templates.alertHourDesc') || 'Configure when alerts will trigger for databases bound to this template.'}
+          </p>
+
+          <div className="grid grid-cols-2 gap-2.5 mb-2.5">
+            {/* Option 1: All Day */}
+            <button
+              type="button"
+              onClick={() => handleAlertHourModeChange('ALL_DAY')}
+              className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                formData.alertHourMode === 'ALL_DAY'
+                  ? 'border-indigo-500 bg-indigo-50/60 ring-1 ring-indigo-500/30'
+                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+              }`}
+            >
+              <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                formData.alertHourMode === 'ALL_DAY' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300 bg-white'
+              }`}>
+                {formData.alertHourMode === 'ALL_DAY' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                  <Sun className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{t('templates.allDay') || 'All Day'}</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                  {t('templates.allDayDesc') || 'Continuous 24/7 monitoring and alerting'}
+                </div>
+              </div>
+            </button>
+
+            {/* Option 2: Hour Range */}
+            <button
+              type="button"
+              onClick={() => handleAlertHourModeChange('HOUR_RANGE')}
+              className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                formData.alertHourMode === 'HOUR_RANGE'
+                  ? 'border-indigo-500 bg-indigo-50/60 ring-1 ring-indigo-500/30'
+                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+              }`}
+            >
+              <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                formData.alertHourMode === 'HOUR_RANGE' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300 bg-white'
+              }`}>
+                {formData.alertHourMode === 'HOUR_RANGE' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>{t('templates.hourRange') || 'Hour Range'}</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                  {t('templates.hourRangeDesc') || 'Alert only during specific daily hours (e.g. 07:30 - 17:00)'}
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {/* Hour Range Inputs (Shown when HOUR_RANGE is selected) */}
+          {formData.alertHourMode === 'HOUR_RANGE' && (
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2.5 animate-in fade-in-50 duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-700 font-semibold text-[11px]">
+                  Daily Active Alert Window
+                </span>
+                <span className="text-[11px] text-indigo-700 font-mono font-semibold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  {formData.alertHourStart || '07:30'} &rarr; {formData.alertHourEnd || '17:00'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    {t('templates.fromHour') || 'From'} ({t('templates.alertHourStart') || 'Start Time'}) *
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={formData.alertHourStart}
+                    onChange={(e) => setFormData({ ...formData, alertHourStart: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 font-mono font-semibold focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    {t('templates.toHour') || 'To'} ({t('templates.alertHourEnd') || 'End Time'}) *
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={formData.alertHourEnd}
+                    onChange={(e) => setFormData({ ...formData, alertHourEnd: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 font-mono font-semibold focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Presets */}
+              <div className="pt-2 border-t border-slate-200 flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-slate-400 font-medium mr-1">Presets:</span>
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, alertHourStart: '07:30', alertHourEnd: '17:00' }))}
+                  className="px-2 py-0.5 text-[10px] font-mono font-medium rounded bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 cursor-pointer transition-colors"
+                >
+                  07:30 – 17:00 (Default)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, alertHourStart: '08:00', alertHourEnd: '17:30' }))}
+                  className="px-2 py-0.5 text-[10px] font-mono font-medium rounded bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 cursor-pointer transition-colors"
+                >
+                  08:00 – 17:30 (Office)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, alertHourStart: '06:00', alertHourEnd: '22:00' }))}
+                  className="px-2 py-0.5 text-[10px] font-mono font-medium rounded bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 cursor-pointer transition-colors"
+                >
+                  06:00 – 22:00 (Extended)
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div>

@@ -188,6 +188,13 @@ model Template {
   databaseEngineId String?         @map("database_engine_id")
   databaseEngine   DatabaseEngine? @relation("EngineTemplates", fields: [databaseEngineId], references: [id], onDelete: SetNull)
 
+  /// Alert Hour Option: "ALL_DAY" (default) or "HOUR_RANGE"
+  alertHourMode  String? @default("ALL_DAY") @map("alert_hour_mode")
+  /// Start time for alert hour window when mode is HOUR_RANGE (default "07:30")
+  alertHourStart String? @default("07:30") @map("alert_hour_start")
+  /// End time for alert hour window when mode is HOUR_RANGE (default "17:00")
+  alertHourEnd   String? @default("17:00") @map("alert_hour_end")
+
   /// Timestamp of template creation.
   createdAt DateTime @default(now())
   /// Timestamp of last template update.
