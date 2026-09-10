@@ -17,7 +17,8 @@ import {
   Filter,
   Play,
   Pause,
-  AlertOctagon
+  AlertOctagon,
+  ArrowUpDown
 } from 'lucide-react';
 import { ActiveAlertEntity, DatabaseEntity, DatabaseEngineEntity, DbEngine, UserRole } from '../../types';
 import { DB_ENGINES, getDbEngineBadgeClass, getDbEngineConfig, getDbEngineTagStyle } from '../../config/dbEngines';
@@ -29,6 +30,8 @@ import { AutoRefreshControl } from '../common/AutoRefreshControl';
 import { SummaryMetricCards } from '../common/SummaryMetricCards';
 import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
 import { DatabaseEngineSummaryGrid } from '../common/DatabaseEngineSummaryGrid';
+
+export type StatusGridSortOption = 'NAME_ASC' | 'IP_ASC' | 'SEVERITY_ASC';
 
 interface DashboardViewProps {
   databases: DatabaseEntity[];
@@ -58,6 +61,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [selectedDbType, setSelectedDbType] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
+  const [gridSortBy, setGridSortBy] = useState<StatusGridSortOption>('NAME_ASC');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -133,7 +137,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     .filter((d) => d.count > 0);
 
   // Filter dbStatuses by severity selection from summary cards
-  const displayedDbStatuses = dbStatuses.filter((db) => {
+  const filteredDbStatuses = dbStatuses.filter((db) => {
     if (severityFilter === 'ALL') return true;
     const dbAlerts = activeAlerts.filter((a) => a.dbId === db.id);
     if (severityFilter === 'DOWN') {
@@ -149,6 +153,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       return db.derivedStatus === 'WARN' || dbAlerts.some((a) => a.alertLevel === 'WARN' || a.alertLevel === 'WARNING');
     }
     return true;
+  });
+
+  // Sort displayed databases by selected criteria (Default: A-Z Name)
+  const displayedDbStatuses = [...filteredDbStatuses].sort((a, b) => {
+    if (gridSortBy === 'IP_ASC') {
+      const hostA = a.host || '';
+      const hostB = b.host || '';
+      const hostCmp = hostA.localeCompare(hostB, undefined, { numeric: true, sensitivity: 'base' });
+      if (hostCmp !== 0) return hostCmp;
+      const portA = a.port || 0;
+      const portB = b.port || 0;
+      if (portA !== portB) return portA - portB;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    }
+
+    if (gridSortBy === 'SEVERITY_ASC') {
+      const getSeverityRank = (item: typeof dbStatuses[0]) => {
+        const itemAlerts = activeAlerts.filter((al) => al.dbId === item.id);
+        if (item.derivedStatus === 'DOWN' || itemAlerts.some((al) => al.alertLevel === 'DOWN')) return 5;
+        if (itemAlerts.some((al) => al.alertLevel === 'CRITICAL')) return 4;
+        if (itemAlerts.some((al) => al.alertLevel === 'HIGH')) return 3;
+        if (item.derivedStatus === 'WARN' || itemAlerts.some((al) => al.alertLevel === 'WARN' || al.alertLevel === 'WARNING')) return 2;
+        return 1; // UP / Healthy
+      };
+
+      const rankA = getSeverityRank(a);
+      const rankB = getSeverityRank(b);
+      // High severity rank first (DOWN/CRITICAL -> HIGH -> WARN -> UP)
+      if (rankB !== rankA) {
+        return rankB - rankA;
+      }
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    }
+
+    // Default: 'NAME_ASC' (A-Z Name)
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
   });
 
   return (
@@ -224,7 +264,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Sort by option (A-Z Name, A-Z IP, A-Z Severity) */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs shadow-2xs">
+              <ArrowUpDown className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <label htmlFor="statusGridSortSelect" className="font-semibold text-slate-600 whitespace-nowrap">
+                {t('dashboard.sortBy')}:
+              </label>
+              <select
+                id="statusGridSortSelect"
+                value={gridSortBy}
+                onChange={(e) => setGridSortBy(e.target.value as StatusGridSortOption)}
+                className="bg-transparent border-0 font-bold text-slate-800 focus:outline-hidden cursor-pointer text-xs pr-1 py-0.5"
+              >
+                <option value="NAME_ASC">{t('dashboard.sortAZName')}</option>
+                <option value="IP_ASC">{t('dashboard.sortAZIP')}</option>
+                <option value="SEVERITY_ASC">{t('dashboard.sortAZSeverity')}</option>
+              </select>
+            </div>
+
             {severityFilter !== 'ALL' && onNavigateToActiveAlerts && (
               <button
                 onClick={onNavigateToActiveAlerts}
