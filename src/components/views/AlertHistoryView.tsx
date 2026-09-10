@@ -185,6 +185,8 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
       } else if (sortField === 'alertLevel') {
         const severityRank: Record<string, number> = { DOWN: 4, CRITICAL: 3, HIGH: 2, WARN: 1 };
         primaryCmp = (severityRank[a.alertLevel] || 0) - (severityRank[b.alertLevel] || 0);
+      } else if (sortField === 'dispatchStatus') {
+        primaryCmp = (a.dispatchStatus || '').localeCompare(b.dispatchStatus || '');
       } else {
         const timeA = new Date(a.clearedAt).getTime();
         const timeB = new Date(b.clearedAt).getTime();
@@ -206,12 +208,11 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
 
   const columns: Column<AlertHistoryEntity>[] = [
     {
-      header: t('alertHistory.colStatusSeverity'),
+      header: t('alertHistory.colSeverity') || 'Severity',
       accessorKey: 'alertLevel',
       sortable: true,
-      width: '140px',
+      width: '100px',
       cell: (row) => {
-        const isDispatched = row.dispatchStatus === 'DISPATCHED';
         const styles = {
           DOWN: 'bg-rose-50 text-rose-700 border-rose-200',
           CRITICAL: 'bg-rose-50 text-rose-700 border-rose-200',
@@ -220,18 +221,9 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
         }[row.alertLevel] || 'bg-slate-100 text-slate-700 border-slate-200';
 
         return (
-          <div className="space-y-1 py-0.5">
-            <div className="flex items-center gap-1 flex-wrap">
-              <span className={cn('px-1.5 py-0.2 border rounded text-[9px] font-bold tracking-wider', styles)}>
-                {row.alertLevel}
-              </span>
-            </div>
-            <div>
-              <span className={cn('inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded', isDispatched ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-slate-600 bg-slate-100 border border-slate-200')}>
-                {isDispatched ? 'DISPATCHED' : 'NO DISPATCH'}
-              </span>
-            </div>
-          </div>
+          <span className={cn('px-1.5 py-0.2 border rounded text-[9px] font-bold tracking-wider inline-block', styles)}>
+            {row.alertLevel}
+          </span>
         );
       },
     },
@@ -325,6 +317,27 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
           {formatRelativeDuration(row.createdAt, row.clearedAt, language)}
         </span>
       ),
+    },
+    {
+      header: t('alertHistory.colDispatchStatus') || 'Dispatcher Status',
+      accessorKey: 'dispatchStatus',
+      sortable: true,
+      width: '130px',
+      cell: (row) => {
+        const isDispatched = row.dispatchStatus === 'DISPATCHED';
+        return (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border shadow-2xs',
+              isDispatched
+                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                : 'text-slate-600 bg-slate-100 border-slate-200'
+            )}
+          >
+            {isDispatched ? t('alertHistory.dispatched') || 'DISPATCHED' : t('alertHistory.noDispatch') || 'NO DISPATCH'}
+          </span>
+        );
+      },
     },
     {
       header: t('alertHistory.colClearedResolver'),
@@ -800,7 +813,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
           <div>
             <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
               <Filter className="w-3.5 h-3.5 text-indigo-600" />
-              {t('alertHistory.colStatusSeverity')}
+              {t('alertHistory.colSeverity') || 'Severity'}
             </label>
             <select
               value={selectedLevel}

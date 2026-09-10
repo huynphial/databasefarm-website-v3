@@ -295,97 +295,55 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
       sortable: true,
       width: '105px',
       cell: (row) => {
-        const isUnack = row.status === 'OPEN' || !row.status;
         const isDown = row.alertLevel === 'DOWN' || row.alertLevel?.toUpperCase() === 'DOWN';
+        const isCritical = row.alertLevel === 'CRITICAL';
+        const isHigh = row.alertLevel === 'HIGH';
 
-        if (isUnack) {
-          if (isDown) {
-            return (
-              <div className="flex flex-col gap-1 items-start">
-                <span className="px-2 py-0.5 border border-red-700 rounded text-[10px] font-black tracking-wider bg-red-600 text-white shadow-sm inline-flex items-center gap-1.5 animate-pulse">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-90"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-                  </span>
-                  DOWN
-                </span>
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase tracking-wider bg-red-100 text-red-900 border border-red-300 animate-pulse inline-flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping shrink-0" />
-                  UNACK
-                </span>
-              </div>
-            );
-          }
-
-          if (row.alertLevel === 'CRITICAL') {
-            return (
-              <div className="flex flex-col gap-1 items-start">
-                <span className="px-2 py-0.5 border border-rose-300 rounded text-[10px] font-extrabold tracking-wider bg-rose-100 text-rose-800 shadow-2xs inline-flex items-center gap-1.5 animate-pulse">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
-                  </span>
-                  CRITICAL
-                </span>
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">
-                  UNACK
-                </span>
-              </div>
-            );
-          }
-
-          if (row.alertLevel === 'HIGH') {
-            return (
-              <div className="flex flex-col gap-1 items-start">
-                <span className="px-2 py-0.5 border border-orange-300 rounded text-[10px] font-bold tracking-wider bg-orange-100 text-orange-800 shadow-2xs inline-flex items-center gap-1.5 animate-pulse">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-orange-600"></span>
-                  </span>
-                  HIGH
-                </span>
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200 animate-pulse">
-                  UNACK
-                </span>
-              </div>
-            );
-          }
-
-          // WARN or others
+        if (isDown) {
           return (
-            <div className="flex flex-col gap-1 items-start">
-              <span className="px-2 py-0.5 border border-amber-300 rounded text-[10px] font-bold tracking-wider bg-amber-100 text-amber-800 shadow-2xs inline-flex items-center gap-1.5 animate-pulse">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-600"></span>
-                </span>
-                WARN
+            <span className="px-2 py-0.5 border border-red-700 rounded text-[10px] font-black tracking-wider bg-red-600 text-white shadow-sm inline-flex items-center gap-1.5 animate-pulse">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-90"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
               </span>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
-                UNACK
-              </span>
-            </div>
+              DOWN
+            </span>
           );
         }
 
-        // Acknowledged (ACK) - peaceful static state
-        const styles = {
-          DOWN: 'bg-rose-50 text-rose-700 border-rose-200',
-          CRITICAL: 'bg-rose-50 text-rose-700 border-rose-200',
-          HIGH: 'bg-orange-50 text-orange-700 border-orange-200',
-          WARN: 'bg-amber-50 text-amber-700 border-amber-200',
-        }[row.alertLevel] || 'bg-slate-100 text-slate-700 border-slate-200';
+        if (isCritical) {
+          return (
+            <span className="px-2 py-0.5 border border-rose-300 rounded text-[10px] font-extrabold tracking-wider bg-rose-100 text-rose-800 shadow-2xs inline-flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
+              </span>
+              CRITICAL
+            </span>
+          );
+        }
 
+        if (isHigh) {
+          return (
+            <span className="px-2 py-0.5 border border-orange-300 rounded text-[10px] font-bold tracking-wider bg-orange-100 text-orange-800 shadow-2xs inline-flex items-center gap-1.5">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-orange-600"></span>
+              </span>
+              HIGH
+            </span>
+          );
+        }
+
+        // WARN or others
         return (
-          <div className="flex flex-col gap-1 items-start">
-            <span className={cn('px-2 py-0.5 border rounded text-[10px] font-bold tracking-wider inline-block', styles)}>
-              {row.alertLevel}
+          <span className="px-2 py-0.5 border border-amber-300 rounded text-[10px] font-bold tracking-wider bg-amber-100 text-amber-800 shadow-2xs inline-flex items-center gap-1.5">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-600"></span>
             </span>
-            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
-              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-              ACK
-            </span>
-          </div>
+            WARN
+          </span>
         );
       },
     },
@@ -465,6 +423,29 @@ export const ActiveAlertsView: React.FC<ActiveAlertsViewProps> = ({
           {formatRelativeDuration(row.createdAt, language)}
         </span>
       ),
+    },
+    {
+      header: t('activeAlerts.ackStatus') || 'Ack Status',
+      accessorKey: 'status',
+      sortable: true,
+      width: '110px',
+      cell: (row) => {
+        const isUnack = row.status === 'OPEN' || !row.status;
+        if (isUnack) {
+          return (
+            <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-red-100 text-red-900 border border-red-300 animate-pulse inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping shrink-0" />
+              UNACK
+            </span>
+          );
+        }
+        return (
+          <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1 shadow-2xs">
+            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+            ACK
+          </span>
+        );
+      },
     },
     {
       header: t('activeAlerts.action'),

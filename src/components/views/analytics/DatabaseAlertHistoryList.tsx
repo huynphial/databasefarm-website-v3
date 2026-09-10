@@ -56,7 +56,7 @@ export const DatabaseAlertHistoryList: React.FC<DatabaseAlertHistoryListProps> =
   // Pagination & Sorting State
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
-  const [sortField, setSortField] = useState<'clearedAt' | 'createdAt' | 'during' | 'alertLevel' | 'metricName'>('clearedAt');
+  const [sortField, setSortField] = useState<'clearedAt' | 'createdAt' | 'during' | 'alertLevel' | 'metricName' | 'dispatchStatus'>('clearedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Handle Preset Selection
@@ -182,6 +182,8 @@ export const DatabaseAlertHistoryList: React.FC<DatabaseAlertHistoryListProps> =
       } else if (sortField === 'alertLevel') {
         const rank: Record<string, number> = { DOWN: 4, CRITICAL: 3, HIGH: 2, WARN: 1, WARNING: 1 };
         primaryCmp = (rank[a.alertLevel?.toUpperCase()] || 0) - (rank[b.alertLevel?.toUpperCase()] || 0);
+      } else if (sortField === 'dispatchStatus') {
+        primaryCmp = (a.dispatchStatus || '').localeCompare(b.dispatchStatus || '');
       } else {
         primaryCmp = new Date(a.clearedAt).getTime() - new Date(b.clearedAt).getTime();
       }
@@ -217,7 +219,7 @@ export const DatabaseAlertHistoryList: React.FC<DatabaseAlertHistoryListProps> =
     return filteredHistory.slice(start, start + pageSize);
   }, [filteredHistory, currentPage, pageSize]);
 
-  const handleSort = (field: 'clearedAt' | 'createdAt' | 'during' | 'alertLevel' | 'metricName') => {
+  const handleSort = (field: 'clearedAt' | 'createdAt' | 'during' | 'alertLevel' | 'metricName' | 'dispatchStatus') => {
     if (sortField === field) {
       setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -287,7 +289,7 @@ export const DatabaseAlertHistoryList: React.FC<DatabaseAlertHistoryListProps> =
   };
 
   // Helper for rendering column sort indicator
-  const renderSortIcon = (field: 'clearedAt' | 'createdAt' | 'during' | 'alertLevel' | 'metricName') => {
+  const renderSortIcon = (field: 'clearedAt' | 'createdAt' | 'during' | 'alertLevel' | 'metricName' | 'dispatchStatus') => {
     if (sortField !== field) {
       return <ArrowUpDown className="w-3 h-3 text-slate-300 ml-1 inline opacity-0 group-hover:opacity-100 transition-opacity" />;
     }
@@ -560,7 +562,7 @@ export const DatabaseAlertHistoryList: React.FC<DatabaseAlertHistoryListProps> =
                   className="group py-2.5 px-3.5 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap"
                 >
                   <div className="flex items-center gap-1">
-                    <span>{t('alertHistory.colStatusSeverity')}</span>
+                    <span>{t('alertHistory.colSeverity') || 'Severity'}</span>
                     {renderSortIcon('alertLevel')}
                   </div>
                 </th>
@@ -599,6 +601,15 @@ export const DatabaseAlertHistoryList: React.FC<DatabaseAlertHistoryListProps> =
                   <div className="flex items-center gap-1">
                     <span>{t('alertHistory.colDuring')}</span>
                     {renderSortIcon('during')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('dispatchStatus')}
+                  className="group py-2.5 px-3.5 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>{t('alertHistory.colDispatchStatus') || 'Dispatcher Status'}</span>
+                    {renderSortIcon('dispatchStatus')}
                   </div>
                 </th>
                 <th className="py-2.5 px-3.5 whitespace-nowrap">{t('alertHistory.colClearedResolver')}</th>
@@ -645,27 +656,11 @@ export const DatabaseAlertHistoryList: React.FC<DatabaseAlertHistoryListProps> =
 
                 return (
                   <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                    {/* Status & Severity */}
+                    {/* Severity */}
                     <td className="py-2.5 px-3.5 whitespace-nowrap">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1">
-                          <span className={cn('px-2 py-0.5 border rounded text-[10px] font-extrabold', levelBadgeClass)}>
-                            {row.alertLevel}
-                          </span>
-                        </div>
-                        <div>
-                          <span
-                            className={cn(
-                              'inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded border',
-                              isDispatched
-                                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                                : 'text-slate-600 bg-slate-100 border-slate-200'
-                            )}
-                          >
-                            {isDispatched ? t('alertHistory.dispatched') : t('alertHistory.noDispatch')}
-                          </span>
-                        </div>
-                      </div>
+                      <span className={cn('px-2 py-0.5 border rounded text-[10px] font-extrabold', levelBadgeClass)}>
+                        {row.alertLevel}
+                      </span>
                     </td>
 
                     {/* Metric */}
@@ -698,6 +693,20 @@ export const DatabaseAlertHistoryList: React.FC<DatabaseAlertHistoryListProps> =
                     {/* Duration */}
                     <td className="py-2.5 px-3.5 whitespace-nowrap font-medium text-slate-700">
                       {formatRelativeDuration(row.createdAt, row.clearedAt, language)}
+                    </td>
+
+                    {/* Dispatcher Status */}
+                    <td className="py-2.5 px-3.5 whitespace-nowrap">
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border shadow-2xs',
+                          isDispatched
+                            ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                            : 'text-slate-600 bg-slate-100 border-slate-200'
+                        )}
+                      >
+                        {isDispatched ? t('alertHistory.dispatched') || 'DISPATCHED' : t('alertHistory.noDispatch') || 'NO DISPATCH'}
+                      </span>
                     </td>
 
                     {/* Cleared Resolver */}
