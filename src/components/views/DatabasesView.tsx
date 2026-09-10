@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Plus,
   Edit2,
@@ -140,9 +140,9 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const [sortField, setSortField] = useState<string>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  // Pagination State (Default 50 items per page)
+  // Pagination State (Default 25 items per page)
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(25);
 
   // Dialog & Form State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -403,7 +403,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   // ----------------------------------------------------
   // EXPORT SINGLE DATABASE (JSON)
   // ----------------------------------------------------
-  const handleExportSingleDatabase = (db: DatabaseEntity) => {
+  const handleExportSingleDatabase = useCallback((db: DatabaseEntity) => {
     if (userRole !== 'ADMIN') {
       toast({
         title: t('activeAlerts.permissionDenied') || 'Permission Denied',
@@ -459,7 +459,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       description: t('databases.dbExportedSingleDesc', { name: db.name }),
       type: 'success',
     });
-  };
+  }, [userRole, toast, t]);
 
   // ----------------------------------------------------
   // IMPORT DATABASES FROM JSON
@@ -651,7 +651,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     setIsDialogOpen(true);
   };
 
-  const openEditDialog = (db: DatabaseEntity) => {
+  const openEditDialog = useCallback((db: DatabaseEntity) => {
     setEditingDb(db);
     setShowPassword(false);
     setCustomTagInput('');
@@ -673,9 +673,9 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       status: (db.status || 'UP') as 'UP' | 'DOWN' | 'WARNING',
     });
     setIsDialogOpen(true);
-  };
+  }, []);
 
-  const handleToggleEnable = (db: DatabaseEntity) => {
+  const handleToggleEnable = useCallback((db: DatabaseEntity) => {
     if (userRole !== 'ADMIN') {
       toast({
         title: t('databases.permissionDenied'),
@@ -694,7 +694,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       description: t('databases.monitoringToastDesc', { name: db.name, state: nextState ? 'ACTIVE' : 'PAUSED' }),
       type: 'info',
     });
-  };
+  }, [userRole, toast, t, onSaveDatabase]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -737,7 +737,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     });
   };
 
-  const handleDelete = (db: DatabaseEntity) => {
+  const handleDelete = useCallback((db: DatabaseEntity) => {
     if (confirm(t('databases.deleteConfirm', { name: db.name }))) {
       onDeleteDatabase(db.id);
       toast({
@@ -746,115 +746,160 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         type: 'info',
       });
     }
-  };
+  }, [t, onDeleteDatabase, toast]);
 
-  const handleSortChange = (field: string) => {
+  const handleSortChange = useCallback((field: string) => {
     if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
       setSortOrder('asc');
     }
     setCurrentPage(1);
-  };
+  }, [sortField]);
 
-  // Filter & Sort Databases
+  // Filter & Sort Databases (Optimized with O(A) indexing for fast rendering with many databases)
   const processedDatabases = useMemo(() => {
-    return databases
-      .map((db) => {
-        const dbAlerts = activeAlerts.filter((a) => {
-          const aDbId = String(a.dbId || (a as any).databaseId || '');
-          const matchId = aDbId && aDbId === String(db.id);
-          const matchName = Boolean(a.dbName && db.name && a.dbName.trim().toLowerCase() === db.name.trim().toLowerCase());
-          return matchId || matchName;
-        });
-        const criticalCount = dbAlerts.filter((a) => {
-          const lvl = (a.alertLevel || '').toUpperCase();
-          return lvl === 'CRITICAL' || lvl === 'FATAL';
-        }).length;
-        const highCount = dbAlerts.filter((a) => (a.alertLevel || '').toUpperCase() === 'HIGH').length;
-        const warnCount = dbAlerts.filter((a) => {
-          const lvl = (a.alertLevel || '').toUpperCase();
-          return lvl === 'WARN' || lvl === 'WARNING';
-        }).length;
-        const downCount = dbAlerts.filter((a) => (a.alertLevel || '').toUpperCase() === 'DOWN').length;
+    // 1. Build fast active alert lookup maps by id and lowercase dbName in a single O(A) pass
+    const alertsByDbId = new Map<string, { critical: number; high: number; warn: number; down: number; total: number }>();
+    const alertsByDbName = new Map<string, { critical: number; high: number; warn: number; down: number; total: number }>();
 
-        const isPaused = db.isEnabled === false;
-        const dbStatusUpper = (db.status || '').toUpperCase();
-        let statusScore = 2; // 0 = DOWN, 1 = WARN, 2 = UP, 3 = PAUSED
-        let statusLabel = 'UP';
-        if (isPaused) {
-          statusScore = 3;
-          statusLabel = 'PAUSED';
-        } else if (dbStatusUpper === 'DOWN' || downCount > 0) {
-          statusScore = 0;
-          statusLabel = 'DOWN';
-        } else if (dbStatusUpper === 'WARNING' || dbStatusUpper === 'WARN' || warnCount > 0 || highCount > 0 || criticalCount > 0) {
-          statusScore = 1;
-          statusLabel = 'WARN';
+    for (let i = 0; i < activeAlerts.length; i++) {
+      const a = activeAlerts[i];
+      const lvl = (a.alertLevel || '').toUpperCase();
+      const isCritical = lvl === 'CRITICAL' || lvl === 'FATAL';
+      const isHigh = lvl === 'HIGH';
+      const isWarn = lvl === 'WARN' || lvl === 'WARNING';
+      const isDown = lvl === 'DOWN';
+
+      const idKey = String(a.dbId || (a as any).databaseId || '');
+      if (idKey) {
+        let stats = alertsByDbId.get(idKey);
+        if (!stats) {
+          stats = { critical: 0, high: 0, warn: 0, down: 0, total: 0 };
+          alertsByDbId.set(idKey, stats);
         }
+        stats.total++;
+        if (isCritical) stats.critical++;
+        else if (isHigh) stats.high++;
+        else if (isWarn) stats.warn++;
+        else if (isDown) stats.down++;
+      }
 
-        return {
-          ...db,
-          criticalCount,
-          highCount,
-          warnCount,
-          downCount,
-          totalAlerts: dbAlerts.length,
-          statusScore,
-          statusLabel,
-          probeCount: db.metricIds?.length || 0,
-        };
-      })
-      .filter((db) => {
-        // Search Term Filter
-        if (searchTerm.trim()) {
-          const term = searchTerm.toLowerCase().trim();
-          const match =
-            db.name.toLowerCase().includes(term) ||
-            db.host.toLowerCase().includes(term) ||
-            db.dbType.toLowerCase().includes(term) ||
-            (db.username && db.username.toLowerCase().includes(term)) ||
-            (db.note && db.note.toLowerCase().includes(term)) ||
-            (db.tags && db.tags.some((t) => t.toLowerCase().includes(term)));
-          if (!match) return false;
+      if (a.dbName) {
+        const nameKey = a.dbName.trim().toLowerCase();
+        let stats = alertsByDbName.get(nameKey);
+        if (!stats) {
+          stats = { critical: 0, high: 0, warn: 0, down: 0, total: 0 };
+          alertsByDbName.set(nameKey, stats);
         }
+        stats.total++;
+        if (isCritical) stats.critical++;
+        else if (isHigh) stats.high++;
+        else if (isWarn) stats.warn++;
+        else if (isDown) stats.down++;
+      }
+    }
 
-        // Database Engine Type Filter
-        if (selectedEngine !== 'ALL') {
-          if (db.dbType.toUpperCase() !== selectedEngine.toUpperCase()) return false;
-        }
+    const trimmedSearch = searchTerm.trim().toLowerCase();
+    const hasSearch = Boolean(trimmedSearch);
+    const hasEngineFilter = selectedEngine !== 'ALL';
+    const selectedEngineUpper = selectedEngine.toUpperCase();
+    const hasStatusFilter = selectedStatus !== 'ALL';
+    const hasSeverityFilter = selectedSeverity !== 'ALL';
 
-        // Status Filter
-        if (selectedStatus !== 'ALL') {
-          if (selectedStatus === 'UP' && db.statusLabel !== 'UP') return false;
-          if (selectedStatus === 'DOWN' && db.statusLabel !== 'DOWN') return false;
-          if (selectedStatus === 'PAUSED' && db.statusLabel !== 'PAUSED') return false;
-        }
+    const result = [];
 
-        // Alert Severity Filter
-        if (selectedSeverity !== 'ALL') {
-          if (selectedSeverity === 'CRITICAL' && db.criticalCount === 0) return false;
-          if (selectedSeverity === 'HIGH' && db.highCount === 0) return false;
-          if (selectedSeverity === 'WARN' && db.warnCount === 0) return false;
-          if (selectedSeverity === 'DOWN' && db.downCount === 0) return false;
-          if (selectedSeverity === 'HAS_ALERTS' && db.totalAlerts === 0) return false;
-          if (selectedSeverity === 'NO_ALERTS' && db.totalAlerts > 0) return false;
-        }
+    for (let i = 0; i < databases.length; i++) {
+      const db = databases[i];
 
-        return true;
-      })
-      .sort((a, b) => {
-        let valA: any = a[sortField as keyof typeof a];
-        let valB: any = b[sortField as keyof typeof b];
+      // Fast O(1) alert lookup
+      const alertStats =
+        alertsByDbId.get(String(db.id)) ||
+        alertsByDbName.get(db.name ? db.name.trim().toLowerCase() : '') ||
+        { critical: 0, high: 0, warn: 0, down: 0, total: 0 };
 
-        if (typeof valA === 'string') valA = valA.toLowerCase();
-        if (typeof valB === 'string') valB = valB.toLowerCase();
+      const criticalCount = alertStats.critical;
+      const highCount = alertStats.high;
+      const warnCount = alertStats.warn;
+      const downCount = alertStats.down;
+      const totalAlerts = alertStats.total;
 
-        if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
-        if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
-        return 0;
+      const isPaused = db.isEnabled === false;
+      const dbStatusUpper = (db.status || '').toUpperCase();
+      let statusScore = 2; // 0 = DOWN, 1 = WARN, 2 = UP, 3 = PAUSED
+      let statusLabel = 'UP';
+      if (isPaused) {
+        statusScore = 3;
+        statusLabel = 'PAUSED';
+      } else if (dbStatusUpper === 'DOWN' || downCount > 0) {
+        statusScore = 0;
+        statusLabel = 'DOWN';
+      } else if (dbStatusUpper === 'WARNING' || dbStatusUpper === 'WARN' || warnCount > 0 || highCount > 0 || criticalCount > 0) {
+        statusScore = 1;
+        statusLabel = 'WARN';
+      }
+
+      // Filter: Search Term
+      if (hasSearch) {
+        const match =
+          (db.name && db.name.toLowerCase().includes(trimmedSearch)) ||
+          (db.host && db.host.toLowerCase().includes(trimmedSearch)) ||
+          (db.dbType && db.dbType.toLowerCase().includes(trimmedSearch)) ||
+          (db.username && db.username.toLowerCase().includes(trimmedSearch)) ||
+          (db.note && db.note.toLowerCase().includes(trimmedSearch)) ||
+          (db.tags && db.tags.some((t) => t.toLowerCase().includes(trimmedSearch)));
+        if (!match) continue;
+      }
+
+      // Filter: Database Engine Type
+      if (hasEngineFilter) {
+        if ((db.dbType || '').toUpperCase() !== selectedEngineUpper) continue;
+      }
+
+      // Filter: Status
+      if (hasStatusFilter) {
+        if (selectedStatus === 'UP' && statusLabel !== 'UP') continue;
+        if (selectedStatus === 'DOWN' && statusLabel !== 'DOWN') continue;
+        if (selectedStatus === 'PAUSED' && statusLabel !== 'PAUSED') continue;
+      }
+
+      // Filter: Alert Severity
+      if (hasSeverityFilter) {
+        if (selectedSeverity === 'CRITICAL' && criticalCount === 0) continue;
+        if (selectedSeverity === 'HIGH' && highCount === 0) continue;
+        if (selectedSeverity === 'WARN' && warnCount === 0) continue;
+        if (selectedSeverity === 'DOWN' && downCount === 0) continue;
+        if (selectedSeverity === 'HAS_ALERTS' && totalAlerts === 0) continue;
+        if (selectedSeverity === 'NO_ALERTS' && totalAlerts > 0) continue;
+      }
+
+      result.push({
+        ...db,
+        criticalCount,
+        highCount,
+        warnCount,
+        downCount,
+        totalAlerts,
+        statusScore,
+        statusLabel,
       });
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let valA: any = a[sortField as keyof typeof a];
+      let valB: any = b[sortField as keyof typeof b];
+
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return result;
   }, [databases, activeAlerts, searchTerm, selectedEngine, selectedStatus, selectedSeverity, sortField, sortOrder]);
 
   // ----------------------------------------------------
@@ -983,7 +1028,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const totalPages = Math.ceil(processedDatabases.length / pageSize) || 1;
   const paginatedDatabases = processedDatabases.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const columns: Column<typeof processedDatabases[0]>[] = [
+  const columns = useMemo<Column<typeof processedDatabases[0]>[]>(() => [
     {
       header: t('databases.databaseNameAndEndpoint'),
       accessorKey: 'name',
@@ -1134,20 +1179,6 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       },
     },
     {
-      header: t('databases.assignedMetrics'),
-      accessorKey: 'probeCount',
-      width: '120px',
-      sortable: true,
-      align: 'center',
-      cell: (row) => {
-        return (
-          <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200 inline-block">
-            {row.probeCount}
-          </span>
-        );
-      },
-    },
-    {
       header: t('databases.actions'),
       align: 'right',
       width: '130px',
@@ -1192,7 +1223,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         </div>
       ),
     },
-  ];
+  ], [t, userRole, handleToggleEnable, handleExportSingleDatabase, openEditDialog, handleDelete, onNavigateToAnalytics]);
 
   return (
     <div className="p-6 sm:p-8 flex-1 flex flex-col gap-6 overflow-y-auto bg-slate-50/50">
