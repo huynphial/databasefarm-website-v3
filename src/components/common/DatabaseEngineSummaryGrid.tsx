@@ -160,6 +160,7 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
           if (onSelectEngine) onSelectEngine('ALL');
           if (onSelectStatus) onSelectStatus('ALL');
         }}
+        title={`All Databases: ${summaryMetrics.totalDbs} total (100.00%)`}
         className={cn(
           'px-3.5 py-2 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-center group shadow-2xs hover:shadow-xs min-h-[52px]',
           selectedEngine.toUpperCase() === 'ALL' && selectedStatus.toUpperCase() === 'ALL'
@@ -168,8 +169,13 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
         )}
       >
         <div className="flex items-center justify-between gap-1.5 leading-tight">
-          <div className="text-xs font-bold text-indigo-600 tracking-tight truncate group-hover:text-indigo-700 transition-colors">
-            All Databases
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-xs font-bold text-indigo-600 tracking-tight truncate group-hover:text-indigo-700 transition-colors">
+              All Databases
+            </span>
+            <span className="text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/80 shrink-0">
+              100.00%
+            </span>
           </div>
           <div className="font-mono text-[11px] shrink-0" title="Critical / High / Warning Alerts">
             <span className={summaryMetrics.criticalAlerts > 0 ? 'text-rose-600 font-extrabold' : 'text-slate-400'}>
@@ -201,45 +207,63 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
       </div>
 
       {/* Card 2: Active Databases */}
-      <div
-        onClick={() => {
-          if (onSelectStatus) {
-            onSelectStatus(selectedStatus === 'UP' ? 'ALL' : 'UP');
-          }
-        }}
-        className={cn(
-          'px-3.5 py-2 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-center group shadow-2xs hover:shadow-xs min-h-[52px]',
-          selectedStatus === 'UP'
-            ? 'border-emerald-500 ring-1.5 ring-emerald-500/20 bg-emerald-50/25'
-            : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/15'
-        )}
-      >
-        <div className="flex items-center justify-between gap-1.5 leading-tight">
-          <div className="text-xs font-bold text-emerald-600 tracking-tight truncate group-hover:text-emerald-700 transition-colors">
-            Active Databases
-          </div>
-          <div className="font-mono font-bold text-[11px] shrink-0 text-emerald-600">
-            {summaryMetrics.dbsUp} UP
-          </div>
-        </div>
+      {(() => {
+        const activePct =
+          summaryMetrics.totalDbs > 0
+            ? ((summaryMetrics.monitoredDbs / summaryMetrics.totalDbs) * 100).toFixed(2)
+            : '0.00';
+        return (
+          <div
+            onClick={() => {
+              if (onSelectStatus) {
+                onSelectStatus(selectedStatus === 'UP' ? 'ALL' : 'UP');
+              }
+            }}
+            title={`Active Databases: ${summaryMetrics.monitoredDbs} of ${summaryMetrics.totalDbs} (${activePct}%)`}
+            className={cn(
+              'px-3.5 py-2 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-center group shadow-2xs hover:shadow-xs min-h-[52px]',
+              selectedStatus === 'UP'
+                ? 'border-emerald-500 ring-1.5 ring-emerald-500/20 bg-emerald-50/25'
+                : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/15'
+            )}
+          >
+            <div className="flex items-center justify-between gap-1.5 leading-tight">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-xs font-bold text-emerald-600 tracking-tight truncate group-hover:text-emerald-700 transition-colors">
+                  Active Databases
+                </span>
+                <span className="text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 shrink-0">
+                  {activePct}%
+                </span>
+              </div>
+              <div className="font-mono font-bold text-[11px] shrink-0 text-emerald-600">
+                {summaryMetrics.dbsUp} UP
+              </div>
+            </div>
 
-        <div className="mt-1 flex items-center justify-between text-[11px] text-slate-600 font-mono leading-tight">
-          <div className="truncate">
-            <span className="font-bold text-slate-800">Active: {summaryMetrics.monitoredDbs}</span>
-            <span className="text-slate-400 mx-1">/</span>
-            <span className="text-slate-700 font-medium">Total: {summaryMetrics.totalDbs}</span>
+            <div className="mt-1 flex items-center justify-between text-[11px] text-slate-600 font-mono leading-tight">
+              <div className="truncate">
+                <span className="font-bold text-slate-800">Active: {summaryMetrics.monitoredDbs}</span>
+                <span className="text-slate-400 mx-1">/</span>
+                <span className="text-slate-700 font-medium">Total: {summaryMetrics.totalDbs}</span>
+              </div>
+              {summaryMetrics.totalDbs - summaryMetrics.monitoredDbs > 0 && (
+                <span className="text-slate-400 font-medium shrink-0 ml-1.5">
+                  {summaryMetrics.totalDbs - summaryMetrics.monitoredDbs} Off
+                </span>
+              )}
+            </div>
           </div>
-          {summaryMetrics.totalDbs - summaryMetrics.monitoredDbs > 0 && (
-            <span className="text-slate-400 font-medium shrink-0 ml-1.5">
-              {summaryMetrics.totalDbs - summaryMetrics.monitoredDbs} Off
-            </span>
-          )}
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Cards 3+: Engine Specific Cards */}
       {engineSummaryMetrics.map((eng) => {
         const isSelected = selectedEngine.toUpperCase() === eng.code.toUpperCase();
+        const percentOverAll =
+          summaryMetrics.totalDbs > 0
+            ? ((eng.totalCount / summaryMetrics.totalDbs) * 100).toFixed(2)
+            : '0.00';
 
         return (
           <div
@@ -249,6 +273,7 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
                 onSelectEngine(isSelected ? 'ALL' : eng.code);
               }
             }}
+            title={`${eng.name}: ${eng.totalCount} databases (${percentOverAll}% of all ${summaryMetrics.totalDbs} databases)`}
             className={cn(
               'px-3.5 py-2 rounded-lg border bg-white transition-all cursor-pointer flex flex-col justify-center group shadow-2xs hover:shadow-xs min-h-[52px]',
               isSelected
@@ -257,11 +282,16 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
             )}
           >
             <div className="flex items-center justify-between gap-1.5 leading-tight">
-              <div
-                className="text-xs font-bold tracking-tight truncate transition-opacity group-hover:opacity-90"
-                style={{ color: eng.color }}
-              >
-                {eng.name}
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span
+                  className="text-xs font-bold tracking-tight truncate transition-opacity group-hover:opacity-90"
+                  style={{ color: eng.color }}
+                >
+                  {eng.name}
+                </span>
+                <span className="text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-700 border border-slate-200/80 shrink-0">
+                  {percentOverAll}%
+                </span>
               </div>
               <div className="font-mono text-[11px] shrink-0" title="Critical / High / Warning Alerts">
                 <span className={eng.criticalCount > 0 ? 'text-rose-600 font-extrabold' : 'text-slate-400'}>
