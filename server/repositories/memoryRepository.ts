@@ -1221,6 +1221,7 @@ FROM pg_tablespace`,
       triggeredThreshold: item.trig,
       cycle: 1,
       status: item.stat,
+      queryDurationMs: Math.round(18 + ((idx * 29 + item.minAgo * 7) % 320)),
       measuredAt: new Date(Date.now() - item.minAgo * 60000).toISOString(),
     })),
 
@@ -1255,6 +1256,7 @@ FROM pg_tablespace`,
       triggeredThreshold: item.trig,
       cycle: 1,
       status: item.stat,
+      queryDurationMs: Math.round(25 + ((idx * 37 + item.minAgo * 11) % 410)),
       measuredAt: new Date(Date.now() - item.minAgo * 60000).toISOString(),
     })),
 
@@ -1285,6 +1287,7 @@ FROM pg_tablespace`,
       triggeredThreshold: item.stat !== 'NORMAL' ? 'Warn: 75 / High: 85 (>=)' : null,
       cycle: 1,
       status: item.stat,
+      queryDurationMs: Math.round(12 + ((idx * 19 + item.minAgo * 5) % 180)),
       measuredAt: new Date(Date.now() - item.minAgo * 60000).toISOString(),
     })),
 
@@ -1311,6 +1314,7 @@ FROM pg_tablespace`,
       triggeredThreshold: item.stat !== 'NORMAL' ? 'Warn: 30 (>=)' : null,
       cycle: 1,
       status: item.stat,
+      queryDurationMs: Math.round(10 + ((idx * 15 + item.minAgo * 3) % 120)),
       measuredAt: new Date(Date.now() - item.minAgo * 60000).toISOString(),
     })),
 
@@ -1340,6 +1344,7 @@ FROM pg_tablespace`,
       triggeredThreshold: null,
       cycle: 1,
       status: item.stat,
+      queryDurationMs: Math.round(35 + ((idx * 21 + item.minAgo * 4) % 250)),
       measuredAt: new Date(Date.now() - item.minAgo * 60000).toISOString(),
     })),
 
@@ -1368,6 +1373,7 @@ FROM pg_tablespace`,
       triggeredThreshold: item.trig,
       cycle: 1,
       status: item.stat,
+      queryDurationMs: Math.round(14 + ((idx * 16 + item.minAgo * 6) % 150)),
       measuredAt: new Date(Date.now() - item.minAgo * 60000).toISOString(),
     })),
 
@@ -1394,6 +1400,7 @@ FROM pg_tablespace`,
       triggeredThreshold: item.trig,
       cycle: 1,
       status: item.stat,
+      queryDurationMs: Math.round(45 + ((idx * 30 + item.minAgo * 8) % 300)),
       measuredAt: new Date(Date.now() - item.minAgo * 60000).toISOString(),
     })),
 
@@ -2264,6 +2271,11 @@ FROM pg_tablespace`,
       );
     }
 
+    const minDur = filter.minDurationMs !== undefined ? filter.minDurationMs : filter.queryDurationMs;
+    if (minDur !== undefined && minDur > 0) {
+      list = list.filter((m) => (m.queryDurationMs ?? 0) >= minDur);
+    }
+
     list.sort((a, b) => new Date(b.measuredAt).getTime() - new Date(a.measuredAt).getTime());
 
     return limit > 0 ? list.slice(0, limit) : list;
@@ -2280,6 +2292,7 @@ FROM pg_tablespace`,
       objectName: data.objectName || 'INSTANCE',
       attributeName: data.attributeName || 'value',
       value: data.value || '0',
+      queryDurationMs: data.queryDurationMs !== undefined && data.queryDurationMs !== null ? Number(data.queryDurationMs) : 0,
       valueType: data.valueType || 'NUMBER',
       thresholdOperator: data.thresholdOperator || '>=',
       triggeredThreshold: data.triggeredThreshold || null,

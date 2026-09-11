@@ -728,6 +728,7 @@ async function startServer() {
       const fromDate = req.query.fromDate as string | undefined;
       const toDate = req.query.toDate as string | undefined;
       const searchTerm = req.query.searchTerm as string | undefined;
+      const minDurationMs = req.query.minDurationMs !== undefined ? parseFloat(req.query.minDurationMs as string) : (req.query.queryDurationMs !== undefined ? parseFloat(req.query.queryDurationMs as string) : undefined);
 
       const measurements = await repo.getRawMeasurements({
         limit,
@@ -745,6 +746,8 @@ async function startServer() {
         fromDate,
         toDate,
         searchTerm,
+        minDurationMs: isNaN(minDurationMs as number) ? undefined : minDurationMs,
+        queryDurationMs: isNaN(minDurationMs as number) ? undefined : minDurationMs,
       });
       res.json(measurements);
     } catch (err: any) {

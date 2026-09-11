@@ -109,6 +109,8 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
   // --- SECONDARY LOG FILTERS ---
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [minDurationInput, setMinDurationInput] = useState<string>('0');
+  const [appliedMinDuration, setAppliedMinDuration] = useState<number>(0);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -307,6 +309,12 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
         // Status filter
         if (statusFilter !== 'ALL' && log.status !== statusFilter) return false;
 
+        // Execution Duration Filter (default >= 0ms)
+        if (appliedMinDuration > 0) {
+          const durMs = calculateDurationMs(log.startedAt, log.finishedAt) ?? 0;
+          if (durMs < appliedMinDuration) return false;
+        }
+
         // Search term
         if (searchTerm.trim()) {
           const term = searchTerm.toLowerCase();
@@ -333,6 +341,7 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
     selectedEngineType,
     selectedDbId,
     statusFilter,
+    appliedMinDuration,
     searchTerm,
     dbMap,
   ]);
@@ -820,51 +829,169 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
             </div>
           </div>
 
-          {/* Row: Search and Secondary Status Filter */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            {/* Search Box */}
-            <div className="relative flex-1 min-w-[240px]">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Search log ID, database ID, database name, error message..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => {
-                    setSearchTerm('');
+          {/* Row: Search, Execution Duration Filter, Status Dropdown, and Search Action */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const val = minDurationInput.trim() === '' || isNaN(Number(minDurationInput)) ? 0 : Math.max(0, Number(minDurationInput));
+              setAppliedMinDuration(val);
+              setCurrentPage(1);
+            }}
+            className="space-y-2.5"
+          >
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5">
+              {/* Search Box */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search log ID, database ID, database name, error message..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setCurrentPage(1);
+                    }}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Execution Duration Filter Input */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs shrink-0">
+                <Timer className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <label htmlFor="logMinDurationInput" className="font-semibold text-slate-600 whitespace-nowrap text-[11px]">
+                  {t('monitorPollLog.filterExecutionDuration') || 'Execution Duration >='}:
+                </label>
+                <div className="flex items-center">
+                  <input
+                    id="logMinDurationInput"
+                    type="number"
+                    min="0"
+                    step="50"
+                    placeholder="0"
+                    value={minDurationInput}
+                    onChange={(e) => setMinDurationInput(e.target.value)}
+                    className="w-16 bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs text-right pr-0.5 font-mono"
+                  />
+                  <span className="text-[11px] text-slate-500 font-semibold">ms</span>
+                </div>
+              </div>
+
+              {/* Secondary Status Dropdown */}
+              <div className="flex items-center gap-2 shrink-0">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
                 >
-                  ✕
+                  <option value="ALL">Status: All (Success, Warning & Failed)</option>
+                  <option value="success">Success Only</option>
+                  <option value="partial_failed">Partial / Warning Only</option>
+                  <option value="failed">Failed Only</option>
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="submit"
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors shadow-2xs cursor-pointer"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>{t('monitorPollLog.searchLogs') || 'Search'}</span>
                 </button>
-              )}
+
+                {(searchTerm.trim() !== '' || statusFilter !== 'ALL' || appliedMinDuration > 0 || (minDurationInput.trim() !== '' && minDurationInput.trim() !== '0')) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setStatusFilter('ALL');
+                      setMinDurationInput('0');
+                      setAppliedMinDuration(0);
+                      setCurrentPage(1);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                    title="Reset filters"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Reset</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Secondary Status Dropdown */}
-            <div className="flex items-center gap-2">
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
+            {/* Quick Duration Presets */}
+            <div className="flex items-center gap-1 text-xs pt-1 border-t border-slate-100">
+              <span className="text-[10px] text-slate-400 font-medium">Quick Duration:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setMinDurationInput('0');
+                  setAppliedMinDuration(0);
                   setCurrentPage(1);
                 }}
-                className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
+                className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
+                  appliedMinDuration === 0 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
               >
-                <option value="ALL">Status: All (Success, Warning & Failed)</option>
-                <option value="success">Success Only</option>
-                <option value="partial_failed">Partial / Warning Only</option>
-                <option value="failed">Failed Only</option>
-              </select>
+                &gt;= 0ms
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMinDurationInput('500');
+                  setAppliedMinDuration(500);
+                  setCurrentPage(1);
+                }}
+                className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
+                  appliedMinDuration === 500 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                &gt;= 500ms
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMinDurationInput('1000');
+                  setAppliedMinDuration(1000);
+                  setCurrentPage(1);
+                }}
+                className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
+                  appliedMinDuration === 1000 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                &gt;= 1s
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMinDurationInput('5000');
+                  setAppliedMinDuration(5000);
+                  setCurrentPage(1);
+                }}
+                className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
+                  appliedMinDuration === 5000 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                &gt;= 5s
+              </button>
             </div>
-          </div>
+          </form>
         </div>
 
         {/* Poll Logs Table Container */}

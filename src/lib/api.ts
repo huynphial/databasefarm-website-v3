@@ -353,6 +353,8 @@ export const api = {
       if (filterOrLimit.fromDate) params.append('fromDate', filterOrLimit.fromDate);
       if (filterOrLimit.toDate) params.append('toDate', filterOrLimit.toDate);
       if (filterOrLimit.searchTerm) params.append('searchTerm', filterOrLimit.searchTerm);
+      if (filterOrLimit.minDurationMs !== undefined) params.append('minDurationMs', String(filterOrLimit.minDurationMs));
+      if (filterOrLimit.queryDurationMs !== undefined) params.append('queryDurationMs', String(filterOrLimit.queryDurationMs));
       return fetchJson(`/api/raw-measurements?${params.toString()}`);
     }
     return fetchJson('/api/raw-measurements');

@@ -387,15 +387,16 @@ model AlertHistory {
 
 /// MetricDataPoint Model: Multidimensional time-series store for monitored tuples (without foreign keys for MySQL partitioning support).
 model MetricDataPoint {
-  id            String   @default(uuid())
-  dbId          String   @map("database_id")
-  metricId      String   @map("metric_id")
-  objectName    String?  @default("GLOBAL") @map("object_name")
-  attributeName String?  @map("attribute_name")
-  value         String
-  pollStatus    String?  @default("SUCCESS") @map("poll_status")
-  pollResponse  String?  @map("poll_response") @db.Text
-  measuredAt    DateTime @default(now()) @map("measured_at")
+  id              String   @default(uuid())
+  dbId            String   @map("database_id")
+  metricId        String   @map("metric_id")
+  objectName      String?  @default("GLOBAL") @map("object_name")
+  attributeName   String?  @map("attribute_name")
+  value           String
+  queryDurationMs Float?   @default(0) @map("query_duration_ms")
+  pollStatus      String?  @default("SUCCESS") @map("poll_status")
+  pollResponse    String?  @map("poll_response") @db.Text
+  measuredAt      DateTime @default(now()) @map("measured_at")
 
   @@id([id, measuredAt])
   @@index([dbId, metricId, measuredAt(sort: Desc)])

@@ -2054,6 +2054,11 @@ export class PrismaRepository implements IStorageRepository {
               // fallback
             }
           }
+          // Duration filtering
+          const minDur = filterOrLimit.minDurationMs !== undefined ? filterOrLimit.minDurationMs : filterOrLimit.queryDurationMs;
+          if (minDur !== undefined && minDur > 0) {
+            where.queryDurationMs = { gte: minDur };
+          }
         }
 
         let dataPoints: any[] = [];
@@ -2146,6 +2151,11 @@ export class PrismaRepository implements IStorageRepository {
               )`);
             }
 
+            const minDur = filterObj?.minDurationMs !== undefined ? filterObj.minDurationMs : filterObj?.queryDurationMs;
+            if (minDur !== undefined && minDur > 0) {
+              whereClauses.push(`COALESCE(mdp.query_duration_ms, mdp.queryDurationMs, 0) >= ${Number(minDur)}`);
+            }
+
             const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
             const takeLimit = limit > 0 ? limit : 10000;
 
@@ -2157,6 +2167,7 @@ export class PrismaRepository implements IStorageRepository {
                 COALESCE(mdp.object_name, mdp.objectName, 'INSTANCE') as objectName,
                 COALESCE(mdp.attribute_name, mdp.attributeName, 'value') as attributeName,
                 COALESCE(mdp.value, '') as value,
+                COALESCE(mdp.query_duration_ms, mdp.queryDurationMs, 0) as queryDurationMs,
                 COALESCE(mdp.poll_status, mdp.pollStatus, 'SUCCESS') as pollStatus,
                 COALESCE(mdp.poll_response, mdp.pollResponse) as pollResponse,
                 COALESCE(mdp.measured_at, mdp.measuredAt, NOW()) as measuredAt,
@@ -2183,6 +2194,7 @@ export class PrismaRepository implements IStorageRepository {
                 objectName: r.objectName,
                 attributeName: r.attributeName,
                 value: r.value,
+                queryDurationMs: r.queryDurationMs !== undefined && r.queryDurationMs !== null ? Number(r.queryDurationMs) : 0,
                 pollStatus: r.pollStatus,
                 pollResponse: r.pollResponse,
                 measuredAt: r.measuredAt,
@@ -2246,6 +2258,7 @@ export class PrismaRepository implements IStorageRepository {
 
             const pStatus = dp.pollStatus || dp.poll_status || (dp.status === 'ERROR' || dp.status === 'DOWN' || dp.status === 'FAIL' ? 'FAIL' : 'SUCCESS');
             const pResponse = dp.pollResponse || dp.poll_response || dp.response || null;
+            const qDuration = dp.queryDurationMs !== undefined && dp.queryDurationMs !== null ? Number(dp.queryDurationMs) : (dp.query_duration_ms !== undefined ? Number(dp.query_duration_ms) : 0);
 
             return {
               id: String(dp.id),
@@ -2257,6 +2270,7 @@ export class PrismaRepository implements IStorageRepository {
               objectName: dp.objectName || 'INSTANCE',
               attributeName: dp.attributeName || 'value',
               value: dp.value,
+              queryDurationMs: qDuration,
               valueType: (mInfo?.valueType as any) || 'NUMBER',
               thresholdOperator: mInfo?.thresholdOperator || '>=',
               triggeredThreshold,
@@ -2270,6 +2284,10 @@ export class PrismaRepository implements IStorageRepository {
           });
 
           if (typeof filterOrLimit === 'object') {
+            const minDurFilter = filterOrLimit?.minDurationMs !== undefined ? filterOrLimit.minDurationMs : filterOrLimit?.queryDurationMs;
+            if (minDurFilter !== undefined && minDurFilter > 0) {
+              list = list.filter((m) => (m.queryDurationMs ?? 0) >= minDurFilter);
+            }
             if (filterOrLimit?.dbType && filterOrLimit.dbType !== 'ALL') {
               list = list.filter((m) => m.dbType?.toUpperCase() === filterOrLimit.dbType?.toUpperCase());
             }
@@ -2320,6 +2338,7 @@ export class PrismaRepository implements IStorageRepository {
           objectName: data.objectName || 'INSTANCE',
           attributeName: data.attributeName || 'value',
           value: data.value || '0',
+          queryDurationMs: data.queryDurationMs !== undefined ? data.queryDurationMs : 0,
           valueType: data.valueType || 'NUMBER',
           cycle: data.cycle || 1,
           status: data.status || 'NORMAL',
@@ -2337,6 +2356,7 @@ export class PrismaRepository implements IStorageRepository {
           objectName: data.objectName || 'INSTANCE',
           attributeName: data.attributeName || 'value',
           value: data.value || '0',
+          queryDurationMs: data.queryDurationMs !== undefined && data.queryDurationMs !== null ? Number(data.queryDurationMs) : 0,
           pollStatus: data.pollStatus || (data.status === 'ERROR' || data.status === 'FAIL' || data.status === 'DOWN' ? 'FAIL' : 'SUCCESS'),
           pollResponse: data.pollResponse || data.response || null,
           measuredAt: data.measuredAt ? new Date(data.measuredAt) : new Date(),
@@ -2358,6 +2378,7 @@ export class PrismaRepository implements IStorageRepository {
         objectName: created.objectName || 'INSTANCE',
         attributeName: created.attributeName || 'value',
         value: created.value,
+        queryDurationMs: created.queryDurationMs !== undefined && created.queryDurationMs !== null ? Number(created.queryDurationMs) : (data.queryDurationMs ?? 0),
         valueType: (metric?.valueType as any) || data.valueType || 'NUMBER',
         thresholdOperator: metric?.relationalOperator || data.thresholdOperator || '>=',
         triggeredThreshold: data.triggeredThreshold || null,

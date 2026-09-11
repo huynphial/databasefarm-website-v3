@@ -67,6 +67,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   const [isSearching, setIsSearching] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [minDurationInput, setMinDurationInput] = useState<string>('0');
+  const [appliedMinDuration, setAppliedMinDuration] = useState<number>(0);
   const [engineFilter, setEngineFilter] = useState<string>('ALL');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('ALL');
   const [selectedTemplateFilter, setSelectedTemplateFilter] = useState<string>('ALL');
@@ -261,6 +263,11 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       const activeFrom = overrideFilter?.fromDate !== undefined ? overrideFilter.fromDate : fromDate;
       const activeTo = overrideFilter?.toDate !== undefined ? overrideFilter.toDate : toDate;
       const activeSearch = overrideFilter?.searchTerm !== undefined ? overrideFilter.searchTerm : searchTerm;
+      const activeMinDuration = overrideFilter?.minDurationMs !== undefined
+        ? overrideFilter.minDurationMs
+        : (minDurationInput.trim() === '' || isNaN(Number(minDurationInput)) ? 0 : Math.max(0, Number(minDurationInput)));
+
+      setAppliedMinDuration(activeMinDuration);
 
       // 1. Resolve database IDs from group filter if active
       let targetDbIds: string[] | undefined = undefined;
@@ -303,6 +310,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         fromDate: activeFrom || undefined,
         toDate: activeTo || undefined,
         searchTerm: activeSearch?.trim() || undefined,
+        minDurationMs: activeMinDuration,
         limit: 0, // 0 indicates unlimited: return all database rows matching criteria from Prisma
       };
 
@@ -338,6 +346,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     const defaultFrom = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const defaultTo = new Date().toISOString().slice(0, 10);
     setSearchTerm('');
+    setMinDurationInput('0');
+    setAppliedMinDuration(0);
     setEngineFilter('ALL');
     setSelectedGroupFilter('ALL');
     setSelectedTemplateFilter('ALL');
@@ -352,6 +362,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
 
     await handleRunQuery({
       searchTerm: '',
+      minDurationMs: 0,
       dbType: 'ALL',
       groupFilter: 'ALL',
       templateFilter: 'ALL',
@@ -449,10 +460,14 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         (item.pollResponse && item.pollResponse.toLowerCase().includes(q)) ||
         (item.dbType && item.dbType.toLowerCase().includes(q));
 
-      return matchEngine && matchGroup && matchTemplate && matchDb && matchMetric && matchStatus && matchObject && matchAttribute && matchDate && matchSearch;
+      const itemDuration = item.queryDurationMs !== undefined && item.queryDurationMs !== null ? Number(item.queryDurationMs) : 0;
+      const matchDuration = itemDuration >= appliedMinDuration;
+
+      return matchEngine && matchGroup && matchTemplate && matchDb && matchMetric && matchStatus && matchObject && matchAttribute && matchDate && matchSearch && matchDuration;
     });
   }, [
     measurementsData,
+    appliedMinDuration,
     engineFilter,
     selectedGroupFilter,
     selectedTemplateFilter,
@@ -488,6 +503,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       'Attribute Name',
       'Poll Status',
       'Measured Value',
+      'Query Duration (ms)',
       'Poll Response / Error',
       'Triggered Threshold',
       'Cycle',
@@ -503,6 +519,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       `"${(m.attributeName || 'value').replace(/"/g, '""')}"`,
       m.pollStatus || (m.status === 'ERROR' || m.status === 'FAIL' || m.status === 'DOWN' ? 'FAIL' : 'SUCCESS'),
       `"${String(m.value || '').replace(/"/g, '""')}"`,
+      m.queryDurationMs !== undefined && m.queryDurationMs !== null ? m.queryDurationMs : 0,
       `"${String(m.pollResponse || m.response || '').replace(/"/g, '""')}"`,
       `"${(m.triggeredThreshold || 'Normal / In Bounds').replace(/"/g, '""')}"`,
       m.cycle ?? 1,
@@ -572,6 +589,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
 
   const hasActiveFilters =
     searchTerm.trim() !== '' ||
+    appliedMinDuration > 0 ||
+    minDurationInput.trim() !== '' && minDurationInput.trim() !== '0' ||
     engineFilter !== 'ALL' ||
     selectedGroupFilter !== 'ALL' ||
     selectedTemplateFilter !== 'ALL' ||
@@ -657,6 +676,27 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 ✕
               </button>
             )}
+          </div>
+
+          {/* Duration Filter Input */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs shrink-0">
+            <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <label htmlFor="rawMinDurationInput" className="font-semibold text-slate-600 whitespace-nowrap text-[11px]">
+              {t('rawMeasurements.minDuration')}:
+            </label>
+            <div className="flex items-center">
+              <input
+                id="rawMinDurationInput"
+                type="number"
+                min="0"
+                step="10"
+                placeholder="0"
+                value={minDurationInput}
+                onChange={(e) => setMinDurationInput(e.target.value)}
+                className="w-16 bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs text-right pr-0.5 font-mono"
+              />
+              <span className="text-[11px] text-slate-500 font-semibold">ms</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -747,6 +787,63 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                   className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
                 >
                   {t('rawMeasurements.all')}
+                </button>
+              </div>
+
+              {/* Quick Duration Presets */}
+              <div className="flex items-center gap-1 ml-2 pl-2 border-l border-slate-200">
+                <span className="text-[10px] text-slate-400 font-medium">Duration:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMinDurationInput('0');
+                    setCurrentPage(1);
+                    handleRunQuery({ minDurationMs: 0 });
+                  }}
+                  className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
+                    appliedMinDuration === 0 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  &gt;= 0ms
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMinDurationInput('50');
+                    setCurrentPage(1);
+                    handleRunQuery({ minDurationMs: 50 });
+                  }}
+                  className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
+                    appliedMinDuration === 50 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  &gt;= 50ms
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMinDurationInput('200');
+                    setCurrentPage(1);
+                    handleRunQuery({ minDurationMs: 200 });
+                  }}
+                  className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
+                    appliedMinDuration === 200 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  &gt;= 200ms
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMinDurationInput('1000');
+                    setCurrentPage(1);
+                    handleRunQuery({ minDurationMs: 1000 });
+                  }}
+                  className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
+                    appliedMinDuration === 1000 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  &gt;= 1s
                 </button>
               </div>
             </div>
@@ -942,6 +1039,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 <th className="py-2.5 px-3.5 w-[180px]">{t('rawMeasurements.database')}</th>
                 <th className="py-2.5 px-3.5 w-[180px]">{t('rawMeasurements.metricName')}</th>
                 <th className="py-2.5 px-3.5 w-[160px]">{t('rawMeasurements.objectAttribute')}</th>
+                <th className="py-2.5 px-3.5 w-[110px] whitespace-nowrap">{t('rawMeasurements.queryDuration')}</th>
                 <th className="py-2.5 px-3.5 w-[120px]">{t('rawMeasurements.pollStatus')}</th>
                 <th className="py-2.5 px-3.5 min-w-[260px]">{t('rawMeasurements.measuredValue')}</th>
                 <th className="py-2.5 px-3.5 w-[80px] text-center whitespace-nowrap">{t('rawMeasurements.cycle')}</th>
@@ -950,7 +1048,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
             <tbody className="divide-y divide-slate-200">
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-500">
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
                     <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="font-semibold text-slate-700">{t('rawMeasurements.noMeasurementsFound')}</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
@@ -1029,7 +1127,23 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 5. Poll Status Column */}
+                      {/* 5. Query Duration Column */}
+                      <td className="py-2.5 px-3.5 whitespace-nowrap align-top font-mono text-[11px]">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold border ${
+                            (item.queryDurationMs ?? 0) >= 1000
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : (item.queryDurationMs ?? 0) >= 500
+                              ? 'bg-sky-50 text-sky-800 border-sky-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          {item.queryDurationMs !== undefined && item.queryDurationMs !== null ? `${item.queryDurationMs}ms` : '0ms'}
+                        </span>
+                      </td>
+
+                      {/* 6. Poll Status Column */}
                       <td className="py-2.5 px-3.5 align-top">
                         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusMeta.badge}`}>
                           {statusMeta.isFail ? (

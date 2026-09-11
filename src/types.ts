@@ -197,6 +197,7 @@ export interface MetricDataPointEntity {
   objectName?: string | null;
   attributeName?: string | null;
   value: string;
+  queryDurationMs?: number | null;
   pollStatus?: 'SUCCESS' | 'FAIL' | 'FAILED' | 'ERROR' | 'TIMEOUT' | string | null;
   pollResponse?: string | null;
   measuredAt: string;
@@ -212,6 +213,7 @@ export interface RawMeasurementEntity {
   objectName: string; // Target object identifier (e.g. "TS_DATA", "v$session", "replica_01", "INSTANCE")
   attributeName: string; // Target attribute identifier (e.g. "used_space_pct", "active_count")
   value: string;
+  queryDurationMs?: number | null; // Query execution duration in milliseconds
   valueType?: MetricValueType;
   thresholdOperator?: string;
   triggeredThreshold?: string | null; // e.g. "Warn: 80 / High: 90 / Crit: 95"
@@ -239,6 +241,8 @@ export interface RawMeasurementFilter {
   fromDate?: string;
   toDate?: string;
   searchTerm?: string;
+  minDurationMs?: number;
+  queryDurationMs?: number;
 }
 
 export interface TemplateEntity {
