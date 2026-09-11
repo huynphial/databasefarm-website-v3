@@ -123,6 +123,8 @@ model Database {
   id     String @id @default(uuid())
   /// User-friendly name identifier (e.g., "ERP_PROD_ORA", "CRM_PORTAL_MY").
   name   String
+  /// Name of friendly service / system of that database (e.g. "Payment Gateway", "Core Banking", "User Auth").
+  databaseSystem String? @default("") @map("database_system")
   /// Database engine architecture (supported in DbType enum matching database_engines).
   dbType DbType
   /// Hostname or IP address of database server.

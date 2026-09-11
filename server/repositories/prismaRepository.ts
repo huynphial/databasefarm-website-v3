@@ -298,6 +298,7 @@ export class PrismaRepository implements IStorageRepository {
     return dbs.map((d) => ({
       id: d.id,
       name: d.name,
+      databaseSystem: (d as any).databaseSystem || (d as any).database_system || '',
       dbType: (d.dbType as any) || ((d as any).databaseEngine ? (d as any).databaseEngine.dbCode : 'POSTGRES'),
       databaseEngineId: (d as any).databaseEngineId || undefined,
       host: d.host,
@@ -329,6 +330,7 @@ export class PrismaRepository implements IStorageRepository {
     return {
       id: d.id,
       name: d.name,
+      databaseSystem: (d as any).databaseSystem || (d as any).database_system || '',
       dbType: (d.dbType as any) || ((d as any).databaseEngine ? (d as any).databaseEngine.dbCode : 'POSTGRES'),
       databaseEngineId: (d as any).databaseEngineId || undefined,
       host: d.host,
@@ -375,6 +377,7 @@ export class PrismaRepository implements IStorageRepository {
     const tagsJson = Array.isArray(dbData.tags) ? dbData.tags : [];
     const pollInterval = dbData.pollIntervalMinutes ? Math.max(1, Number(dbData.pollIntervalMinutes)) : 5;
     const noteText = dbData.note !== undefined ? dbData.note : null;
+    const dbSystem = dbData.databaseSystem !== undefined ? dbData.databaseSystem : '';
     const defaultLastCheckAt = new Date('2026-01-01T00:00:00Z');
     let dbRecord;
     if (id) {
@@ -382,6 +385,7 @@ export class PrismaRepository implements IStorageRepository {
         where: { id },
         update: {
           name: dbData.name,
+          databaseSystem: dbSystem,
           dbType,
           databaseEngineId: databaseEngineId || undefined,
           host: dbData.host,
@@ -399,6 +403,7 @@ export class PrismaRepository implements IStorageRepository {
         create: {
           id,
           name: dbData.name || 'NEW_DB',
+          databaseSystem: dbSystem,
           dbType,
           databaseEngineId: databaseEngineId || undefined,
           host: dbData.host || '127.0.0.1',
@@ -419,6 +424,7 @@ export class PrismaRepository implements IStorageRepository {
       dbRecord = await this.prisma.database.create({
         data: {
           name: dbData.name || 'NEW_DB',
+          databaseSystem: dbSystem,
           dbType,
           databaseEngineId: databaseEngineId || undefined,
           host: dbData.host || '127.0.0.1',

@@ -72,6 +72,7 @@ export type AuthMethod = 'PASSWORD' | 'AUTH_KEY' | 'TRUST';
 export interface DatabaseEntity {
   id: string;
   name: string;
+  databaseSystem?: string; // Friendly service/system name (e.g. "Payment Gateway", "Core Banking")
   dbType: DbEngine;
   databaseEngineId?: string; // Optional foreign key to registered database engine
   host: string;

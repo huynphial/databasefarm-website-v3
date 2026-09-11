@@ -34,7 +34,8 @@ import {
   FileUp,
   Layers,
   Lock,
-  ArrowRight
+  ArrowRight,
+  RotateCcw
 } from 'lucide-react';
 import { ActiveAlertEntity, DatabaseEntity, DatabaseEngineEntity, DbEngine, GroupEntity, MetricEntity, TemplateEntity, UserRole } from '../../types';
 import { DataTable, Column } from '../tables/DataTable';
@@ -133,8 +134,40 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEngine, setSelectedEngine] = useState<string>('ALL');
+  const [selectedSystem, setSelectedSystem] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL');
+
+  // Extract unique systems for system filter dropdown
+  const availableSystems = useMemo(() => {
+    const systems = new Set<string>();
+    databases.forEach((db) => {
+      if (db.databaseSystem && db.databaseSystem.trim()) {
+        systems.add(db.databaseSystem.trim());
+      }
+    });
+    return Array.from(systems).sort((a, b) => a.localeCompare(b));
+  }, [databases]);
+
+  // Compute active filters count and reset handler
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (searchTerm.trim()) count++;
+    if (selectedEngine !== 'ALL') count++;
+    if (selectedSystem !== 'ALL') count++;
+    if (selectedStatus !== 'ALL') count++;
+    if (selectedSeverity !== 'ALL') count++;
+    return count;
+  }, [searchTerm, selectedEngine, selectedSystem, selectedStatus, selectedSeverity]);
+
+  const handleResetFilters = useCallback(() => {
+    setSearchTerm('');
+    setSelectedEngine('ALL');
+    setSelectedSystem('ALL');
+    setSelectedStatus('ALL');
+    setSelectedSeverity('ALL');
+    setCurrentPage(1);
+  }, []);
   
   // Sorting State
   const [sortField, setSortField] = useState<string>('name');
@@ -158,6 +191,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     databases: Array<{
       id?: string;
       name: string;
+      databaseSystem?: string;
       dbType: DbEngine;
       host: string;
       port: number;
@@ -187,6 +221,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const [formData, setFormData] = useState<{
     id?: string;
     name: string;
+    databaseSystem: string;
     dbType: DbEngine;
     host: string;
     port: number;
@@ -202,6 +237,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     status?: 'UP' | 'DOWN' | 'WARNING';
   }>({
     name: '',
+    databaseSystem: '',
     dbType: DB_ENGINES[0]?.code || 'ORACLE',
     host: '',
     port: 1521,
@@ -361,6 +397,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         return {
           id: db.id,
           name: db.name,
+          databaseSystem: db.databaseSystem || '',
           dbType: db.dbType,
           host: db.host,
           port: db.port,
@@ -422,6 +459,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       database: {
         id: db.id,
         name: db.name,
+        databaseSystem: db.databaseSystem || '',
         dbType: db.dbType,
         host: db.host,
         port: db.port,
@@ -466,6 +504,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   // ----------------------------------------------------
   const parseDatabaseItem = (raw: any) => {
     const name = raw.name || raw.databaseName || 'Imported Database';
+    const databaseSystem = raw.databaseSystem || raw.database_system || raw.system || '';
     const dbType = (raw.dbType || raw.engine || 'ORACLE').toUpperCase() as DbEngine;
     const host = raw.host || '127.0.0.1';
     const foundEng = getDbEngineConfig(dbType);
@@ -487,6 +526,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     return {
       id: raw.id,
       name,
+      databaseSystem,
       dbType,
       host,
       port,
@@ -578,6 +618,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         const payload: Partial<DatabaseEntity> = {
           id: dbId,
           name: item.name.trim(),
+          databaseSystem: item.databaseSystem?.trim() || '',
           dbType: item.dbType,
           host: item.host.trim(),
           port: Number(item.port),
@@ -634,6 +675,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     const defaultEng = availableEngines[0] || DB_ENGINES[0];
     setFormData({
       name: '',
+      databaseSystem: '',
       dbType: (defaultEng?.code || 'ORACLE') as DbEngine,
       host: '',
       port: defaultEng?.defaultPort || 1521,
@@ -658,6 +700,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     setFormData({
       id: db.id,
       name: db.name,
+      databaseSystem: db.databaseSystem || '',
       dbType: db.dbType,
       host: db.host,
       port: db.port,
@@ -706,6 +749,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     const payload: Partial<DatabaseEntity> = {
       id: formData.id,
       name: formData.name.trim(),
+      databaseSystem: formData.databaseSystem.trim(),
       dbType: formData.dbType,
       host: formData.host.trim(),
       port: Number(formData.port),
@@ -805,6 +849,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     const hasSearch = Boolean(trimmedSearch);
     const hasEngineFilter = selectedEngine !== 'ALL';
     const selectedEngineUpper = selectedEngine.toUpperCase();
+    const hasSystemFilter = selectedSystem !== 'ALL';
     const hasStatusFilter = selectedStatus !== 'ALL';
     const hasSeverityFilter = selectedSeverity !== 'ALL';
 
@@ -844,6 +889,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       if (hasSearch) {
         const match =
           (db.name && db.name.toLowerCase().includes(trimmedSearch)) ||
+          (db.databaseSystem && db.databaseSystem.toLowerCase().includes(trimmedSearch)) ||
           (db.host && db.host.toLowerCase().includes(trimmedSearch)) ||
           (db.dbType && db.dbType.toLowerCase().includes(trimmedSearch)) ||
           (db.username && db.username.toLowerCase().includes(trimmedSearch)) ||
@@ -855,6 +901,11 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       // Filter: Database Engine Type
       if (hasEngineFilter) {
         if ((db.dbType || '').toUpperCase() !== selectedEngineUpper) continue;
+      }
+
+      // Filter: System (Friendly Service Name)
+      if (hasSystemFilter) {
+        if ((db.databaseSystem || '').trim() !== selectedSystem) continue;
       }
 
       // Filter: Status
@@ -900,7 +951,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     });
 
     return result;
-  }, [databases, activeAlerts, searchTerm, selectedEngine, selectedStatus, selectedSeverity, sortField, sortOrder]);
+  }, [databases, activeAlerts, searchTerm, selectedEngine, selectedSystem, selectedStatus, selectedSeverity, sortField, sortOrder]);
 
   // ----------------------------------------------------
   // EXPORT FILTERED DATABASES TO CSV (FOR STATS)
@@ -936,6 +987,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     const baseHeaders = [
       'Database ID',
       'Database Name',
+      'System',
       'Engine Type',
       'Host',
       'Port',
@@ -976,6 +1028,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       const baseValues = [
         escapeCsv(db.id),
         escapeCsv(db.name),
+        escapeCsv(db.databaseSystem || ''),
         escapeCsv(db.dbType),
         escapeCsv(db.host),
         escapeCsv(db.port),
@@ -1064,6 +1117,26 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           )}
         </div>
       ),
+    },
+    {
+      header: t('databases.system'),
+      accessorKey: 'databaseSystem',
+      width: '150px',
+      sortable: true,
+      cell: (row) => {
+        const sys = row.databaseSystem;
+        if (!sys) {
+          return <span className="text-xs text-slate-400 italic">-</span>;
+        }
+        return (
+          <div className="flex items-center gap-1.5 text-xs">
+            <Layers className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <span className="truncate font-semibold text-slate-800" title={sys}>
+              {sys}
+            </span>
+          </div>
+        );
+      },
     },
     {
       header: t('databases.engineType'),
@@ -1303,62 +1376,13 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         }}
       />
 
-      {/* Compact Filter & Controls Toolbar */}
-      <div className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2.5 text-xs">
-        <div className="flex flex-wrap items-center gap-2 flex-1">
-          <div className="flex items-center gap-1 text-slate-800 font-bold shrink-0">
-            <Filter className="w-3.5 h-3.5 text-indigo-600" />
-            <span>{t('common.filter')}:</span>
-          </div>
-
-          {/* Engine Type Filter */}
-          <DatabaseEngineFilter
-            value={selectedEngine}
-            onChange={(val) => {
-              setSelectedEngine(val);
-              setCurrentPage(1);
-            }}
-            databases={databases}
-            databaseEngines={databaseEngines}
-            allLabel={t('common.allEngines')}
-          />
-
-          {/* Status Filter */}
-          <select
-            value={selectedStatus}
-            onChange={(e) => {
-              setSelectedStatus(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-medium focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
-          >
-            <option value="ALL">{t('common.allStatuses')}</option>
-            <option value="UP">{t('databases.upOnly')}</option>
-            <option value="DOWN">{t('databases.downOnly')}</option>
-            <option value="PAUSED">{t('databases.pausedOnly')}</option>
-          </select>
-
-          {/* Alert Severity Filter */}
-          <select
-            value={selectedSeverity}
-            onChange={(e) => {
-              setSelectedSeverity(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-medium focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
-          >
-            <option value="ALL">{t('common.allAlertLevels')}</option>
-            <option value="CRITICAL">{t('databases.sevCriticalPresent')}</option>
-            <option value="HIGH">{t('databases.sevHighPresent')}</option>
-            <option value="WARN">{t('databases.sevWarnPresent')}</option>
-            <option value="DOWN">{t('databases.sevDownPresent')}</option>
-            <option value="HAS_ALERTS">{t('databases.sevAnyActiveAlert')}</option>
-            <option value="NO_ALERTS">{t('databases.sevZeroAlerts')}</option>
-          </select>
-
-          {/* Search Input */}
-          <div className="relative min-w-[180px] flex-1 sm:w-60">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
+      {/* Clean, Friendly & Beautiful Filter & Controls Toolbar */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs p-3.5 space-y-3">
+        {/* Row 1: Primary Search & Actions Suite */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          {/* Left: Prominent Search Input with Clear Button */}
+          <div className="relative flex-1 min-w-[240px] max-w-lg">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text"
               placeholder={t('databases.searchPlaceholder')}
@@ -1367,85 +1391,227 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full bg-slate-50 border border-slate-300 text-xs pl-8 pr-2.5 py-1 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-2xs"
+              className="w-full bg-slate-50/80 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-2xs font-medium"
             />
+            {searchTerm && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
+                title={t('databases.clearSearch')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/60 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Right: Actions Group (Export CSV, JSON, Import, Refresh, Add DB) */}
+          <div className="flex items-center gap-2 flex-wrap justify-end shrink-0 text-xs">
+            <button
+              onClick={handleExportFilteredCsv}
+              title="Export filtered database list and tag statistics matrix to CSV"
+              className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100/80 active:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer shadow-2xs hover:shadow-xs"
+            >
+              <FileDown className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>{t('databases.exportCsv')}</span>
+            </button>
+
+            {userRole === 'ADMIN' && (
+              <>
+                <button
+                  onClick={handleExportAllDatabases}
+                  title="Export all database connection configurations to JSON"
+                  className="flex items-center gap-1.5 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer shadow-2xs hover:shadow-xs"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <span>{t('databases.exportJson')}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setImportJsonText('');
+                    setImportFileError(null);
+                    setImportPreview(null);
+                    setImportAssignGroupIds([]);
+                    setIsImportModalOpen(true);
+                  }}
+                  title="Import database configurations from JSON file or snippet"
+                  className="flex items-center gap-1.5 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer shadow-2xs hover:shadow-xs"
+                >
+                  <Upload className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <span>{t('databases.importJson')}</span>
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={async () => {
+                setIsCheckingHealth(true);
+                try {
+                  if (onRefresh) await onRefresh();
+                  toast({
+                    title: t('common.refreshed'),
+                    description: 'Successfully refreshed database statuses and active alert counts.',
+                    type: 'success',
+                  });
+                } finally {
+                  setIsCheckingHealth(false);
+                }
+              }}
+              disabled={isCheckingHealth}
+              title="Refresh database statuses and active alert telemetry"
+              className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100/80 active:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer disabled:opacity-50 shadow-2xs hover:shadow-xs"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isCheckingHealth ? 'animate-spin' : ''}`} />
+              <span>{isCheckingHealth ? t('common.loading') : t('common.refresh')}</span>
+            </button>
+
+            {userRole === 'ADMIN' ? (
+              <button
+                onClick={openCreateDialog}
+                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs px-3.5 py-1.5 rounded-xl font-bold transition-all shadow-xs hover:shadow-sm cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{t('databases.addDatabase')}</span>
+              </button>
+            ) : (
+              <div className="text-xs text-slate-400 italic flex items-center gap-1 shrink-0 px-2">
+                <Shield className="w-3.5 h-3.5 text-slate-400" />
+                <span>{t('common.readOnly')}</span>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 justify-end shrink-0">
-          <button
-            onClick={handleExportFilteredCsv}
-            title="Export filtered database list and tag statistics matrix to CSV"
-            className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer shadow-2xs"
-          >
-            <FileDown className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-            <span>{t('databases.exportCsv')}</span>
-          </button>
-
-          {userRole === 'ADMIN' && (
-            <button
-              onClick={handleExportAllDatabases}
-              title="Export all database connection configurations to JSON"
-              className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-600" />
-              <span>{t('databases.exportJson')}</span>
-            </button>
-          )}
-
-          {userRole === 'ADMIN' && (
-            <button
-              onClick={() => {
-                setImportJsonText('');
-                setImportFileError(null);
-                setImportPreview(null);
-                setImportAssignGroupIds([]);
-                setIsImportModalOpen(true);
-              }}
-              title="Import database configurations from JSON file or snippet"
-              className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer"
-            >
-              <Upload className="w-3.5 h-3.5 text-slate-600" />
-              <span>{t('databases.importJson')}</span>
-            </button>
-          )}
-
-          <button
-            onClick={async () => {
-              setIsCheckingHealth(true);
-              try {
-                if (onRefresh) await onRefresh();
-                toast({
-                  title: t('common.refreshed'),
-                  description: 'Successfully refreshed database statuses and active alert counts.',
-                  type: 'success',
-                });
-              } finally {
-                setIsCheckingHealth(false);
-              }
-            }}
-            disabled={isCheckingHealth}
-            title="Refresh database statuses and active alert telemetry"
-            className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isCheckingHealth ? 'animate-spin' : ''}`} />
-            <span>{isCheckingHealth ? t('common.loading') : t('common.refresh')}</span>
-          </button>
-
-          {userRole === 'ADMIN' ? (
-            <button
-              onClick={openCreateDialog}
-              className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1 rounded-lg font-bold transition-colors shadow-2xs cursor-pointer shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{t('databases.addDatabase')}</span>
-            </button>
-          ) : (
-            <div className="text-xs text-slate-400 italic flex items-center gap-1 shrink-0">
-              <Shield className="w-3.5 h-3.5 text-slate-400" />
-              <span>{t('common.readOnly')}</span>
+        {/* Row 2: Ordered Filters & Active Reset Controls */}
+        <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-slate-600 font-bold px-1 shrink-0">
+              <Filter className="w-3.5 h-3.5 text-indigo-600" />
+              <span>{t('common.filter')}:</span>
             </div>
-          )}
+
+            {/* 1. Engine Filter */}
+            <div className="relative flex items-center">
+              <DatabaseEngineFilter
+                value={selectedEngine}
+                onChange={(val) => {
+                  setSelectedEngine(val);
+                  setCurrentPage(1);
+                }}
+                databases={databases}
+                databaseEngines={databaseEngines}
+                allLabel={t('common.allEngines')}
+                className={cn(
+                  'bg-slate-50/80 border rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs transition-colors',
+                  selectedEngine !== 'ALL'
+                    ? 'border-indigo-400 bg-indigo-50/50 text-indigo-900 font-bold ring-1 ring-indigo-300/40'
+                    : 'border-slate-200 text-slate-700 hover:border-slate-300'
+                )}
+              />
+            </div>
+
+            {/* 2. System Filter */}
+            <div className="relative flex items-center">
+              <select
+                value={selectedSystem}
+                onChange={(e) => {
+                  setSelectedSystem(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className={cn(
+                  'bg-slate-50/80 border rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs transition-colors max-w-[170px] truncate',
+                  selectedSystem !== 'ALL'
+                    ? 'border-indigo-400 bg-indigo-50/50 text-indigo-900 font-bold ring-1 ring-indigo-300/40'
+                    : 'border-slate-200 text-slate-700 hover:border-slate-300'
+                )}
+              >
+                <option value="ALL">{t('databases.allSystems')}</option>
+                {availableSystems.map((sys) => (
+                  <option key={sys} value={sys}>
+                    {sys}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. Status Filter */}
+            <div className="relative flex items-center">
+              <select
+                value={selectedStatus}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className={cn(
+                  'bg-slate-50/80 border rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs transition-colors',
+                  selectedStatus !== 'ALL'
+                    ? 'border-indigo-400 bg-indigo-50/50 text-indigo-900 font-bold ring-1 ring-indigo-300/40'
+                    : 'border-slate-200 text-slate-700 hover:border-slate-300'
+                )}
+              >
+                <option value="ALL">{t('common.allStatuses')}</option>
+                <option value="UP">{t('databases.upOnly')}</option>
+                <option value="DOWN">{t('databases.downOnly')}</option>
+                <option value="PAUSED">{t('databases.pausedOnly')}</option>
+              </select>
+            </div>
+
+            {/* 4. Alert Severity Filter */}
+            <div className="relative flex items-center">
+              <select
+                value={selectedSeverity}
+                onChange={(e) => {
+                  setSelectedSeverity(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className={cn(
+                  'bg-slate-50/80 border rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs transition-colors',
+                  selectedSeverity !== 'ALL'
+                    ? 'border-indigo-400 bg-indigo-50/50 text-indigo-900 font-bold ring-1 ring-indigo-300/40'
+                    : 'border-slate-200 text-slate-700 hover:border-slate-300'
+                )}
+              >
+                <option value="ALL">{t('common.allAlertLevels')}</option>
+                <option value="CRITICAL">{t('databases.sevCriticalPresent')}</option>
+                <option value="HIGH">{t('databases.sevHighPresent')}</option>
+                <option value="WARN">{t('databases.sevWarnPresent')}</option>
+                <option value="DOWN">{t('databases.sevDownPresent')}</option>
+                <option value="HAS_ALERTS">{t('databases.sevAnyActiveAlert')}</option>
+                <option value="NO_ALERTS">{t('databases.sevZeroAlerts')}</option>
+              </select>
+            </div>
+
+            {/* Active Filter Count & Reset Button */}
+            {activeFiltersCount > 0 && (
+              <button
+                onClick={handleResetFilters}
+                title={t('databases.resetFilters')}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+              >
+                <RotateCcw className="w-3 h-3 text-rose-600" />
+                <span>{t('databases.resetFilters')}</span>
+                <span className="bg-rose-200 text-rose-800 text-[10px] px-1.5 py-0.2 rounded-full font-black">
+                  {activeFiltersCount}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* Right: Showing status counter */}
+          <div className="text-xs text-slate-500 font-medium px-1 flex items-center gap-1.5">
+            {processedDatabases.length !== databases.length ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold text-[11px]">
+                {t('databases.filteredOfTotal', { filtered: processedDatabases.length, total: databases.length })}
+              </span>
+            ) : (
+              <span className="text-slate-500 text-[11px] font-medium">
+                {databases.length} {databases.length === 1 ? 'database' : 'databases'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1497,6 +1663,19 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
               />
             </div>
             <div>
+              <label className="block text-slate-700 font-semibold mb-1">{t('databases.systemLabel')}</label>
+              <input
+                type="text"
+                placeholder={t('databases.systemPlaceholder')}
+                value={formData.databaseSystem}
+                onChange={(e) => setFormData({ ...formData, databaseSystem: e.target.value })}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
               <label className="block text-slate-700 font-semibold mb-1">{t('databases.engineTypeLabel')}</label>
               <select
                 value={formData.dbType}
@@ -1514,6 +1693,18 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                {formData.dbType === 'ORACLE' ? t('databases.serviceNameOrSidLabel') : t('databases.databaseNameLabel')}
+              </label>
+              <input
+                type="text"
+                placeholder={formData.dbType === 'ORACLE' ? 'ORCLPDB1.internal' : 'app_production'}
+                value={formData.databaseNameOrSid}
+                onChange={(e) => setFormData({ ...formData, databaseNameOrSid: e.target.value })}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+              />
             </div>
           </div>
 
@@ -1539,19 +1730,6 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-slate-700 font-semibold mb-1">
-              {formData.dbType === 'ORACLE' ? t('databases.serviceNameOrSidLabel') : t('databases.databaseNameLabel')}
-            </label>
-            <input
-              type="text"
-              placeholder={formData.dbType === 'ORACLE' ? 'ORCLPDB1.internal' : 'app_production'}
-              value={formData.databaseNameOrSid}
-              onChange={(e) => setFormData({ ...formData, databaseNameOrSid: e.target.value })}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
-            />
           </div>
 
           {/* Database Credentials */}
@@ -1877,6 +2055,11 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                             {cfg?.name || db.dbType}
                           </span>
                           <span className="font-bold text-slate-900">{db.name}</span>
+                          {db.databaseSystem && (
+                            <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                              {db.databaseSystem}
+                            </span>
+                          )}
                           {db.id && (
                             <span className="text-[10px] text-slate-400 font-mono">({db.id})</span>
                           )}
