@@ -1380,9 +1380,9 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs p-3.5 space-y-3">
         {/* Row 1: Primary Search & Actions Suite */}
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          {/* Left: Prominent Search Input with Clear Button */}
-          <div className="relative flex-1 min-w-[240px] max-w-lg">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          {/* Left: Prominent Search Input with Clear Button and Result Counter */}
+          <div className="relative flex-1 min-w-[240px] max-w-xl flex items-center">
+            <Search className="w-4 h-4 absolute left-3 text-slate-400 pointer-events-none" />
             <input
               type="text"
               placeholder={t('databases.searchPlaceholder')}
@@ -1400,7 +1400,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                   setCurrentPage(1);
                 }}
                 title={t('databases.clearSearch')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/60 transition-colors"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/60 transition-colors cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1603,16 +1603,104 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           {/* Right: Showing status counter */}
           <div className="text-xs text-slate-500 font-medium px-1 flex items-center gap-1.5">
             {processedDatabases.length !== databases.length ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold text-[11px]">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-xs shadow-2xs">
                 {t('databases.filteredOfTotal', { filtered: processedDatabases.length, total: databases.length })}
               </span>
             ) : (
-              <span className="text-slate-500 text-[11px] font-medium">
+              <span className="text-slate-500 text-xs font-semibold bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
                 {databases.length} {databases.length === 1 ? 'database' : 'databases'}
               </span>
             )}
           </div>
         </div>
+
+        {/* Row 3: Interactive Active Filter Chips (if any filter or search active) */}
+        {activeFiltersCount > 0 && (
+          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5 text-[11px]">
+            <span className="text-slate-400 font-medium mr-1">Active filters:</span>
+            {searchTerm.trim() && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium">
+                <span>Search: &ldquo;{searchTerm}&rdquo;</span>
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setCurrentPage(1);
+                  }}
+                  className="hover:text-rose-600 font-bold ml-0.5 cursor-pointer"
+                  title="Remove search filter"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            {selectedEngine !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                <span>Engine: {selectedEngine}</span>
+                <button
+                  onClick={() => {
+                    setSelectedEngine('ALL');
+                    setCurrentPage(1);
+                  }}
+                  className="hover:text-rose-600 font-bold ml-0.5 cursor-pointer"
+                  title="Remove engine filter"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            {selectedSystem !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-medium">
+                <span>System: {selectedSystem}</span>
+                <button
+                  onClick={() => {
+                    setSelectedSystem('ALL');
+                    setCurrentPage(1);
+                  }}
+                  className="hover:text-rose-600 font-bold ml-0.5 cursor-pointer"
+                  title="Remove system filter"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            {selectedStatus !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+                <span>Status: {selectedStatus}</span>
+                <button
+                  onClick={() => {
+                    setSelectedStatus('ALL');
+                    setCurrentPage(1);
+                  }}
+                  className="hover:text-rose-600 font-bold ml-0.5 cursor-pointer"
+                  title="Remove status filter"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            {selectedSeverity !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 font-medium">
+                <span>Alert: {selectedSeverity}</span>
+                <button
+                  onClick={() => {
+                    setSelectedSeverity('ALL');
+                    setCurrentPage(1);
+                  }}
+                  className="hover:text-rose-600 font-bold ml-0.5 cursor-pointer"
+                  title="Remove severity filter"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            <button
+              onClick={handleResetFilters}
+              className="text-slate-400 hover:text-rose-600 underline font-medium ml-1 cursor-pointer transition-colors"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Data Table with Multi-Column Sorting and 50-Item Pagination */}

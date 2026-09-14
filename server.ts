@@ -833,6 +833,42 @@ async function startServer() {
     }
   });
 
+  // Audit Logs API
+  app.get('/api/audit-logs', async (req, res) => {
+    try {
+      const fromDate = req.query.fromDate as string | undefined;
+      const toDate = req.query.toDate as string | undefined;
+      const actionType = req.query.actionType as string | undefined;
+      const searchTerm = req.query.searchTerm as string | undefined;
+      const limit = req.query.limit !== undefined ? parseInt(req.query.limit as string, 10) : undefined;
+      const logs = await repo.getAuditLogs({
+        fromDate,
+        toDate,
+        actionType,
+        searchTerm,
+        limit,
+      });
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/audit-logs', async (req, res) => {
+    try {
+      const clientIp = getClientIp(req);
+      const userId = getUserId(req);
+      const entry = await repo.addAuditLog({
+        ...req.body,
+        clientIp: req.body.clientIp || clientIp,
+        userId: req.body.userId || userId,
+      });
+      res.status(201).json(entry);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // System Settings API
   app.get('/api/system-settings', async (req, res) => {
     try {

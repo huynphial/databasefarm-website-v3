@@ -94,7 +94,13 @@ export interface IStorageRepository {
   deleteSystemSettingItem(id: string): Promise<boolean>;
 
   // Audit Logs
-  getAuditLogs(limit?: number): Promise<AuditLogEntity[]>;
+  getAuditLogs(
+    limitOrFilter?: number | { limit?: number; fromDate?: string; toDate?: string; actionType?: string; searchTerm?: string },
+    fromDate?: string,
+    toDate?: string,
+    actionType?: string,
+    searchTerm?: string
+  ): Promise<AuditLogEntity[]>;
   addAuditLog(logData: Partial<AuditLogEntity>): Promise<AuditLogEntity>;
 
   // Reset & Maintenance Data

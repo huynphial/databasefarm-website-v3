@@ -277,8 +277,25 @@ export const api = {
   },
 
   // Audit Logs
-  async getAuditLogs(): Promise<AuditLogEntity[]> {
-    return fetchJson('/api/audit-logs');
+  async getAuditLogs(filter?: {
+    fromDate?: string;
+    toDate?: string;
+    actionType?: string;
+    searchTerm?: string;
+    limit?: number;
+  }): Promise<AuditLogEntity[]> {
+    try {
+      const params = new URLSearchParams();
+      if (filter?.fromDate) params.append('fromDate', filter.fromDate);
+      if (filter?.toDate) params.append('toDate', filter.toDate);
+      if (filter?.actionType && filter.actionType !== 'ALL') params.append('actionType', filter.actionType);
+      if (filter?.searchTerm) params.append('searchTerm', filter.searchTerm);
+      if (filter?.limit) params.append('limit', String(filter.limit));
+      const query = params.toString() ? `?${params.toString()}` : '';
+      return await fetchJson(`/api/audit-logs${query}`);
+    } catch {
+      return [];
+    }
   },
   async logAudit(data: Partial<AuditLogEntity>): Promise<AuditLogEntity> {
     return fetchJson('/api/audit-logs', {

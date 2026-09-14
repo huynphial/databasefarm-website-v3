@@ -34,6 +34,7 @@ import {
 import { getDbEngineBadgeClass, getDbEngineHexColor } from '../../config/dbEngines';
 import { useTranslation } from '../../i18n';
 import { api } from '../../lib/api';
+import { formatFriendlyDuration } from '../../lib/utils';
 import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
 import { TargetDatabaseFilter } from '../common/TargetDatabaseFilter';
 import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
@@ -1139,7 +1140,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                           }`}
                         >
                           <Clock className="w-3 h-3 text-slate-400" />
-                          {item.queryDurationMs !== undefined && item.queryDurationMs !== null ? `${item.queryDurationMs}ms` : '0ms'}
+                          {formatFriendlyDuration(item.queryDurationMs)}
                         </span>
                       </td>
 

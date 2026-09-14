@@ -266,12 +266,112 @@ export class MemoryRepository implements IStorageRepository {
     {
       id: 'aud-01',
       userId: 'admin',
-      clientIp: '127.0.0.1',
-      actionType: 'LOGIN',
+      clientIp: '192.168.1.10',
+      actionType: 'LOGIN_SUCCESS',
       targetEntity: 'AUTH',
       targetId: 'usr-admin-01',
-      details: 'Administrator session initiated successfully',
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
+      details: 'Administrator session initiated successfully via web interface',
+      createdAt: new Date(Date.now() - 12 * 60000).toISOString(), // 12 mins ago
+    },
+    {
+      id: 'aud-02',
+      userId: 'admin',
+      clientIp: '192.168.1.10',
+      actionType: 'UPDATE',
+      targetEntity: 'DATABASE',
+      targetId: 'db-01',
+      details: 'Updated database configuration for "ERP_PROD_ORA" (Connection pool size: 30)',
+      createdAt: new Date(Date.now() - 28 * 60000).toISOString(), // 28 mins ago
+    },
+    {
+      id: 'aud-03',
+      userId: 'admin',
+      clientIp: '192.168.1.10',
+      actionType: 'CREATE',
+      targetEntity: 'METRIC',
+      targetId: 'met-05',
+      details: 'Created metric probe "Threads Connected" (NUMERIC)',
+      createdAt: new Date(Date.now() - 48 * 60000).toISOString(), // 48 mins ago
+    },
+    {
+      id: 'aud-04',
+      userId: 'operator_01',
+      clientIp: '192.168.1.45',
+      actionType: 'LOGIN_SUCCESS',
+      targetEntity: 'AUTH',
+      targetId: 'usr-viewer-02',
+      details: 'Operator session authenticated',
+      createdAt: new Date(Date.now() - 90 * 60000).toISOString(), // 1.5h ago
+    },
+    {
+      id: 'aud-05',
+      userId: 'operator_01',
+      clientIp: '192.168.1.45',
+      actionType: 'CONFIG_CHANGE',
+      targetEntity: 'SYSTEM_SETTINGS',
+      targetId: 'default',
+      details: 'Updated global system configuration (Retention: 30d, Info Tips: Enabled)',
+      createdAt: new Date(Date.now() - 3 * 3600000).toISOString(), // 3h ago
+    },
+    {
+      id: 'aud-06',
+      userId: 'admin',
+      clientIp: '192.168.1.10',
+      actionType: 'CREATE',
+      targetEntity: 'TEMPLATE',
+      targetId: 'tmpl-02',
+      details: 'Created monitoring template bundle "PostgreSQL High-Volume Workload"',
+      createdAt: new Date(Date.now() - 5 * 3600000).toISOString(), // 5h ago
+    },
+    {
+      id: 'aud-07',
+      userId: 'guest_test',
+      clientIp: '10.0.0.120',
+      actionType: 'LOGIN_FAILED',
+      targetEntity: 'AUTH',
+      targetId: null,
+      details: 'Authentication failed: Invalid credentials provided',
+      createdAt: new Date(Date.now() - 14 * 3600000).toISOString(), // 14h ago
+    },
+    {
+      id: 'aud-08',
+      userId: 'admin',
+      clientIp: '192.168.1.10',
+      actionType: 'CREATE',
+      targetEntity: 'ALERT_METHOD',
+      targetId: 'meth-tg-02',
+      details: 'Created alert notification dispatcher "Telegram Incident Operations Bot" (TELEGRAM)',
+      createdAt: new Date(Date.now() - 22 * 3600000).toISOString(), // 22h ago
+    },
+    {
+      id: 'aud-09',
+      userId: 'admin',
+      clientIp: '192.168.1.10',
+      actionType: 'CREATE',
+      targetEntity: 'GROUP',
+      targetId: 'grp-01',
+      details: 'Created database group "Core Production Fleet"',
+      createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), // 2 days ago
+    },
+    {
+      id: 'aud-10',
+      userId: 'admin',
+      clientIp: '192.168.1.10',
+      actionType: 'CREATE',
+      targetEntity: 'DATABASE',
+      targetId: 'db-02',
+      details: 'Created database "PAYMENT_API_PG" (POSTGRES at 10.0.4.15:5432)',
+      createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), // 4 days ago
+    },
+    {
+      id: 'aud-11',
+      userId: 'admin',
+      clientIp: '192.168.1.10',
+      actionType: 'CREATE',
+      targetEntity: 'USER',
+      targetId: 'usr-admin-01',
+      details: 'Created system administrator root profile',
+      createdAt: new Date(Date.now() - 7 * 86400000).toISOString(), // 7 days ago
     },
   ];
 
@@ -2441,8 +2541,68 @@ FROM pg_tablespace`,
   }
 
   // --- Audit Logs ---
-  async getAuditLogs(limit = 100): Promise<AuditLogEntity[]> {
-    return this.auditLogs.slice(0, limit);
+  async getAuditLogs(
+    limitOrFilter?: number | { limit?: number; fromDate?: string; toDate?: string; actionType?: string; searchTerm?: string },
+    fromDateParam?: string,
+    toDateParam?: string,
+    actionTypeParam?: string,
+    searchTermParam?: string
+  ): Promise<AuditLogEntity[]> {
+    let limit = 0;
+    let fromDate = fromDateParam;
+    let toDate = toDateParam;
+    let actionType = actionTypeParam;
+    let searchTerm = searchTermParam;
+
+    if (typeof limitOrFilter === 'number') {
+      limit = limitOrFilter;
+    } else if (limitOrFilter && typeof limitOrFilter === 'object') {
+      if (limitOrFilter.limit !== undefined) limit = limitOrFilter.limit;
+      if (limitOrFilter.fromDate !== undefined) fromDate = limitOrFilter.fromDate;
+      if (limitOrFilter.toDate !== undefined) toDate = limitOrFilter.toDate;
+      if (limitOrFilter.actionType !== undefined) actionType = limitOrFilter.actionType;
+      if (limitOrFilter.searchTerm !== undefined) searchTerm = limitOrFilter.searchTerm;
+    }
+
+    let filtered = [...this.auditLogs];
+
+    if (fromDate) {
+      const fromTime = new Date(fromDate).getTime();
+      if (!isNaN(fromTime)) {
+        filtered = filtered.filter((log) => new Date(log.createdAt).getTime() >= fromTime);
+      }
+    }
+
+    if (toDate) {
+      const toTime = new Date(toDate).getTime();
+      if (!isNaN(toTime)) {
+        filtered = filtered.filter((log) => new Date(log.createdAt).getTime() <= toTime);
+      }
+    }
+
+    if (actionType && actionType !== 'ALL') {
+      filtered = filtered.filter((log) => log.actionType.toUpperCase() === actionType.toUpperCase());
+    }
+
+    if (searchTerm && searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(
+        (log) =>
+          (log.userId && log.userId.toLowerCase().includes(term)) ||
+          (log.clientIp && log.clientIp.toLowerCase().includes(term)) ||
+          (log.targetEntity && log.targetEntity.toLowerCase().includes(term)) ||
+          (log.targetId && log.targetId.toLowerCase().includes(term)) ||
+          (log.details && log.details.toLowerCase().includes(term)) ||
+          (log.actionType && log.actionType.toLowerCase().includes(term))
+      );
+    }
+
+    filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    if (limit && limit > 0) {
+      return filtered.slice(0, limit);
+    }
+    return filtered;
   }
 
   async addAuditLog(logData: Partial<AuditLogEntity>): Promise<AuditLogEntity> {

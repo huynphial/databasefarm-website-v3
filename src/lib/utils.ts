@@ -125,6 +125,54 @@ function parseDateInput(val: string | Date | number | null | undefined): Date | 
   return null;
 }
 
+export function formatFriendlyDuration(
+  input?: number | string | Date | null,
+  endInput?: string | Date | null
+): string {
+  if (input === null || input === undefined || input === '') return '—';
+
+  let durationMs: number;
+  if (typeof input === 'number') {
+    durationMs = input;
+  } else {
+    const start = parseDateInput(input);
+    if (!start) return '—';
+    const end = endInput ? parseDateInput(endInput) : new Date();
+    if (!end) return '—';
+    durationMs = Math.max(0, end.getTime() - start.getTime());
+  }
+
+  if (isNaN(durationMs) || durationMs < 0) return '—';
+
+  if (durationMs < 1000) {
+    return `${Math.round(durationMs)}ms`;
+  }
+
+  if (durationMs < 60000) {
+    const secs = durationMs / 1000;
+    const formatted = secs.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+    return `${formatted}s`;
+  }
+
+  const mins = Math.floor(durationMs / 60000);
+  const remainingSecs = Math.floor((durationMs % 60000) / 1000);
+
+  if (durationMs < 3600000) {
+    if (remainingSecs > 0) {
+      return `${mins}m${remainingSecs}s`;
+    }
+    return `${mins}m`;
+  }
+
+  const hours = Math.floor(durationMs / 3600000);
+  const remainingMins = Math.floor((durationMs % 3600000) / 60000);
+
+  if (remainingMins > 0) {
+    return `${hours}h${remainingMins}m`;
+  }
+  return `${hours}h`;
+}
+
 export function formatRelativeDuration(
   startDateOrDuration: string | Date | number | null | undefined,
   endDateOrLang?: string | Date | number | null,

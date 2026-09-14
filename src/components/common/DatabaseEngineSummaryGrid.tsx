@@ -289,7 +289,10 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
                 >
                   {eng.name}
                 </span>
-                <span className="text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-700 border border-slate-200/80 shrink-0">
+                <span
+                  className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-700 border border-slate-200/90 shrink-0 shadow-2xs"
+                  title={`${eng.name}: ${percentOverAll}% of all databases`}
+                >
                   {percentOverAll}%
                 </span>
               </div>
@@ -312,7 +315,7 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
               <div className="truncate">
                 <span className="font-bold text-slate-800">Active: {eng.activeCount}</span>
                 <span className="text-slate-400 mx-1">/</span>
-                <span className="text-slate-700 font-medium">Total: {eng.totalCount}</span>
+                <span className="text-slate-700 font-medium">Total: {eng.totalCount} ({percentOverAll}%)</span>
               </div>
               {eng.downCount > 0 ? (
                 <span className="text-rose-600 font-bold shrink-0 ml-1.5">{eng.downCount} DOWN</span>

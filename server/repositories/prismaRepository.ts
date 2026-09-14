@@ -1635,13 +1635,56 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   // --- Audit Logs ---
-  async getAuditLogs(limit = 200): Promise<AuditLogEntity[]> {
+  async getAuditLogs(
+    limitOrFilter?: number | { limit?: number; fromDate?: string; toDate?: string; actionType?: string; searchTerm?: string },
+    fromDateParam?: string,
+    toDateParam?: string,
+    actionTypeParam?: string,
+    searchTermParam?: string
+  ): Promise<AuditLogEntity[]> {
+    let limit = 0;
+    let fromDate = fromDateParam;
+    let toDate = toDateParam;
+    let actionType = actionTypeParam;
+    let searchTerm = searchTermParam;
+
+    if (typeof limitOrFilter === 'number') {
+      limit = limitOrFilter;
+    } else if (limitOrFilter && typeof limitOrFilter === 'object') {
+      if (limitOrFilter.limit !== undefined) limit = limitOrFilter.limit;
+      if (limitOrFilter.fromDate !== undefined) fromDate = limitOrFilter.fromDate;
+      if (limitOrFilter.toDate !== undefined) toDate = limitOrFilter.toDate;
+      if (limitOrFilter.actionType !== undefined) actionType = limitOrFilter.actionType;
+      if (limitOrFilter.searchTerm !== undefined) searchTerm = limitOrFilter.searchTerm;
+    }
+
+    const maxLimit = limit > 0 ? limit : undefined;
     let logs: any[] = [];
     let hasLoaded = false;
-    const maxLimit = limit > 0 ? limit : 200;
+
+    // Build prisma where clause
+    const where: any = {};
+    if (fromDate || toDate) {
+      where.createdAt = {};
+      if (fromDate) where.createdAt.gte = new Date(fromDate);
+      if (toDate) where.createdAt.lte = new Date(toDate);
+    }
+    if (actionType && actionType !== 'ALL') {
+      where.actionType = actionType;
+    }
+    if (searchTerm && searchTerm.trim()) {
+      where.OR = [
+        { userId: { contains: searchTerm.trim() } },
+        { clientIp: { contains: searchTerm.trim() } },
+        { targetEntity: { contains: searchTerm.trim() } },
+        { details: { contains: searchTerm.trim() } },
+      ];
+    }
+
     try {
       if ((this.prisma as any).auditLog) {
         logs = await (this.prisma as any).auditLog.findMany({
+          where: Object.keys(where).length > 0 ? where : undefined,
           orderBy: { createdAt: 'desc' },
           take: maxLimit,
         });
@@ -1652,21 +1695,48 @@ export class PrismaRepository implements IStorageRepository {
     }
 
     if (!hasLoaded) {
+      // Build raw SQL WHERE clauses
+      const conditions: string[] = [];
+      if (fromDate) {
+        conditions.push(`created_at >= '${new Date(fromDate).toISOString()}'`);
+      }
+      if (toDate) {
+        conditions.push(`created_at <= '${new Date(toDate).toISOString()}'`);
+      }
+      if (actionType && actionType !== 'ALL') {
+        conditions.push(`(action_type = '${actionType.replace(/'/g, "''")}' OR actionType = '${actionType.replace(/'/g, "''")}')`);
+      }
+      if (searchTerm && searchTerm.trim()) {
+        const s = searchTerm.trim().replace(/'/g, "''");
+        conditions.push(`(user_id LIKE '%${s}%' OR client_ip LIKE '%${s}%' OR target_entity LIKE '%${s}%' OR details LIKE '%${s}%')`);
+      }
+      const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+      const limitSql = maxLimit ? `LIMIT ${maxLimit}` : '';
+
       try {
         logs = await (this.prisma as any).$queryRawUnsafe(
-          `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ${maxLimit}`
+          `SELECT * FROM audit_logs ${whereSql} ORDER BY created_at DESC ${limitSql}`
         );
         hasLoaded = true;
       } catch (rawErr1) {
         try {
+          const conditions2: string[] = [];
+          if (fromDate) conditions2.push(`createdAt >= '${new Date(fromDate).toISOString()}'`);
+          if (toDate) conditions2.push(`createdAt <= '${new Date(toDate).toISOString()}'`);
+          if (actionType && actionType !== 'ALL') conditions2.push(`actionType = '${actionType.replace(/'/g, "''")}'`);
+          if (searchTerm && searchTerm.trim()) {
+            const s = searchTerm.trim().replace(/'/g, "''");
+            conditions2.push(`(userId LIKE '%${s}%' OR clientIp LIKE '%${s}%' OR targetEntity LIKE '%${s}%' OR details LIKE '%${s}%')`);
+          }
+          const whereSql2 = conditions2.length > 0 ? `WHERE ${conditions2.join(' AND ')}` : '';
           logs = await (this.prisma as any).$queryRawUnsafe(
-            `SELECT * FROM audit_logs ORDER BY createdAt DESC LIMIT ${maxLimit}`
+            `SELECT * FROM audit_logs ${whereSql2} ORDER BY createdAt DESC ${limitSql}`
           );
           hasLoaded = true;
         } catch (rawErr2) {
           try {
             logs = await (this.prisma as any).$queryRawUnsafe(
-              `SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ${maxLimit}`
+              `SELECT * FROM audit_log ${whereSql} ORDER BY created_at DESC ${limitSql}`
             );
             hasLoaded = true;
           } catch (rawErr3) {}

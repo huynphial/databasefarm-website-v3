@@ -36,6 +36,7 @@ import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { useTranslation } from '../../i18n';
 import { api } from '../../lib/api';
+import { formatFriendlyDuration } from '../../lib/utils';
 import { AutoRefreshControl } from '../common/AutoRefreshControl';
 import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
 import { TargetDatabaseFilter } from '../common/TargetDatabaseFilter';
@@ -1099,7 +1100,7 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
                               }`}
                             >
                               <Timer className="w-3 h-3 text-slate-400" />
-                              {durationMs}ms
+                              {formatFriendlyDuration(durationMs)}
                             </span>
                           ) : (
                             <span className="text-slate-400">—</span>
@@ -1243,7 +1244,7 @@ export const MonitorPollLogView: React.FC<MonitorPollLogViewProps> = ({
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold block">Execution Duration</span>
                 <span className="font-mono font-bold text-indigo-700">
-                  {calculateDurationMs(selectedLog.startedAt, selectedLog.finishedAt)}ms
+                  {formatFriendlyDuration(calculateDurationMs(selectedLog.startedAt, selectedLog.finishedAt))}
                 </span>
               </div>
             </div>
