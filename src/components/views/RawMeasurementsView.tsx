@@ -52,6 +52,8 @@ interface RawMeasurementsViewProps {
   showInfoTips?: boolean;
 }
 
+type TimeRangePreset = '1h' | '3h' | '6h' | '12h' | '24h' | '3d' | '7d' | 'all' | 'custom';
+
 export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   measurements,
   databases,
@@ -79,13 +81,52 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   const [selectedAttributeFilter, setSelectedAttributeFilter] = useState<string>('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
 
-  // Date Range Filter (Default: Last 24 Hours)
-  const [fromDate, setFromDate] = useState<string>(() => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
-  const [toDate, setToDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  // Time Range Filter (Default: Last 1 Hour)
+  const [timeRangePreset, setTimeRangePreset] = useState<TimeRangePreset>('1h');
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
+  const [fromDate, setFromDate] = useState<string>(() => new Date(Date.now() - 60 * 60 * 1000).toISOString());
+  const [toDate, setToDate] = useState<string>(() => new Date().toISOString());
 
   // Pagination state (Default: 50 per page)
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
+
+  // Helper to compute exact ISO bounds based on preset
+  const calculateDateRange = useCallback((preset: TimeRangePreset, fromStr: string, toStr: string) => {
+    const now = Date.now();
+    let calculatedFrom: string | undefined = undefined;
+    let calculatedTo: string | undefined = undefined;
+
+    if (preset === '1h') {
+      calculatedFrom = new Date(now - 60 * 60 * 1000).toISOString();
+      calculatedTo = new Date(now).toISOString();
+    } else if (preset === '3h') {
+      calculatedFrom = new Date(now - 3 * 60 * 60 * 1000).toISOString();
+      calculatedTo = new Date(now).toISOString();
+    } else if (preset === '6h') {
+      calculatedFrom = new Date(now - 6 * 60 * 60 * 1000).toISOString();
+      calculatedTo = new Date(now).toISOString();
+    } else if (preset === '12h') {
+      calculatedFrom = new Date(now - 12 * 60 * 60 * 1000).toISOString();
+      calculatedTo = new Date(now).toISOString();
+    } else if (preset === '24h') {
+      calculatedFrom = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+      calculatedTo = new Date(now).toISOString();
+    } else if (preset === '3d') {
+      calculatedFrom = new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString();
+      calculatedTo = new Date(now).toISOString();
+    } else if (preset === '7d') {
+      calculatedFrom = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+      calculatedTo = new Date(now).toISOString();
+    } else if (preset === 'custom') {
+      if (fromStr) calculatedFrom = new Date(fromStr).toISOString();
+      if (toStr) calculatedTo = new Date(toStr).toISOString();
+    }
+    // 'all' leaves undefined
+
+    return { fromDate: calculatedFrom, toDate: calculatedTo };
+  }, []);
 
   // Dynamic discovery of unique objects and attributes
   const availableObjects = useMemo(() => {
@@ -234,10 +275,10 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   // Options for Status filter (Poll Status)
   const statusOptions = useMemo<SearchableOption[]>(() => {
     return [
-      { value: 'SUCCESS', label: 'SUCCESS (OK)', badge: 'SUCCESS', badgeColor: 'bg-emerald-100 text-emerald-800 border border-emerald-300', icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> },
-      { value: 'FAIL', label: 'FAIL (Error)', badge: 'FAIL', badgeColor: 'bg-red-100 text-red-800 border border-red-300', icon: <XCircle className="w-3.5 h-3.5 text-red-600" /> },
+      { value: 'SUCCESS', label: t('rawMeasurements.successOk'), badge: 'SUCCESS', badgeColor: 'bg-emerald-100 text-emerald-800 border border-emerald-300', icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> },
+      { value: 'FAIL', label: t('rawMeasurements.failError'), badge: 'FAIL', badgeColor: 'bg-red-100 text-red-800 border border-red-300', icon: <XCircle className="w-3.5 h-3.5 text-red-600" /> },
     ];
-  }, []);
+  }, [t]);
 
   // Target databases scoped to selected group if active
   const databasesForFilter = useMemo(() => {
@@ -249,7 +290,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   }, [databases, selectedGroupFilter, groups]);
 
   // Execute database query with filter criteria without row limits
-  const handleRunQuery = useCallback(async (overrideFilter?: Partial<RawMeasurementFilter> & { groupFilter?: string; templateFilter?: string }) => {
+  const handleRunQuery = useCallback(async (overrideFilter?: Partial<RawMeasurementFilter> & { groupFilter?: string; templateFilter?: string; timePreset?: TimeRangePreset; customFromVal?: string; customToVal?: string }) => {
     setIsSearching(true);
     hasCustomQueryRef.current = true;
     try {
@@ -261,14 +302,27 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       const activeObject = overrideFilter?.objectName !== undefined ? overrideFilter.objectName : selectedObjectFilter;
       const activeAttribute = overrideFilter?.attributeName !== undefined ? overrideFilter.attributeName : selectedAttributeFilter;
       const activeStatus = overrideFilter?.status !== undefined ? overrideFilter.status : selectedStatusFilter;
-      const activeFrom = overrideFilter?.fromDate !== undefined ? overrideFilter.fromDate : fromDate;
-      const activeTo = overrideFilter?.toDate !== undefined ? overrideFilter.toDate : toDate;
       const activeSearch = overrideFilter?.searchTerm !== undefined ? overrideFilter.searchTerm : searchTerm;
+      const activePreset = overrideFilter?.timePreset !== undefined ? overrideFilter.timePreset : timeRangePreset;
+      const activeCustomFrom = overrideFilter?.customFromVal !== undefined ? overrideFilter.customFromVal : customFrom;
+      const activeCustomTo = overrideFilter?.customToVal !== undefined ? overrideFilter.customToVal : customTo;
+
+      // Calculate time bounds from preset or explicit override
+      let activeFrom = overrideFilter?.fromDate;
+      let activeTo = overrideFilter?.toDate;
+      if (activeFrom === undefined && activeTo === undefined) {
+        const computed = calculateDateRange(activePreset, activeCustomFrom, activeCustomTo);
+        activeFrom = computed.fromDate;
+        activeTo = computed.toDate;
+      }
+
       const activeMinDuration = overrideFilter?.minDurationMs !== undefined
         ? overrideFilter.minDurationMs
         : (minDurationInput.trim() === '' || isNaN(Number(minDurationInput)) ? 0 : Math.max(0, Number(minDurationInput)));
 
       setAppliedMinDuration(activeMinDuration);
+      if (activeFrom !== undefined) setFromDate(activeFrom);
+      if (activeTo !== undefined) setToDate(activeTo);
 
       // 1. Resolve database IDs from group filter if active
       let targetDbIds: string[] | undefined = undefined;
@@ -333,19 +387,27 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     selectedObjectFilter,
     selectedAttributeFilter,
     selectedStatusFilter,
+    timeRangePreset,
+    customFrom,
+    customTo,
     fromDate,
     toDate,
     searchTerm,
+    minDurationInput,
+    calculateDateRange,
     groups,
     databases,
     templates,
     metrics,
   ]);
 
-  // Reset all filters to default state and execute search (default to 24h)
+  // Reset all filters to default state and execute search (default to 1 hour)
   const handleResetFilters = async () => {
-    const defaultFrom = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const defaultTo = new Date().toISOString().slice(0, 10);
+    const defaultPreset: TimeRangePreset = '1h';
+    const computed = calculateDateRange(defaultPreset, '', '');
+    setTimeRangePreset(defaultPreset);
+    setCustomFrom('');
+    setCustomTo('');
     setSearchTerm('');
     setMinDurationInput('0');
     setAppliedMinDuration(0);
@@ -357,8 +419,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     setSelectedObjectFilter('ALL');
     setSelectedAttributeFilter('ALL');
     setSelectedStatusFilter('ALL');
-    setFromDate(defaultFrom);
-    setToDate(defaultTo);
+    setFromDate(computed.fromDate || '');
+    setToDate(computed.toDate || '');
     setCurrentPage(1);
 
     await handleRunQuery({
@@ -373,25 +435,24 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
       pollStatus: 'ALL',
       objectName: 'ALL',
       attributeName: 'ALL',
-      fromDate: defaultFrom,
-      toDate: defaultTo,
+      timePreset: defaultPreset,
+      fromDate: computed.fromDate,
+      toDate: computed.toDate,
     });
   };
 
-  // Quick Date Presets
-  const handleSetQuickDate = (days: number | 'ALL') => {
-    let nextFrom = '';
-    let nextTo = '';
-    if (days !== 'ALL') {
-      const now = new Date();
-      const past = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-      nextTo = now.toISOString().slice(0, 10);
-      nextFrom = past.toISOString().slice(0, 10);
+  // Quick Time Range Presets (1h default, 3h, 6h, 12h, 24h, 3d, 7d, all, custom)
+  const handleSetQuickPreset = (preset: TimeRangePreset) => {
+    setTimeRangePreset(preset);
+    if (preset !== 'custom') {
+      setCustomFrom('');
+      setCustomTo('');
     }
-    setFromDate(nextFrom);
-    setToDate(nextTo);
+    const computed = calculateDateRange(preset, customFrom, customTo);
+    setFromDate(computed.fromDate || '');
+    setToDate(computed.toDate || '');
     setCurrentPage(1);
-    handleRunQuery({ fromDate: nextFrom, toDate: nextTo });
+    handleRunQuery({ timePreset: preset, fromDate: computed.fromDate, toDate: computed.toDate });
   };
 
   // Client-side fallback filter ensure perfect synchronization with view state
@@ -445,9 +506,19 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
         (item.attributeName || 'value').trim().toLowerCase() === selectedAttributeFilter.trim().toLowerCase();
 
       let matchDate = true;
-      const itemDateStr = item.measuredAt ? item.measuredAt.slice(0, 10) : '';
-      if (fromDate && itemDateStr && itemDateStr < fromDate) matchDate = false;
-      if (toDate && itemDateStr && itemDateStr > toDate) matchDate = false;
+      if (fromDate || toDate) {
+        const itemTime = item.measuredAt ? new Date(item.measuredAt).getTime() : NaN;
+        if (!isNaN(itemTime)) {
+          if (fromDate) {
+            const fromTime = new Date(fromDate).getTime();
+            if (!isNaN(fromTime) && itemTime < fromTime) matchDate = false;
+          }
+          if (toDate) {
+            const toTime = toDate.length === 10 ? new Date(`${toDate}T23:59:59.999Z`).getTime() : new Date(toDate).getTime();
+            if (!isNaN(toTime) && itemTime > toTime) matchDate = false;
+          }
+        }
+      }
 
       const q = searchTerm.toLowerCase().trim();
       const matchSearch =
@@ -591,7 +662,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   const hasActiveFilters =
     searchTerm.trim() !== '' ||
     appliedMinDuration > 0 ||
-    minDurationInput.trim() !== '' && minDurationInput.trim() !== '0' ||
+    (minDurationInput.trim() !== '' && minDurationInput.trim() !== '0') ||
+    timeRangePreset !== '1h' ||
     engineFilter !== 'ALL' ||
     selectedGroupFilter !== 'ALL' ||
     selectedTemplateFilter !== 'ALL' ||
@@ -685,7 +757,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
             <label htmlFor="rawMinDurationInput" className="font-semibold text-slate-600 whitespace-nowrap text-[11px]">
               {t('rawMeasurements.minDuration')}:
             </label>
-            <div className="flex items-center">
+            <div className="flex items-center gap-1">
               <input
                 id="rawMinDurationInput"
                 type="number"
@@ -693,10 +765,31 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 step="10"
                 placeholder="0"
                 value={minDurationInput}
-                onChange={(e) => setMinDurationInput(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setMinDurationInput(val);
+                  const num = val.trim() === '' || isNaN(Number(val)) ? 0 : Math.max(0, Number(val));
+                  setAppliedMinDuration(num);
+                  setCurrentPage(1);
+                }}
                 className="w-16 bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs text-right pr-0.5 font-mono"
               />
               <span className="text-[11px] text-slate-500 font-semibold">ms</span>
+              {appliedMinDuration > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMinDurationInput('0');
+                    setAppliedMinDuration(0);
+                    setCurrentPage(1);
+                    handleRunQuery({ minDurationMs: 0 });
+                  }}
+                  className="text-slate-400 hover:text-slate-700 text-xs px-0.5"
+                  title={t('rawMeasurements.clearDuration')}
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 
@@ -726,136 +819,129 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
           </div>
         </form>
 
-        {/* Row 2: Date Range Filter + Filter Dropdowns */}
+        {/* Row 2: Date & Time Window Presets + Duration Quick Chips */}
         <div className="space-y-3 pt-2.5 border-t border-slate-100 text-xs">
-          {/* Sub-row 1: Date Range Presets */}
+          {/* Sub-row 1: Time Window Presets & Duration Presets */}
           <div className="flex flex-wrap items-center justify-between gap-2.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <div className="flex items-center gap-1 text-[11px] text-slate-600 font-semibold mr-1">
-                <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-                <span>{t('rawMeasurements.dateRange')}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-slate-400 font-medium">{t('rawMeasurements.from')}</span>
-                <input
-                  type="date"
-                  value={fromDate}
-                  onChange={(e) => {
-                    setFromDate(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
-                />
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-slate-400 font-medium">{t('rawMeasurements.to')}</span>
-                <input
-                  type="date"
-                  value={toDate}
-                  onChange={(e) => {
-                    setToDate(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
-                />
-              </div>
-              {/* Quick Presets */}
-              <div className="flex items-center gap-1 ml-1">
-                <button
-                  type="button"
-                  onClick={() => handleSetQuickDate(1)}
-                  className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
-                >
-                  {t('rawMeasurements.last24h')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetQuickDate(3)}
-                  className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
-                >
-                  {t('rawMeasurements.last3Days')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetQuickDate(7)}
-                  className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
-                >
-                  {t('rawMeasurements.last7Days')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetQuickDate('ALL')}
-                  className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
-                >
-                  {t('rawMeasurements.all')}
-                </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Hourly Time Range Presets */}
+              <div className="flex flex-wrap items-center gap-1">
+                <div className="flex items-center gap-1 text-[11px] text-slate-600 font-semibold mr-1">
+                  <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>{t('rawMeasurements.timeRange')}:</span>
+                </div>
+                {(['1h', '3h', '6h', '12h', '24h', '3d', '7d', 'all', 'custom'] as TimeRangePreset[]).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => handleSetQuickPreset(preset)}
+                    className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition-colors cursor-pointer ${
+                      timeRangePreset === preset
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                    }`}
+                  >
+                    {preset === '1h' && `${t('rawMeasurements.range1h')} (${t('rawMeasurements.default')})`}
+                    {preset === '3h' && t('rawMeasurements.range3h')}
+                    {preset === '6h' && t('rawMeasurements.range6h')}
+                    {preset === '12h' && t('rawMeasurements.range12h')}
+                    {preset === '24h' && t('rawMeasurements.range24h')}
+                    {preset === '3d' && t('rawMeasurements.range3d')}
+                    {preset === '7d' && t('rawMeasurements.range7d')}
+                    {preset === 'all' && t('rawMeasurements.rangeAll')}
+                    {preset === 'custom' && t('rawMeasurements.rangeCustom')}
+                  </button>
+                ))}
               </div>
 
               {/* Quick Duration Presets */}
-              <div className="flex items-center gap-1 ml-2 pl-2 border-l border-slate-200">
-                <span className="text-[10px] text-slate-400 font-medium">Duration:</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMinDurationInput('0');
-                    setCurrentPage(1);
-                    handleRunQuery({ minDurationMs: 0 });
-                  }}
-                  className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
-                    appliedMinDuration === 0 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  &gt;= 0ms
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMinDurationInput('50');
-                    setCurrentPage(1);
-                    handleRunQuery({ minDurationMs: 50 });
-                  }}
-                  className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
-                    appliedMinDuration === 50 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  &gt;= 50ms
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMinDurationInput('200');
-                    setCurrentPage(1);
-                    handleRunQuery({ minDurationMs: 200 });
-                  }}
-                  className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
-                    appliedMinDuration === 200 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  &gt;= 200ms
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMinDurationInput('1000');
-                    setCurrentPage(1);
-                    handleRunQuery({ minDurationMs: 1000 });
-                  }}
-                  className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer ${
-                    appliedMinDuration === 1000 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  &gt;= 1s
-                </button>
+              <div className="flex flex-wrap items-center gap-1 ml-2 pl-2 border-l border-slate-200">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{t('rawMeasurements.duration')}</span>
+                {[
+                  { label: t('rawMeasurements.allDurations'), ms: 0 },
+                  { label: '>=50ms', ms: 50 },
+                  { label: '>=100ms', ms: 100 },
+                  { label: '>=200ms', ms: 200 },
+                  { label: '>=500ms', ms: 500 },
+                  { label: '>=1s', ms: 1000 },
+                  { label: '>=3s', ms: 3000 },
+                ].map((chip) => (
+                  <button
+                    key={chip.ms}
+                    type="button"
+                    onClick={() => {
+                      const msStr = String(chip.ms);
+                      setMinDurationInput(msStr);
+                      setAppliedMinDuration(chip.ms);
+                      setCurrentPage(1);
+                      handleRunQuery({ minDurationMs: chip.ms });
+                    }}
+                    className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer transition-colors ${
+                      appliedMinDuration === chip.ms
+                        ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
               </div>
             </div>
 
             {hasActiveFilters && (
-              <div className="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200 flex items-center gap-1">
+              <div className="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200 flex items-center gap-1">
                 <SlidersHorizontal className="w-3 h-3" />
-                <span>Filters active</span>
+                <span>{t('rawMeasurements.filtersActive')}</span>
               </div>
             )}
           </div>
+
+          {/* Custom Date Range Picker when 'custom' preset is selected */}
+          {timeRangePreset === 'custom' && (
+            <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{t('rawMeasurements.customRangeTitle')}</span>
+              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-slate-500">{t('rawMeasurements.from')}:</span>
+                <input
+                  type="datetime-local"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-slate-500">{t('rawMeasurements.to')}:</span>
+                <input
+                  type="datetime-local"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const computed = calculateDateRange('custom', customFrom, customTo);
+                  setFromDate(computed.fromDate || '');
+                  setToDate(computed.toDate || '');
+                  setCurrentPage(1);
+                  handleRunQuery({
+                    timePreset: 'custom',
+                    customFromVal: customFrom,
+                    customToVal: customTo,
+                    fromDate: computed.fromDate,
+                    toDate: computed.toDate,
+                  });
+                }}
+                className="px-3 py-1 text-xs font-semibold rounded bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer"
+              >
+                {t('rawMeasurements.applyRange')}
+              </button>
+            </div>
+          )}
 
           {/* Sub-row 2: Searchable Dropdown Filters */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2">
@@ -886,7 +972,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 }}
                 options={groupOptions}
                 allLabel={t('rawMeasurements.allGroups')}
-                allSubLabel="Show telemetry across all database groups"
+                allSubLabel={t('rawMeasurements.allGroupsSubLabel')}
                 placeholder={t('rawMeasurements.searchGroup')}
                 title={t('rawMeasurements.databaseGroup')}
                 icon={<FolderKanban className="w-3.5 h-3.5" />}
@@ -907,7 +993,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 }}
                 options={templateOptions}
                 allLabel={t('rawMeasurements.allTemplates')}
-                allSubLabel="Show telemetry from all metric templates"
+                allSubLabel={t('rawMeasurements.allTemplatesSubLabel')}
                 placeholder={t('rawMeasurements.searchTemplate')}
                 title={t('rawMeasurements.metricTemplate')}
                 icon={<FileCode2 className="w-3.5 h-3.5" />}
@@ -946,7 +1032,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 }}
                 options={metricOptions}
                 allLabel={t('rawMeasurements.allMetrics')}
-                allSubLabel="Show telemetry across all metrics"
+                allSubLabel={t('rawMeasurements.allMetricsSubLabel')}
                 placeholder={t('rawMeasurements.searchMetric')}
                 title={t('rawMeasurements.metricName')}
                 icon={<Activity className="w-3.5 h-3.5" />}
@@ -967,8 +1053,8 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 }}
                 options={statusOptions}
                 allLabel={t('rawMeasurements.allStatuses')}
-                allSubLabel="Filter by poll metric status"
-                placeholder="Filter status..."
+                allSubLabel={t('rawMeasurements.filterStatusSubLabel')}
+                placeholder={t('rawMeasurements.filterStatus')}
                 title={t('rawMeasurements.pollStatus')}
                 icon={<ShieldAlert className="w-3.5 h-3.5" />}
                 className="w-full"
@@ -988,7 +1074,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 }}
                 options={objectOptions}
                 allLabel={t('rawMeasurements.allObjects')}
-                allSubLabel="Show telemetry from all objects/entities"
+                allSubLabel={t('rawMeasurements.allObjectsSubLabel')}
                 placeholder={t('rawMeasurements.searchObject')}
                 title={t('rawMeasurements.objectName')}
                 icon={<Box className="w-3.5 h-3.5" />}
@@ -1009,7 +1095,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                 }}
                 options={attributeOptions}
                 allLabel={t('rawMeasurements.allAttributes')}
-                allSubLabel="Show telemetry for all attributes/fields"
+                allSubLabel={t('rawMeasurements.allAttributesSubLabel')}
                 placeholder={t('rawMeasurements.searchAttribute')}
                 title={t('rawMeasurements.attributeName')}
                 icon={<Tag className="w-3.5 h-3.5" />}
@@ -1226,7 +1312,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
               onClick={() => setCurrentPage(1)}
               disabled={currentPage <= 1}
               className="px-2 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold cursor-pointer"
-              title="First Page"
+              title={t('rawMeasurements.firstPage')}
             >
               «
             </button>
@@ -1253,7 +1339,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
               onClick={() => setCurrentPage(totalPages)}
               disabled={currentPage >= totalPages}
               className="px-2.5 py-1 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold cursor-pointer"
-              title="Last Page"
+              title={t('rawMeasurements.lastPage')}
             >
               »
             </button>
