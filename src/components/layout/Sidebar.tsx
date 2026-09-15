@@ -12,8 +12,6 @@ import {
   ShieldAlert,
   Eye,
   Server,
-  ExternalLink,
-  Sparkles,
   Sliders,
   FileText,
   Activity,
@@ -224,43 +222,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       </nav>
-
-      {/* Author & System Badge */}
-      {!isCollapsed ? (
-        <div className="px-4 py-3 border-t border-slate-200/80 bg-slate-100/60">
-          <div className="flex items-center justify-between text-[11px] mb-1">
-            <span className="text-slate-500 font-medium flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-indigo-600" />
-              Author
-            </span>
-            <a
-              href="https://www.linkedin.com/in/nguyenxuanluu/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
-              title="View LinkedIn Profile"
-            >
-              <span>Nguyen Xuan Luu</span>
-              <ExternalLink className="w-2.5 h-2.5" />
-            </a>
-          </div>
-          <div className="text-[10px] text-slate-400">
-            DatabaseFarm • Powered by Google AI
-          </div>
-        </div>
-      ) : (
-        <div className="py-2.5 flex justify-center border-t border-slate-200/80 bg-slate-100/60">
-          <a
-            href="https://www.linkedin.com/in/nguyenxuanluu/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-indigo-600 hover:text-indigo-800 p-1.5 rounded hover:bg-slate-200/60 transition-colors cursor-pointer"
-            title="DatabaseFarm • Author: Nguyen Xuan Luu"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-          </a>
-        </div>
-      )}
 
       {/* User Card in Footer */}
       <div className={cn('border-t border-slate-200 bg-white', isCollapsed ? 'p-2.5 flex flex-col items-center gap-2' : 'p-4')}>

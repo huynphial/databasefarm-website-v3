@@ -15,6 +15,7 @@ import {
   Info,
   Calendar,
   Sparkles,
+  ExternalLink,
   Users,
   UserPlus,
   UserX,
@@ -1071,6 +1072,39 @@ export const AccountView: React.FC<AccountViewProps> = ({ currentUser, sessionTi
           )}
         </div>
       )}
+
+      {/* Author & System Info Footer */}
+      <div className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-200/60 flex items-center justify-center text-indigo-600 shrink-0">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-900">DatabaseFarm Platform</span>
+              <span className="text-[10px] text-slate-300">•</span>
+              <span className="text-[11px] text-slate-500 font-medium">Enterprise Database Monitoring</span>
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              Powered by Google AI Studio
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 text-xs">
+          <span className="text-slate-500 font-medium">Author:</span>
+          <a
+            href="https://www.linkedin.com/in/nguyenxuanluu/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-600 hover:text-indigo-800 font-bold inline-flex items-center gap-1.5 hover:underline cursor-pointer bg-indigo-50/80 px-2.5 py-1 rounded-lg border border-indigo-100 transition-colors"
+            title="View LinkedIn Profile"
+          >
+            <span>Nguyen Xuan Luu</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </div>
 
       {/* CREATE NEW USER MODAL */}
       <Dialog

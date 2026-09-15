@@ -111,11 +111,12 @@ export const DatabaseEngineSummaryGrid: React.FC<DatabaseEngineSummaryGridProps>
 
       const item = map.get(code)!;
       item.totalCount += 1;
-      if (db.isEnabled !== false) {
+      const isDbEnabled = db.isEnabled === true || (db as any).isEnabled === 1 || (db.isEnabled !== false && (db as any).isEnabled !== 0 && (db as any).isEnabled !== '0');
+      if (isDbEnabled) {
         item.activeCount += 1;
       }
       const st = (db.status || '').toUpperCase();
-      if (st === 'DOWN') {
+      if (st === 'DOWN' && isDbEnabled) {
         item.downCount += 1;
       } else if (st === 'UP') {
         item.upCount += 1;

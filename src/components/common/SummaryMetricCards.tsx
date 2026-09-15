@@ -32,6 +32,10 @@ export const SummaryMetricCards: React.FC<SummaryMetricCardsProps> = ({
   const filteredDbIds = new Set(filteredDatabases.map((db) => db.id));
   const dbTypeScopedAlerts = activeAlerts.filter((alert) => filteredDbIds.has(alert.dbId));
 
+  // Helper to check if database has isEnabled === 1 / true in prisma/database storage
+  const isDbEnabled = (db: DatabaseEntity) =>
+    db.isEnabled === true || (db as any).isEnabled === 1 || (db.isEnabled !== false && (db as any).isEnabled !== 0 && (db as any).isEnabled !== '0');
+
   // Derive database statuses
   const dbStatuses = filteredDatabases.map((db) => {
     const dbAlerts = activeAlerts.filter((a) => a.dbId === db.id);
@@ -55,7 +59,8 @@ export const SummaryMetricCards: React.FC<SummaryMetricCardsProps> = ({
   });
 
   const upCount = dbStatuses.filter((d) => d.derivedStatus === 'UP').length;
-  const downCount = dbStatuses.filter((d) => d.derivedStatus === 'DOWN').length;
+  // Card "Databases Down" only counts databases that have isEnabled === 1 / true in storage
+  const downCount = dbStatuses.filter((d) => d.derivedStatus === 'DOWN' && isDbEnabled(d)).length;
   const warnCount = dbStatuses.filter((d) => d.derivedStatus === 'WARN').length;
   const upPercentage = filteredDatabases.length > 0 ? Math.round((upCount / filteredDatabases.length) * 100) : 100;
 
@@ -63,9 +68,9 @@ export const SummaryMetricCards: React.FC<SummaryMetricCardsProps> = ({
   const highAlertsCount = dbTypeScopedAlerts.filter((a) => a.alertLevel === 'HIGH').length;
   const warnAlertsCount = dbTypeScopedAlerts.filter((a) => a.alertLevel === 'WARN').length;
 
-  // Hover Tooltips data resolution
+  // Hover Tooltips data resolution (only active/enabled databases in down list)
   const affectedDownDbs = dbStatuses
-    .filter((d) => d.derivedStatus === 'DOWN')
+    .filter((d) => d.derivedStatus === 'DOWN' && isDbEnabled(d))
     .map((d) => ({
       name: d.name,
       count: activeAlerts.filter((a) => a.dbId === d.id && (a.alertLevel === 'CRITICAL' || a.alertLevel === 'DOWN')).length,
