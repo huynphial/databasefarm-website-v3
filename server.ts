@@ -39,31 +39,6 @@ async function startServer() {
     return fallback;
   }
 
-  // Audit Logs API
-  app.get('/api/audit-logs', async (req, res) => {
-    try {
-      const logs = await repo.getAuditLogs();
-      res.json(logs);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  app.post('/api/audit-logs', async (req, res) => {
-    try {
-      const clientIp = getClientIp(req);
-      const userId = getUserId(req, req.body.userId || 'admin');
-      const log = await repo.addAuditLog({
-        ...req.body,
-        userId,
-        clientIp,
-      });
-      res.status(201).json(log);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
   // API Health & Config Info
   app.get('/api/health', async (req, res) => {
     res.json({

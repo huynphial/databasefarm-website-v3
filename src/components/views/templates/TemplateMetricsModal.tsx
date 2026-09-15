@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Layers,
   Search,
@@ -15,7 +15,10 @@ import {
   Sparkles,
   SlidersHorizontal,
   Info,
+  ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   ShieldCheck,
   AlertTriangle,
   RotateCcw,
@@ -66,6 +69,11 @@ export const TemplateMetricsModal: React.FC<TemplateMetricsModalProps> = ({
 
   // Multi-select for adding metrics in batch
   const [selectedMetricIdsToAdd, setSelectedMetricIdsToAdd] = useState<Set<string>>(new Set());
+
+  // Pagination states (20 per page)
+  const [bundledCurrentPage, setBundledCurrentPage] = useState<number>(1);
+  const [availableCurrentPage, setAvailableCurrentPage] = useState<number>(1);
+  const pageSize = 20;
 
   // Add/Update Metric sub-modal state
   const [isMetricFormOpen, setIsMetricFormOpen] = useState(false);
@@ -190,6 +198,39 @@ export const TemplateMetricsModal: React.FC<TemplateMetricsModalProps> = ({
     queryTypeFilter,
     searchQuery,
   ]);
+
+  // Bundled Pagination Calculations
+  const totalBundledPages = Math.max(1, Math.ceil(filteredBundledMetrics.length / pageSize));
+  const currentBundledPageSafe = Math.min(Math.max(1, bundledCurrentPage), totalBundledPages);
+  const pagedBundledMetrics = useMemo(() => {
+    const start = (currentBundledPageSafe - 1) * pageSize;
+    return filteredBundledMetrics.slice(start, start + pageSize);
+  }, [filteredBundledMetrics, currentBundledPageSafe, pageSize]);
+
+  // Available Pagination Calculations
+  const totalAvailablePages = Math.max(1, Math.ceil(filteredAvailableMetrics.length / pageSize));
+  const currentAvailablePageSafe = Math.min(Math.max(1, availableCurrentPage), totalAvailablePages);
+  const pagedAvailableMetrics = useMemo(() => {
+    const start = (currentAvailablePageSafe - 1) * pageSize;
+    return filteredAvailableMetrics.slice(start, start + pageSize);
+  }, [filteredAvailableMetrics, currentAvailablePageSafe, pageSize]);
+
+  // Reset page on filter changes
+  useEffect(() => {
+    setBundledCurrentPage(1);
+  }, [searchQuery, queryTypeFilter]);
+
+  useEffect(() => {
+    setAvailableCurrentPage(1);
+  }, [searchQuery, queryTypeFilter, engineFilterMode]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setBundledCurrentPage(1);
+      setAvailableCurrentPage(1);
+      setSelectedMetricIdsToAdd(new Set());
+    }
+  }, [isOpen, template]);
 
   // Single-click Add Metric to template
   const handleAddSingleMetric = (metric: MetricEntity) => {
@@ -506,108 +547,165 @@ export const TemplateMetricsModal: React.FC<TemplateMetricsModalProps> = ({
               </div>
 
               {filteredBundledMetrics.length > 0 ? (
-                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                  {filteredBundledMetrics.map((m) => {
-                    const isActive = m.isEnabled !== false;
-                    const mEngine =
-                      m.databaseEngine ||
-                      databaseEngines.find((e) => e.id === m.databaseEngineId);
-                    const engineCode = mEngine?.dbCode || 'Universal';
-                    const engineBadge = getDbEngineBadgeClass(engineCode);
+                <>
+                  <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                    {pagedBundledMetrics.map((m) => {
+                      const isActive = m.isEnabled !== false;
+                      const mEngine =
+                        m.databaseEngine ||
+                        databaseEngines.find((e) => e.id === m.databaseEngineId);
+                      const engineCode = mEngine?.dbCode || 'Universal';
+                      const engineBadge = getDbEngineBadgeClass(engineCode);
 
-                    return (
-                      <div
-                        key={m.id}
-                        className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                          isActive
-                            ? 'bg-white border-slate-200 shadow-2xs hover:border-slate-300'
-                            : 'bg-slate-50 border-slate-200/70 opacity-70'
-                        }`}
-                      >
-                        {/* Metric Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-slate-900 text-xs">{m.name}</span>
-                            <span
-                              className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider ${
-                                isActive
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                  : 'bg-slate-200 text-slate-600 border border-slate-300'
-                              }`}
-                            >
-                              {isActive ? 'ACTIVE' : 'PAUSED'}
-                            </span>
-                            <span
-                              className={`px-1.5 py-0.2 rounded text-[9px] font-bold font-mono uppercase border ${engineBadge}`}
-                            >
-                              {engineCode}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
-                              <Clock className="w-2.5 h-2.5" />
-                              Cycle {m.cycle || 60}s
-                            </span>
-                            {m.metricQueryType && (
-                              <span className="text-[9px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
-                                T{m.metricQueryType}
+                      return (
+                        <div
+                          key={m.id}
+                          className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            isActive
+                              ? 'bg-white border-slate-200 shadow-2xs hover:border-slate-300'
+                              : 'bg-slate-50 border-slate-200/70 opacity-70'
+                          }`}
+                        >
+                          {/* Metric Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-bold text-slate-900 text-xs">{m.name}</span>
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                  isActive
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-slate-200 text-slate-600 border border-slate-300'
+                                }`}
+                              >
+                                {isActive ? 'ACTIVE' : 'PAUSED'}
                               </span>
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[9px] font-bold font-mono uppercase border ${engineBadge}`}
+                              >
+                                {engineCode}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                                <Clock className="w-2.5 h-2.5" />
+                                Cycle {m.cycle || 60}s
+                              </span>
+                              {m.metricQueryType && (
+                                <span className="text-[9px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
+                                  T{m.metricQueryType}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-600 truncate mt-1 max-w-xl">
+                              {m.sqlQuery}
+                            </div>
+                          </div>
+
+                          {/* Controls: Edit, Toggle Switch, Remove */}
+                          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                            {/* Edit Button */}
+                            {userRole === 'ADMIN' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMetricToEdit(m);
+                                  setIsMetricFormOpen(true);
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                                title="Edit metric query and thresholds"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {/* Monitoring On/Off Toggle */}
+                            <div className="flex items-center gap-1.5 pl-1 border-l border-slate-200">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleActiveState(m)}
+                                disabled={userRole !== 'ADMIN'}
+                                className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                                  isActive ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
+                                } ${userRole !== 'ADMIN' ? 'cursor-not-allowed opacity-60' : ''}`}
+                                title={isActive ? 'Click to pause metric' : 'Click to activate metric'}
+                              >
+                                <span className="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform" />
+                              </button>
+                              <span className="text-[10px] font-bold text-slate-600 w-6">
+                                {isActive ? 'ON' : 'OFF'}
+                              </span>
+                            </div>
+
+                            {/* 1-Click Remove from Template */}
+                            {userRole === 'ADMIN' && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveMetric(m)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer ml-1"
+                                title="Remove metric from template"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             )}
                           </div>
-                          <div className="text-[11px] font-mono text-slate-600 truncate mt-1 max-w-xl">
-                            {m.sqlQuery}
-                          </div>
                         </div>
+                      );
+                    })}
+                  </div>
 
-                        {/* Controls: Edit, Toggle Switch, Remove */}
-                        <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
-                          {/* Edit Button */}
-                          {userRole === 'ADMIN' && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMetricToEdit(m);
-                                setIsMetricFormOpen(true);
-                              }}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                              title="Edit metric query and thresholds"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                  {/* Bundled Pagination Controls (20/page) */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 px-1 text-[11px] text-slate-600 border-t border-slate-200">
+                    <div>
+                      Showing <strong className="font-semibold text-slate-900">{(currentBundledPageSafe - 1) * pageSize + 1}</strong> to{' '}
+                      <strong className="font-semibold text-slate-900">{Math.min(currentBundledPageSafe * pageSize, filteredBundledMetrics.length)}</strong> of{' '}
+                      <strong className="font-semibold text-slate-900">{filteredBundledMetrics.length}</strong> (20/page)
+                    </div>
 
-                          {/* Monitoring On/Off Toggle */}
-                          <div className="flex items-center gap-1.5 pl-1 border-l border-slate-200">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleActiveState(m)}
-                              disabled={userRole !== 'ADMIN'}
-                              className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
-                                isActive ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
-                              } ${userRole !== 'ADMIN' ? 'cursor-not-allowed opacity-60' : ''}`}
-                              title={isActive ? 'Click to pause metric' : 'Click to activate metric'}
-                            >
-                              <span className="w-4 h-4 bg-white rounded-full shadow-md transform transition-transform" />
-                            </button>
-                            <span className="text-[10px] font-bold text-slate-600 w-6">
-                              {isActive ? 'ON' : 'OFF'}
-                            </span>
-                          </div>
+                    {totalBundledPages > 1 && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setBundledCurrentPage(1)}
+                          disabled={currentBundledPageSafe <= 1}
+                          className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                          title="First Page"
+                        >
+                          <ChevronsLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBundledCurrentPage((p) => Math.max(1, p - 1))}
+                          disabled={currentBundledPageSafe <= 1}
+                          className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                          title="Previous Page"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
 
-                          {/* 1-Click Remove from Template */}
-                          {userRole === 'ADMIN' && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMetric(m)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer ml-1"
-                              title="Remove metric from template"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
+                        <span className="px-2 py-0.5 font-medium text-slate-700">
+                          Page <strong className="font-bold text-slate-900">{currentBundledPageSafe}</strong> of <strong className="font-bold text-slate-900">{totalBundledPages}</strong>
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => setBundledCurrentPage((p) => Math.min(totalBundledPages, p + 1))}
+                          disabled={currentBundledPageSafe >= totalBundledPages}
+                          className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                          title="Next Page"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBundledCurrentPage(totalBundledPages)}
+                          disabled={currentBundledPageSafe >= totalBundledPages}
+                          className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                          title="Last Page"
+                        >
+                          <ChevronsRight className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+                  </div>
+                </>
               ) : (
                 <div className="p-8 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-center text-slate-500">
                   <Layers className="w-8 h-8 mx-auto mb-2 text-slate-400" />
@@ -648,14 +746,40 @@ export const TemplateMetricsModal: React.FC<TemplateMetricsModalProps> = ({
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = new Set(selectedMetricIdsToAdd);
+                      pagedAvailableMetrics.forEach((m) => next.add(m.id));
+                      setSelectedMetricIdsToAdd(next);
+                    }}
+                    disabled={pagedAvailableMetrics.length === 0}
+                    className="text-[11px] text-indigo-700 hover:text-indigo-900 font-semibold cursor-pointer disabled:opacity-50"
+                  >
+                    Select Page ({pagedAvailableMetrics.length})
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = new Set(selectedMetricIdsToAdd);
+                      pagedAvailableMetrics.forEach((m) => next.delete(m.id));
+                      setSelectedMetricIdsToAdd(next);
+                    }}
+                    disabled={selectedMetricIdsToAdd.size === 0}
+                    className="text-[11px] text-slate-600 hover:text-slate-900 font-semibold cursor-pointer disabled:opacity-50"
+                  >
+                    Deselect Page
+                  </button>
+                  <span className="text-slate-300">|</span>
                   <button
                     type="button"
                     onClick={handleSelectAllFiltered}
                     disabled={filteredAvailableMetrics.length === 0}
                     className="text-[11px] text-indigo-700 hover:text-indigo-900 font-semibold cursor-pointer disabled:opacity-50"
                   >
-                    Select All Filtered
+                    Select All ({filteredAvailableMetrics.length})
                   </button>
                   <span className="text-slate-300">|</span>
                   <button
@@ -681,81 +805,138 @@ export const TemplateMetricsModal: React.FC<TemplateMetricsModalProps> = ({
 
               {/* Metrics Grid / List */}
               {filteredAvailableMetrics.length > 0 ? (
-                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                  {filteredAvailableMetrics.map((m) => {
-                    const isChecked = selectedMetricIdsToAdd.has(m.id);
-                    const mEngine =
-                      m.databaseEngine ||
-                      databaseEngines.find((e) => e.id === m.databaseEngineId);
-                    const engineCode = mEngine?.dbCode || 'Universal';
-                    const engineBadge = getDbEngineBadgeClass(engineCode);
+                <>
+                  <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                    {pagedAvailableMetrics.map((m) => {
+                      const isChecked = selectedMetricIdsToAdd.has(m.id);
+                      const mEngine =
+                        m.databaseEngine ||
+                        databaseEngines.find((e) => e.id === m.databaseEngineId);
+                      const engineCode = mEngine?.dbCode || 'Universal';
+                      const engineBadge = getDbEngineBadgeClass(engineCode);
 
-                    return (
-                      <div
-                        key={m.id}
-                        className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                          isChecked
-                            ? 'bg-indigo-50/70 border-indigo-300 shadow-2xs'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        {/* Checkbox + Details */}
-                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              const next = new Set(selectedMetricIdsToAdd);
-                              if (e.target.checked) next.add(m.id);
-                              else next.delete(m.id);
-                              setSelectedMetricIdsToAdd(next);
-                            }}
-                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer mt-0.5 shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-bold text-slate-900 text-xs">{m.name}</span>
-                              <span
-                                className={`px-1.5 py-0.2 rounded text-[9px] font-bold font-mono uppercase border ${engineBadge}`}
-                              >
-                                {engineCode}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                Cycle {m.cycle || 60}s
-                              </span>
-                              {m.metricQueryType && (
-                                <span className="text-[9px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
-                                  T{m.metricQueryType}
+                      return (
+                        <div
+                          key={m.id}
+                          className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            isChecked
+                              ? 'bg-indigo-50/70 border-indigo-300 shadow-2xs'
+                              : 'bg-white border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          {/* Checkbox + Details */}
+                          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const next = new Set(selectedMetricIdsToAdd);
+                                if (e.target.checked) next.add(m.id);
+                                else next.delete(m.id);
+                                setSelectedMetricIdsToAdd(next);
+                              }}
+                              className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer mt-0.5 shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-slate-900 text-xs">{m.name}</span>
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[9px] font-bold font-mono uppercase border ${engineBadge}`}
+                                >
+                                  {engineCode}
                                 </span>
-                              )}
-                              {m.templateName && (
                                 <span className="text-[10px] text-slate-400 font-mono">
-                                  (Also in: {m.templateName})
+                                  Cycle {m.cycle || 60}s
                                 </span>
-                              )}
-                            </div>
-                            <div className="text-[11px] font-mono text-slate-600 truncate mt-1 max-w-xl">
-                              {m.sqlQuery}
+                                {m.metricQueryType && (
+                                  <span className="text-[9px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
+                                    T{m.metricQueryType}
+                                  </span>
+                                )}
+                                {m.templateName && (
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    (Also in: {m.templateName})
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] font-mono text-slate-600 truncate mt-1 max-w-xl">
+                                {m.sqlQuery}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* 1-Click Quick Add Button */}
-                        <div className="shrink-0 self-end sm:self-center">
-                          <button
-                            type="button"
-                            onClick={() => handleAddSingleMetric(m)}
-                            className="px-3 py-1.5 bg-white hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-300 hover:border-indigo-600 rounded-lg font-bold text-xs transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
-                            title="Add directly to this template"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add</span>
-                          </button>
+                          {/* 1-Click Quick Add Button */}
+                          <div className="shrink-0 self-end sm:self-center">
+                            <button
+                              type="button"
+                              onClick={() => handleAddSingleMetric(m)}
+                              className="px-3 py-1.5 bg-white hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-300 hover:border-indigo-600 rounded-lg font-bold text-xs transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
+                              title="Add directly to this template"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add</span>
+                            </button>
+                          </div>
                         </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Available Pagination Controls (20/page) */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 px-1 text-[11px] text-slate-600 border-t border-slate-200">
+                    <div>
+                      Showing <strong className="font-semibold text-slate-900">{(currentAvailablePageSafe - 1) * pageSize + 1}</strong> to{' '}
+                      <strong className="font-semibold text-slate-900">{Math.min(currentAvailablePageSafe * pageSize, filteredAvailableMetrics.length)}</strong> of{' '}
+                      <strong className="font-semibold text-slate-900">{filteredAvailableMetrics.length}</strong> (20/page)
+                    </div>
+
+                    {totalAvailablePages > 1 && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setAvailableCurrentPage(1)}
+                          disabled={currentAvailablePageSafe <= 1}
+                          className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                          title="First Page"
+                        >
+                          <ChevronsLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAvailableCurrentPage((p) => Math.max(1, p - 1))}
+                          disabled={currentAvailablePageSafe <= 1}
+                          className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                          title="Previous Page"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+
+                        <span className="px-2 py-0.5 font-medium text-slate-700">
+                          Page <strong className="font-bold text-slate-900">{currentAvailablePageSafe}</strong> of <strong className="font-bold text-slate-900">{totalAvailablePages}</strong>
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => setAvailableCurrentPage((p) => Math.min(totalAvailablePages, p + 1))}
+                          disabled={currentAvailablePageSafe >= totalAvailablePages}
+                          className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                          title="Next Page"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAvailableCurrentPage(totalAvailablePages)}
+                          disabled={currentAvailablePageSafe >= totalAvailablePages}
+                          className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                          title="Last Page"
+                        >
+                          <ChevronsRight className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+                  </div>
+                </>
               ) : (
                 <div className="p-8 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-center text-slate-500">
                   <Filter className="w-8 h-8 mx-auto mb-2 text-slate-400" />

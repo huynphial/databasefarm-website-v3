@@ -52,7 +52,7 @@ interface RawMeasurementsViewProps {
   showInfoTips?: boolean;
 }
 
-type TimeRangePreset = '1h' | '3h' | '6h' | '12h' | '24h' | '3d' | '7d' | 'all' | 'custom';
+type TimeRangePreset = '1h' | '2h' | '4h' | '6h' | '12h' | '24h' | '48h' | '72h' | 'all' | 'custom';
 
 export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
   measurements,
@@ -99,10 +99,13 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     let calculatedTo: string | undefined = undefined;
 
     if (preset === '1h') {
-      calculatedFrom = new Date(now - 60 * 60 * 1000).toISOString();
+      calculatedFrom = new Date(now - 1 * 60 * 60 * 1000).toISOString();
       calculatedTo = new Date(now).toISOString();
-    } else if (preset === '3h') {
-      calculatedFrom = new Date(now - 3 * 60 * 60 * 1000).toISOString();
+    } else if (preset === '2h') {
+      calculatedFrom = new Date(now - 2 * 60 * 60 * 1000).toISOString();
+      calculatedTo = new Date(now).toISOString();
+    } else if (preset === '4h') {
+      calculatedFrom = new Date(now - 4 * 60 * 60 * 1000).toISOString();
       calculatedTo = new Date(now).toISOString();
     } else if (preset === '6h') {
       calculatedFrom = new Date(now - 6 * 60 * 60 * 1000).toISOString();
@@ -113,11 +116,11 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
     } else if (preset === '24h') {
       calculatedFrom = new Date(now - 24 * 60 * 60 * 1000).toISOString();
       calculatedTo = new Date(now).toISOString();
-    } else if (preset === '3d') {
-      calculatedFrom = new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString();
+    } else if (preset === '48h') {
+      calculatedFrom = new Date(now - 48 * 60 * 60 * 1000).toISOString();
       calculatedTo = new Date(now).toISOString();
-    } else if (preset === '7d') {
-      calculatedFrom = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+    } else if (preset === '72h') {
+      calculatedFrom = new Date(now - 72 * 60 * 60 * 1000).toISOString();
       calculatedTo = new Date(now).toISOString();
     } else if (preset === 'custom') {
       if (fromStr) calculatedFrom = new Date(fromStr).toISOString();
@@ -772,6 +775,12 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                   setAppliedMinDuration(num);
                   setCurrentPage(1);
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleRunQuery();
+                  }
+                }}
                 className="w-16 bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs text-right pr-0.5 font-mono"
               />
               <span className="text-[11px] text-slate-500 font-semibold">ms</span>
@@ -784,7 +793,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                     setCurrentPage(1);
                     handleRunQuery({ minDurationMs: 0 });
                   }}
-                  className="text-slate-400 hover:text-slate-700 text-xs px-0.5"
+                  className="text-slate-400 hover:text-slate-700 text-xs px-0.5 cursor-pointer"
                   title={t('rawMeasurements.clearDuration')}
                 >
                   ✕
@@ -830,7 +839,7 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                   <Clock className="w-3.5 h-3.5 text-indigo-600" />
                   <span>{t('rawMeasurements.timeRange')}:</span>
                 </div>
-                {(['1h', '3h', '6h', '12h', '24h', '3d', '7d', 'all', 'custom'] as TimeRangePreset[]).map((preset) => (
+                {(['1h', '2h', '4h', '6h', '12h', '24h', '48h', '72h', 'all', 'custom'] as TimeRangePreset[]).map((preset) => (
                   <button
                     key={preset}
                     type="button"
@@ -842,12 +851,13 @@ export const RawMeasurementsView: React.FC<RawMeasurementsViewProps> = ({
                     }`}
                   >
                     {preset === '1h' && `${t('rawMeasurements.range1h')} (${t('rawMeasurements.default')})`}
-                    {preset === '3h' && t('rawMeasurements.range3h')}
+                    {preset === '2h' && t('rawMeasurements.range2h')}
+                    {preset === '4h' && t('rawMeasurements.range4h')}
                     {preset === '6h' && t('rawMeasurements.range6h')}
                     {preset === '12h' && t('rawMeasurements.range12h')}
                     {preset === '24h' && t('rawMeasurements.range24h')}
-                    {preset === '3d' && t('rawMeasurements.range3d')}
-                    {preset === '7d' && t('rawMeasurements.range7d')}
+                    {preset === '48h' && t('rawMeasurements.range48h')}
+                    {preset === '72h' && t('rawMeasurements.range72h')}
                     {preset === 'all' && t('rawMeasurements.rangeAll')}
                     {preset === 'custom' && t('rawMeasurements.rangeCustom')}
                   </button>

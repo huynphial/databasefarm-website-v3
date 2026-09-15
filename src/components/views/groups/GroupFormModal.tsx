@@ -16,6 +16,8 @@ import {
   Info,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   RotateCcw,
   ChevronDown,
   CheckSquare,
@@ -78,19 +80,24 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
     notificationMappings: [],
   });
 
-  // Database selection filters & sort
+  // Database selection filters, sort & pagination (20 per page)
   const [dbSearch, setDbSearch] = useState('');
   const [dbEngineFilter, setDbEngineFilter] = useState<string>('ALL');
   const [dbSelectedTags, setDbSelectedTags] = useState<string[]>([]);
   const [dbTagDropdownOpen, setDbTagDropdownOpen] = useState(false);
   const [dbTagSearch, setDbTagSearch] = useState('');
-  const [dbSortOption, setDbSortOption] = useState<'created_desc' | 'created_asc' | 'name_asc' | 'name_desc'>('created_desc');
+  const [dbSortOption, setDbSortOption] = useState<'created_desc' | 'created_asc' | 'checked_first' | 'unchecked_first' | 'name_asc' | 'name_desc'>('created_desc');
   const [dbShowOnlySelected, setDbShowOnlySelected] = useState(false);
+  const [dbCurrentPage, setDbCurrentPage] = useState<number>(1);
+  const dbPageSize = 20;
 
-  // Template selection filters
+  // Template selection filters, sort & pagination (20 per page)
   const [tplSearch, setTplSearch] = useState('');
   const [tplEngineFilter, setTplEngineFilter] = useState<string>('ALL');
+  const [tplSortOption, setTplSortOption] = useState<'name_asc' | 'name_desc' | 'checked_first' | 'unchecked_first'>('name_asc');
   const [tplShowOnlySelected, setTplShowOnlySelected] = useState(false);
+  const [tplCurrentPage, setTplCurrentPage] = useState<number>(1);
+  const tplPageSize = 20;
 
   // Dispatcher selection filters
   const [dispSearch, setDispSearch] = useState('');
@@ -145,14 +152,27 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
       setDbTagSearch('');
       setDbSortOption('created_desc');
       setDbShowOnlySelected(false);
+      setDbCurrentPage(1);
       setTplSearch('');
       setTplEngineFilter('ALL');
+      setTplSortOption('name_asc');
       setTplShowOnlySelected(false);
+      setTplCurrentPage(1);
       setDispSearch('');
       setDispTypeFilter('ALL');
       setDispShowOnlySelected(false);
     }
   }, [isOpen, editingGroup]);
+
+  // Reset database page when filters/search/sort change
+  useEffect(() => {
+    setDbCurrentPage(1);
+  }, [dbSearch, dbEngineFilter, dbSelectedTags, dbShowOnlySelected, dbSortOption]);
+
+  // Reset template page when filters/search/sort change
+  useEffect(() => {
+    setTplCurrentPage(1);
+  }, [tplSearch, tplEngineFilter, tplShowOnlySelected, tplSortOption]);
 
   // -------------------------------------------------------------
   // 1. MANAGED DATABASES FILTERING & SORTING LOGIC
@@ -236,9 +256,21 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
     });
   }, [databases, dbEngineFilter, dbSelectedTags, dbShowOnlySelected, dbSearch, formData.databaseIds]);
 
-  // Apply sorting
+  // Apply sorting (including checked vs unchecked)
   const sortedDatabases = useMemo(() => {
     return [...filteredDatabases].sort((a, b) => {
+      if (dbSortOption === 'checked_first') {
+        const aChecked = formData.databaseIds.includes(a.id);
+        const bChecked = formData.databaseIds.includes(b.id);
+        if (aChecked !== bChecked) return aChecked ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      }
+      if (dbSortOption === 'unchecked_first') {
+        const aChecked = formData.databaseIds.includes(a.id);
+        const bChecked = formData.databaseIds.includes(b.id);
+        if (aChecked !== bChecked) return aChecked ? 1 : -1;
+        return a.name.localeCompare(b.name);
+      }
       if (dbSortOption === 'name_asc') {
         return a.name.localeCompare(b.name);
       }
@@ -259,7 +291,29 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
       }
       return 0;
     });
-  }, [filteredDatabases, dbSortOption]);
+  }, [filteredDatabases, dbSortOption, formData.databaseIds]);
+
+  // Database Pagination (20 per page)
+  const totalDbPages = Math.max(1, Math.ceil(sortedDatabases.length / dbPageSize));
+  const currentDbPageSafe = Math.min(Math.max(1, dbCurrentPage), totalDbPages);
+
+  const pagedDatabases = useMemo(() => {
+    const start = (currentDbPageSafe - 1) * dbPageSize;
+    return sortedDatabases.slice(start, start + dbPageSize);
+  }, [sortedDatabases, currentDbPageSafe, dbPageSize]);
+
+  const toggleCurrentPageDatabases = (select: boolean) => {
+    const pageIds = pagedDatabases.map((d) => d.id);
+    if (select) {
+      const merged = Array.from(new Set([...formData.databaseIds, ...pageIds]));
+      setFormData((prev) => ({ ...prev, databaseIds: merged }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        databaseIds: prev.databaseIds.filter((id) => !pageIds.includes(id)),
+      }));
+    }
+  };
 
   const toggleAllFilteredDatabases = (select: boolean) => {
     const filteredIds = sortedDatabases.map((d) => d.id);
@@ -280,6 +334,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
     setDbSelectedTags([]);
     setDbSortOption('created_desc');
     setDbShowOnlySelected(false);
+    setDbCurrentPage(1);
   };
 
   // -------------------------------------------------------------
@@ -328,8 +383,52 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
     });
   }, [templates, tplEngineFilter, tplShowOnlySelected, tplSearch, formData.templateIds]);
 
+  // Apply sorting for templates (including checked vs unchecked)
+  const sortedTemplates = useMemo(() => {
+    return [...filteredTemplates].sort((a, b) => {
+      if (tplSortOption === 'checked_first') {
+        const aChecked = formData.templateIds.includes(a.id);
+        const bChecked = formData.templateIds.includes(b.id);
+        if (aChecked !== bChecked) return aChecked ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      }
+      if (tplSortOption === 'unchecked_first') {
+        const aChecked = formData.templateIds.includes(a.id);
+        const bChecked = formData.templateIds.includes(b.id);
+        if (aChecked !== bChecked) return aChecked ? 1 : -1;
+        return a.name.localeCompare(b.name);
+      }
+      if (tplSortOption === 'name_desc') {
+        return b.name.localeCompare(a.name);
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredTemplates, tplSortOption, formData.templateIds]);
+
+  // Template Pagination (20 per page)
+  const totalTplPages = Math.max(1, Math.ceil(sortedTemplates.length / tplPageSize));
+  const currentTplPageSafe = Math.min(Math.max(1, tplCurrentPage), totalTplPages);
+
+  const pagedTemplates = useMemo(() => {
+    const start = (currentTplPageSafe - 1) * tplPageSize;
+    return sortedTemplates.slice(start, start + tplPageSize);
+  }, [sortedTemplates, currentTplPageSafe, tplPageSize]);
+
+  const toggleCurrentPageTemplates = (select: boolean) => {
+    const pageIds = pagedTemplates.map((t) => t.id);
+    if (select) {
+      const merged = Array.from(new Set([...formData.templateIds, ...pageIds]));
+      setFormData((prev) => ({ ...prev, templateIds: merged }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        templateIds: prev.templateIds.filter((id) => !pageIds.includes(id)),
+      }));
+    }
+  };
+
   const toggleAllFilteredTemplates = (select: boolean) => {
-    const filteredIds = filteredTemplates.map((t) => t.id);
+    const filteredIds = sortedTemplates.map((t) => t.id);
     if (select) {
       const merged = Array.from(new Set([...formData.templateIds, ...filteredIds]));
       setFormData((prev) => ({ ...prev, templateIds: merged }));
@@ -339,6 +438,14 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
         templateIds: prev.templateIds.filter((id) => !filteredIds.includes(id)),
       }));
     }
+  };
+
+  const resetTplFilters = () => {
+    setTplSearch('');
+    setTplEngineFilter('ALL');
+    setTplSortOption('name_asc');
+    setTplShowOnlySelected(false);
+    setTplCurrentPage(1);
   };
 
   // -------------------------------------------------------------
@@ -605,18 +712,18 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                     onClick={() => toggleAllFilteredDatabases(true)}
                     disabled={sortedDatabases.length === 0}
                     className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                    title="Select all databases matching current search, engine, multi-tag, and sort filters"
+                    title={t('groups.selectFiltered', { count: sortedDatabases.length })}
                   >
-                    Select Filtered ({sortedDatabases.length})
+                    {t('groups.selectFiltered', { count: sortedDatabases.length })}
                   </button>
                   <button
                     type="button"
                     onClick={() => toggleAllFilteredDatabases(false)}
                     disabled={sortedDatabases.length === 0}
                     className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                    title="Deselect all databases matching current filter"
+                    title={t('groups.deselectFiltered')}
                   >
-                    Deselect Filtered
+                    {t('groups.deselectFiltered')}
                   </button>
                   {formData.databaseIds.length > 0 && (
                     <button
@@ -624,7 +731,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                       onClick={() => setFormData((prev) => ({ ...prev, databaseIds: [] }))}
                       className="px-2 py-1 rounded-lg text-rose-600 hover:bg-rose-50 font-bold transition-colors cursor-pointer"
                     >
-                      Clear All
+                      {t('groups.clearAll')}
                     </button>
                   )}
                 </div>
@@ -638,7 +745,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
-                      placeholder="Search name, host, port, env, tag..."
+                      placeholder={t('groups.searchDbPlaceholder')}
                       value={dbSearch}
                       onChange={(e) => setDbSearch(e.target.value)}
                       className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 text-xs focus:outline-none focus:border-indigo-500 shadow-2xs"
@@ -661,7 +768,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                       onChange={(val) => setDbEngineFilter(val)}
                       databases={databases}
                       databaseEngines={databaseEngines}
-                      allLabel={`All DB Engines (${databases.length})`}
+                      allLabel={t('groups.allDbEnginesCount', { count: databases.length })}
                       className="w-full text-xs font-medium shadow-2xs"
                     />
                   </div>
@@ -681,8 +788,8 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                         <Tag className={`w-3 h-3 shrink-0 ${dbSelectedTags.length > 0 ? 'text-indigo-600' : 'text-slate-400'}`} />
                         <span className="truncate">
                           {dbSelectedTags.length === 0
-                            ? t('groups.allTags') || 'All Tags'
-                            : `${dbSelectedTags.length} tag(s) selected`}
+                            ? t('groups.allTags')
+                            : t('groups.selectedTagsCount', { count: dbSelectedTags.length })}
                         </span>
                       </div>
                       <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -694,7 +801,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                         <div className="flex items-center justify-between pb-1 border-b border-slate-100">
                           <span className="font-bold text-slate-900 text-[11px] flex items-center gap-1">
                             <Tag className="w-3 h-3 text-indigo-600" />
-                            {t('groups.filterByTags') || 'Filter by Tags'}
+                            {t('groups.filterByTags')}
                           </span>
                           {dbSelectedTags.length > 0 && (
                             <button
@@ -702,7 +809,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                               onClick={() => setDbSelectedTags([])}
                               className="text-[10px] text-rose-600 hover:underline font-bold cursor-pointer"
                             >
-                              {t('groups.clearTags') || 'Clear'}
+                              {t('groups.clearTags')}
                             </button>
                           )}
                         </div>
@@ -713,7 +820,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                             <Search className="w-3 h-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2" />
                             <input
                               type="text"
-                              placeholder="Find tag..."
+                              placeholder={t('groups.filterByTag')}
                               value={dbTagSearch}
                               onChange={(e) => setDbTagSearch(e.target.value)}
                               className="w-full pl-6 pr-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-[11px] text-slate-900 focus:outline-none focus:border-indigo-500"
@@ -725,7 +832,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                         <div className="max-h-44 overflow-y-auto space-y-0.5 py-0.5 divide-y divide-slate-50">
                           {filteredAvailableTags.length === 0 ? (
                             <div className="py-2 text-center text-slate-400 text-[11px] italic">
-                              No tags match
+                              {t('groups.noTagsMatch')}
                             </div>
                           ) : (
                             filteredAvailableTags.map(({ tag, count }) => {
@@ -765,14 +872,14 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                             onClick={() => setDbSelectedTags(availableTags.map((t) => t.tag))}
                             className="text-indigo-600 hover:underline font-semibold cursor-pointer"
                           >
-                            {t('groups.selectAllTags') || 'Select All'}
+                            {t('groups.selectAllTags')}
                           </button>
                           <button
                             type="button"
                             onClick={() => setDbTagDropdownOpen(false)}
                             className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold cursor-pointer"
                           >
-                            Done
+                            {t('groups.done')}
                           </button>
                         </div>
                       </div>
@@ -786,10 +893,12 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                       onChange={(e) => setDbSortOption(e.target.value as any)}
                       className="w-full py-1.5 px-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-xs font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
                     >
-                      <option value="created_desc">🆕 {t('groups.sortNewest') || 'Newest Created'}</option>
-                      <option value="created_asc">⏳ {t('groups.sortOldest') || 'Oldest Created'}</option>
-                      <option value="name_asc">🔤 {t('groups.sortNameAsc') || 'Name (A → Z)'}</option>
-                      <option value="name_desc">🔤 {t('groups.sortNameDesc') || 'Name (Z → A)'}</option>
+                      <option value="created_desc">🆕 {t('groups.sortNewest')}</option>
+                      <option value="created_asc">⏳ {t('groups.sortOldest')}</option>
+                      <option value="checked_first">✅ {t('groups.sortCheckedFirst')}</option>
+                      <option value="unchecked_first">⬜ {t('groups.sortUncheckedFirst')}</option>
+                      <option value="name_asc">🔤 {t('groups.sortNameAsc')}</option>
+                      <option value="name_desc">🔤 {t('groups.sortNameDesc')}</option>
                     </select>
                   </div>
                 </div>
@@ -798,7 +907,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                 <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
                   <div className="flex flex-wrap items-center gap-1 text-[11px] text-slate-600 font-medium">
                     <span>
-                      Showing <strong className="text-slate-900 font-bold">{sortedDatabases.length}</strong> of {databases.length} databases
+                      {t('groups.showingDatabasesCount', { count: sortedDatabases.length, total: databases.length })}
                     </span>
 
                     {/* Active Selected Tag Pills */}
@@ -823,14 +932,14 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                       </div>
                     )}
 
-                    {(dbEngineFilter !== 'ALL' || dbSelectedTags.length > 0 || dbSearch || dbShowOnlySelected) && (
+                    {(dbEngineFilter !== 'ALL' || dbSelectedTags.length > 0 || dbSearch || dbShowOnlySelected || dbSortOption !== 'created_desc') && (
                       <button
                         type="button"
                         onClick={resetDbFilters}
                         className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-bold ml-2 cursor-pointer"
                       >
                         <RotateCcw className="w-3 h-3" />
-                        Reset
+                        {t('groups.reset')}
                       </button>
                     )}
                   </div>
@@ -844,27 +953,27 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                         : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                     }`}
                   >
-                    {dbShowOnlySelected ? '✓ Selected Only' : 'Show All'}
+                    {dbShowOnlySelected ? t('groups.selectedOnly') : t('groups.showAll')}
                   </button>
                 </div>
               </div>
 
-              {/* SINGLE COLUMN DATABASE LIST (One column to tick) */}
+              {/* SINGLE COLUMN DATABASE LIST (One column to tick, paginated 20 per page) */}
               <div className="flex-1 overflow-y-auto min-h-0 border border-slate-200 rounded-xl bg-slate-50/40 divide-y divide-slate-200/80">
                 {sortedDatabases.length === 0 ? (
                   <div className="p-8 text-center text-slate-400 italic space-y-2">
                     <Server className="w-8 h-8 text-slate-300 mx-auto" />
-                    <p>No databases match the selected engine, tags, sort option, or search query.</p>
+                    <p>{t('groups.noDatabasesMatch')}</p>
                     <button
                       type="button"
                       onClick={resetDbFilters}
                       className="text-xs text-indigo-600 font-bold hover:underline cursor-pointer"
                     >
-                      Clear All Filters
+                      {t('groups.clearAllFilters')}
                     </button>
                   </div>
                 ) : (
-                  sortedDatabases.map((db) => {
+                  pagedDatabases.map((db) => {
                     const isSelected = formData.databaseIds.includes(db.id);
                     return (
                       <label
@@ -946,6 +1055,84 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                   })
                 )}
               </div>
+
+              {/* Database Pagination Bar (20 per page) */}
+              {sortedDatabases.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 px-1 text-[11px] text-slate-600 border-t border-slate-200 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span>
+                      {t('groups.showingPagination', {
+                        start: (currentDbPageSafe - 1) * dbPageSize + 1,
+                        end: Math.min(currentDbPageSafe * dbPageSize, sortedDatabases.length),
+                        total: sortedDatabases.length,
+                      })}
+                    </span>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleCurrentPageDatabases(true)}
+                      className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+                      title={t('groups.selectPage', { count: pagedDatabases.length })}
+                    >
+                      {t('groups.selectPage', { count: pagedDatabases.length })}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleCurrentPageDatabases(false)}
+                      className="text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
+                      title={t('groups.deselectPage')}
+                    >
+                      {t('groups.deselectPage')}
+                    </button>
+                  </div>
+
+                  {totalDbPages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setDbCurrentPage(1)}
+                        disabled={currentDbPageSafe <= 1}
+                        className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title={t('groups.firstPage')}
+                      >
+                        <ChevronsLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDbCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentDbPageSafe <= 1}
+                        className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title={t('groups.prevPage')}
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+
+                      <span className="px-2 py-0.5 font-medium text-slate-700">
+                        {t('groups.pageOf', { current: currentDbPageSafe, total: totalDbPages })}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setDbCurrentPage((p) => Math.min(totalDbPages, p + 1))}
+                        disabled={currentDbPageSafe >= totalDbPages}
+                        className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title={t('groups.nextPage')}
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDbCurrentPage(totalDbPages)}
+                        disabled={currentDbPageSafe >= totalDbPages}
+                        className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title={t('groups.lastPage')}
+                      >
+                        <ChevronsRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -977,18 +1164,18 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                     onClick={() => toggleAllFilteredTemplates(true)}
                     disabled={filteredTemplates.length === 0}
                     className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                    title="Select all templates matching current search and engine filter"
+                    title={t('groups.selectFiltered', { count: filteredTemplates.length })}
                   >
-                    Select Filtered ({filteredTemplates.length})
+                    {t('groups.selectFiltered', { count: filteredTemplates.length })}
                   </button>
                   <button
                     type="button"
                     onClick={() => toggleAllFilteredTemplates(false)}
                     disabled={filteredTemplates.length === 0}
                     className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                    title="Deselect all templates matching current filter"
+                    title={t('groups.deselectFiltered')}
                   >
-                    Deselect Filtered
+                    {t('groups.deselectFiltered')}
                   </button>
                   {formData.templateIds.length > 0 && (
                     <button
@@ -996,19 +1183,19 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                       onClick={() => setFormData((prev) => ({ ...prev, templateIds: [] }))}
                       className="px-2 py-1 rounded-lg text-rose-600 hover:bg-rose-50 font-bold transition-colors cursor-pointer"
                     >
-                      Clear All
+                      {t('groups.clearAll')}
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Search & Engine Compatibility Filter Toolbar */}
+              {/* Search, Engine & Sort Filter Toolbar */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 shrink-0">
-                <div className="sm:col-span-6 relative">
+                <div className="sm:col-span-5 relative">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="text"
-                    placeholder="Search templates by name, metric, description..."
+                    placeholder={t('groups.searchTplPlaceholder')}
                     value={tplSearch}
                     onChange={(e) => setTplSearch(e.target.value)}
                     className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 text-xs focus:outline-none focus:border-indigo-500 shadow-2xs"
@@ -1024,13 +1211,13 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                   )}
                 </div>
 
-                <div className="sm:col-span-4 relative">
+                <div className="sm:col-span-3 relative">
                   <select
                     value={tplEngineFilter}
                     onChange={(e) => setTplEngineFilter(e.target.value)}
                     className="w-full py-1.5 px-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 text-xs font-medium focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
                   >
-                    <option value="ALL">All Compatibility ({templates.length})</option>
+                    <option value="ALL">{t('groups.allCompatibilityCount', { count: templates.length })}</option>
                     <option value="UNIVERSAL">
                       Universal ({templates.filter((t) => !t.targetDbType || t.targetDbType === 'ALL').length})
                     </option>
@@ -1040,10 +1227,24 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                       ).length;
                       return (
                         <option key={engine} value={engine}>
-                          {engine} Engine ({count})
+                          {t('groups.engineCompatibilityCount', { engine, count })}
                         </option>
                       );
                     })}
+                  </select>
+                </div>
+
+                {/* Template Sort Dropdown */}
+                <div className="sm:col-span-2 relative">
+                  <select
+                    value={tplSortOption}
+                    onChange={(e) => setTplSortOption(e.target.value as any)}
+                    className="w-full py-1.5 px-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-xs font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-2xs"
+                  >
+                    <option value="name_asc">🔤 {t('groups.sortNameAsc')}</option>
+                    <option value="name_desc">🔤 {t('groups.sortNameDesc')}</option>
+                    <option value="checked_first">✅ {t('groups.sortCheckedFirst')}</option>
+                    <option value="unchecked_first">⬜ {t('groups.sortUncheckedFirst')}</option>
                   </select>
                 </div>
 
@@ -1057,19 +1258,27 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                         : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
                     }`}
                   >
-                    {tplShowOnlySelected ? '✓ Selected Only' : 'Show All'}
+                    {tplShowOnlySelected ? t('groups.selectedOnly') : t('groups.showAll')}
                   </button>
                 </div>
               </div>
 
-              {/* SINGLE COLUMN TEMPLATES LIST (One column to tick) */}
+              {/* SINGLE COLUMN TEMPLATES LIST (One column to tick, paginated 20 per page) */}
               <div className="flex-1 overflow-y-auto min-h-0 border border-slate-200 rounded-xl bg-slate-50/40 divide-y divide-slate-200/80">
-                {filteredTemplates.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 italic">
-                    No templates match the selected engine compatibility or search query.
+                {sortedTemplates.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 italic space-y-2">
+                    <Layers className="w-8 h-8 text-slate-300 mx-auto" />
+                    <p>{t('groups.noTemplatesMatch')}</p>
+                    <button
+                      type="button"
+                      onClick={resetTplFilters}
+                      className="text-xs text-indigo-600 font-bold hover:underline cursor-pointer"
+                    >
+                      {t('groups.clearAllFilters')}
+                    </button>
                   </div>
                 ) : (
-                  filteredTemplates.map((tpl) => {
+                  pagedTemplates.map((tpl) => {
                     const isSelected = formData.templateIds.includes(tpl.id);
                     const isUniversal = !tpl.targetDbType || tpl.targetDbType.toUpperCase() === 'ALL';
                     return (
@@ -1127,6 +1336,84 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                   })
                 )}
               </div>
+
+              {/* Template Pagination Bar (20 per page) */}
+              {sortedTemplates.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 px-1 text-[11px] text-slate-600 border-t border-slate-200 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span>
+                      {t('groups.showingPagination', {
+                        start: (currentTplPageSafe - 1) * tplPageSize + 1,
+                        end: Math.min(currentTplPageSafe * tplPageSize, sortedTemplates.length),
+                        total: sortedTemplates.length,
+                      })}
+                    </span>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleCurrentPageTemplates(true)}
+                      className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+                      title={t('groups.selectPage', { count: pagedTemplates.length })}
+                    >
+                      {t('groups.selectPage', { count: pagedTemplates.length })}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleCurrentPageTemplates(false)}
+                      className="text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
+                      title={t('groups.deselectPage')}
+                    >
+                      {t('groups.deselectPage')}
+                    </button>
+                  </div>
+
+                  {totalTplPages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setTplCurrentPage(1)}
+                        disabled={currentTplPageSafe <= 1}
+                        className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title={t('groups.firstPage')}
+                      >
+                        <ChevronsLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTplCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentTplPageSafe <= 1}
+                        className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title={t('groups.prevPage')}
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+
+                      <span className="px-2 py-0.5 font-medium text-slate-700">
+                        {t('groups.pageOf', { current: currentTplPageSafe, total: totalTplPages })}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setTplCurrentPage((p) => Math.min(totalTplPages, p + 1))}
+                        disabled={currentTplPageSafe >= totalTplPages}
+                        className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title={t('groups.nextPage')}
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTplCurrentPage(totalTplPages)}
+                        disabled={currentTplPageSafe >= totalTplPages}
+                        className="p-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title={t('groups.lastPage')}
+                      >
+                        <ChevronsRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1158,18 +1445,18 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                     onClick={() => toggleAllFilteredDispatchers(true)}
                     disabled={filteredAlertMethods.length === 0}
                     className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                    title="Select all dispatchers matching current search and filter"
+                    title={t('groups.selectFiltered', { count: filteredAlertMethods.length })}
                   >
-                    Select Filtered ({filteredAlertMethods.length})
+                    {t('groups.selectFiltered', { count: filteredAlertMethods.length })}
                   </button>
                   <button
                     type="button"
                     onClick={() => toggleAllFilteredDispatchers(false)}
                     disabled={filteredAlertMethods.length === 0}
                     className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                    title="Deselect all dispatchers matching current filter"
+                    title={t('groups.deselectFiltered')}
                   >
-                    Deselect Filtered
+                    {t('groups.deselectFiltered')}
                   </button>
                   {formData.notificationMappings.length > 0 && (
                     <button
@@ -1177,7 +1464,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                       onClick={() => setFormData((prev) => ({ ...prev, notificationMappings: [] }))}
                       className="px-2 py-1 rounded-lg text-rose-600 hover:bg-rose-50 font-bold transition-colors cursor-pointer"
                     >
-                      Clear All
+                      {t('groups.clearAll')}
                     </button>
                   )}
                 </div>
@@ -1189,7 +1476,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="text"
-                    placeholder="Search dispatchers by name, type, endpoint, bot..."
+                    placeholder={t('groups.searchDispPlaceholder')}
                     value={dispSearch}
                     onChange={(e) => setDispSearch(e.target.value)}
                     className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 text-xs focus:outline-none focus:border-indigo-500 shadow-2xs"
@@ -1233,7 +1520,7 @@ export const GroupFormModal: React.FC<GroupFormModalProps> = ({
                         : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
                     }`}
                   >
-                    {dispShowOnlySelected ? '✓ Selected Only' : 'Show All'}
+                    {dispShowOnlySelected ? t('groups.selectedOnly') : t('groups.showAll')}
                   </button>
                 </div>
               </div>

@@ -398,6 +398,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           id: db.id,
           name: db.name,
           databaseSystem: db.databaseSystem || '',
+          database_system: db.databaseSystem || '',
           dbType: db.dbType,
           host: db.host,
           port: db.port,
@@ -460,6 +461,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         id: db.id,
         name: db.name,
         databaseSystem: db.databaseSystem || '',
+        database_system: db.databaseSystem || '',
         dbType: db.dbType,
         host: db.host,
         port: db.port,
@@ -504,7 +506,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   // ----------------------------------------------------
   const parseDatabaseItem = (raw: any) => {
     const name = raw.name || raw.databaseName || 'Imported Database';
-    const databaseSystem = raw.databaseSystem || raw.database_system || raw.system || '';
+    const databaseSystem = (raw.databaseSystem || raw.database_system || raw.databaseSystemName || raw.database_system_name || raw.system || raw.systemName || '').trim();
     const dbType = (raw.dbType || raw.engine || 'ORACLE').toUpperCase() as DbEngine;
     const host = raw.host || '127.0.0.1';
     const foundEng = getDbEngineConfig(dbType);
