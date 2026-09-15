@@ -377,7 +377,7 @@ export class PrismaRepository implements IStorageRepository {
     const tagsJson = Array.isArray(dbData.tags) ? dbData.tags : [];
     const pollInterval = dbData.pollIntervalMinutes ? Math.max(1, Number(dbData.pollIntervalMinutes)) : 5;
     const noteText = dbData.note !== undefined ? dbData.note : null;
-    const dbSystem = dbData.databaseSystem !== undefined ? dbData.databaseSystem : '';
+    const dbSystem = dbData.databaseSystem !== undefined ? dbData.databaseSystem : ((dbData as any).database_system !== undefined ? (dbData as any).database_system : '');
     const defaultLastCheckAt = new Date('2026-01-01T00:00:00Z');
     let dbRecord;
     if (id) {

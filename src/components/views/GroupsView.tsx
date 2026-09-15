@@ -381,6 +381,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           return {
             id: db.id,
             name: db.name,
+            databaseSystem: db.databaseSystem || (db as any).database_system || '',
+            database_system: db.databaseSystem || (db as any).database_system || '',
             dbType: db.dbType,
             host: db.host,
             port: db.port,
@@ -419,6 +421,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         referencedDbsMap.set(db.id, {
           id: db.id,
           name: db.name,
+          databaseSystem: db.databaseSystem || (db as any).database_system || '',
+          database_system: db.databaseSystem || (db as any).database_system || '',
           dbType: db.dbType,
           host: db.host,
           port: db.port,
@@ -642,9 +646,13 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           ? rawPass
           : (rawPass ? `enc:24be969ea89dd77dc256beab28bd03af:${btoa(unescape(encodeURIComponent(rawPass)))}` : '');
 
+        const databaseSystem = (db.databaseSystem || db.database_system || db.databaseSystemName || db.database_system_name || db.system || db.systemName || '').trim();
+
         return {
           id: db.id,
           name: db.name || 'Imported Database',
+          databaseSystem,
+          database_system: databaseSystem,
           dbType: db.dbType || 'ORACLE',
           host: db.host || '127.0.0.1',
           port: Number(db.port) || 1521,
@@ -842,9 +850,13 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           ? `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`
           : candidate.id || `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
 
+        const dbSystem = (candidate.databaseSystem || candidate.database_system || candidate.databaseSystemName || candidate.database_system_name || candidate.system || candidate.systemName || '').trim();
+
         const dbPayload: Partial<DatabaseEntity> = {
           id: dbId,
           name: (candidate.name || 'Imported Database').trim(),
+          databaseSystem: dbSystem,
+          database_system: dbSystem,
           dbType: (candidate.dbType || candidate.engine || 'ORACLE').toUpperCase() as DbEngine,
           host: (candidate.host || '127.0.0.1').trim(),
           port: Number(candidate.port) || 1521,
@@ -1850,6 +1862,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                           <div className="flex items-center gap-2">
                             <Database className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                             <span className="font-bold text-slate-900">{db.name}</span>
+                            {db.databaseSystem && (
+                              <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
+                                {db.databaseSystem}
+                              </span>
+                            )}
                             <span className="font-mono text-[10px] text-slate-400">({db.id || 'no-id'})</span>
                           </div>
                           <div className="flex items-center gap-1.5">

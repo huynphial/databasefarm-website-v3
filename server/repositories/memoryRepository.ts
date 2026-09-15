@@ -1865,7 +1865,7 @@ FROM pg_tablespace`,
       const newDb: DatabaseEntity = {
         id: dbData.id || `db-${Date.now().toString().slice(-4)}`,
         name: dbData.name || 'New Database',
-        databaseSystem: dbData.databaseSystem || '',
+        databaseSystem: dbData.databaseSystem || (dbData as any).database_system || '',
         dbType: dbData.dbType || 'POSTGRES',
         host: dbData.host || 'localhost',
         port: dbData.port || 5432,

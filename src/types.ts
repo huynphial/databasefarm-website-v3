@@ -73,6 +73,7 @@ export interface DatabaseEntity {
   id: string;
   name: string;
   databaseSystem?: string; // Friendly service/system name (e.g. "Payment Gateway", "Core Banking")
+  database_system?: string; // snake_case DB schema alias for databaseSystem
   dbType: DbEngine;
   databaseEngineId?: string; // Optional foreign key to registered database engine
   host: string;
