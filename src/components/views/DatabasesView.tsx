@@ -710,7 +710,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       pollIntervalMinutes: db.pollIntervalMinutes ?? 5,
       note: db.note || '',
       username: db.username || db.connectionConfig?.username || '',
-      password: db.password || '',
+      password: '', // Plaintext password is never loaded into the form
       databaseNameOrSid: db.connectionConfig?.databaseName || db.connectionConfig?.serviceName || '',
       sslMode: db.connectionConfig?.sslMode || 'require',
       groupIds: db.groupIds || [],
@@ -748,6 +748,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       return;
     }
 
+    const enteredPassword = formData.password.trim();
     const payload: Partial<DatabaseEntity> = {
       id: formData.id,
       name: formData.name.trim(),
@@ -759,7 +760,6 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       pollIntervalMinutes: Number(formData.pollIntervalMinutes) || 5,
       note: formData.note.trim(),
       username: formData.username.trim(),
-      password: formData.password,
       isEnabled: formData.isEnabled,
       status: editingDb?.status || formData.status || 'UP',
       lastCheckAt: editingDb?.lastCheckAt || new Date().toISOString(),
@@ -773,6 +773,15 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
       groupIds: editingDb?.groupIds || formData.groupIds || [],
       metricIds: editingDb?.metricIds || [],
     };
+
+    // Password logic:
+    // If a new password was typed, pass it so backend encrypts and saves it.
+    // If left blank during edit, preserve existing passwordEncrypted so it's not overwritten.
+    if (enteredPassword) {
+      payload.password = enteredPassword;
+    } else if (editingDb?.passwordEncrypted) {
+      payload.passwordEncrypted = editingDb.passwordEncrypted;
+    }
 
     onSaveDatabase(payload);
     setIsDialogOpen(false);
@@ -1841,23 +1850,49 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-slate-600 font-medium mb-1">{t('databases.passwordLabel')}</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-slate-600 font-medium">{t('databases.passwordLabel')}</label>
+                  {editingDb && (
+                    <span className="text-[10px] text-slate-500 font-normal">
+                      {editingDb.passwordEncrypted ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-medium">
+                          <Lock className="w-2.5 h-2.5" />
+                          {t('databases.passwordConfigured')}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">
+                          {t('databases.passwordNotSet')}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    placeholder={t('databases.passwordPlaceholder')}
+                    placeholder={
+                      editingDb
+                        ? t('databases.passwordKeepExistingPlaceholder')
+                        : t('databases.passwordPlaceholder')
+                    }
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg pl-3 pr-9 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono"
+                    className="w-full bg-white border border-slate-300 rounded-lg pl-3 pr-9 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono text-sm"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    title={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                  {editingDb
+                    ? t('databases.passwordUpdateHelp')
+                    : t('databases.passwordNewHelp')}
+                </p>
               </div>
             </div>
           </div>

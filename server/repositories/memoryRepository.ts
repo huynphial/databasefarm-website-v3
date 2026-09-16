@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { encryptPassword } from '../utils/crypto';
 import {
   User,
   DatabaseEntity,
@@ -929,7 +930,7 @@ FROM pg_tablespace`,
       note: 'Primary ERP transactional Oracle cluster. High availability database node.',
       authMethod: 'PASSWORD',
       username: 'dbmon_user',
-      password: 'enc_password_sec_01',
+      password: '',
       passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
       databaseName: 'ORCLPDB1.internal',
       environment: 'PRODUCTION',
@@ -954,7 +955,7 @@ FROM pg_tablespace`,
       note: 'PCI-DSS compliant payment gateway core ledger database.',
       authMethod: 'PASSWORD',
       username: 'pg_monitor',
-      password: 'enc_password_sec_02',
+      password: '',
       passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
       databaseName: 'payment_gateway',
       environment: 'PRODUCTION',
@@ -979,7 +980,7 @@ FROM pg_tablespace`,
       note: 'Customer relationship portal staging replica.',
       authMethod: 'PASSWORD',
       username: 'mysql_collector',
-      password: 'enc_password_sec_03',
+      password: '',
       passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
       databaseName: 'crm_production',
       environment: 'PRODUCTION',
@@ -1004,7 +1005,7 @@ FROM pg_tablespace`,
       note: 'Data warehouse batch reporting engine for executive dashboards.',
       authMethod: 'PASSWORD',
       username: 'sql_mon',
-      password: 'enc_password_sec_04',
+      password: '',
       passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
       databaseName: 'DW_BI_REPORTS',
       environment: 'PRODUCTION',
@@ -1029,7 +1030,8 @@ FROM pg_tablespace`,
       note: 'Inventory management development integration server.',
       authMethod: 'PASSWORD',
       username: 'stg_reader',
-      password: 'enc_password_sec_05',
+      password: '',
+      passwordEncrypted: 'enc:24be969ea89dd77dc256beab28bd03af:f73dedbced2513e6f2848f7d38b6bacd',
       databaseName: 'inventory_staging',
       environment: 'STAGING',
       connectionConfig: { databaseName: 'inventory_staging' },
@@ -1840,26 +1842,56 @@ FROM pg_tablespace`,
 
   async getDatabases(): Promise<DatabaseEntity[]> {
     this.syncDatabaseMetrics();
-    return this.databases;
+    return this.databases.map((d) => ({
+      ...d,
+      password: '', // Plaintext password is NEVER returned over API to enhance security
+    }));
   }
 
   async getDatabaseById(id: string): Promise<DatabaseEntity | null> {
-    return this.databases.find((d) => d.id === id) || null;
+    const d = this.databases.find((item) => item.id === id);
+    if (!d) return null;
+    return {
+      ...d,
+      password: '', // Plaintext password is NEVER returned over API to enhance security
+    };
   }
 
   async saveDatabase(dbData: Partial<DatabaseEntity>): Promise<DatabaseEntity> {
     let saved: DatabaseEntity;
+    const rawPass = dbData.password !== undefined && dbData.password !== null ? String(dbData.password).trim() : '';
+    const rawEncPass = dbData.passwordEncrypted !== undefined && dbData.passwordEncrypted !== null ? String(dbData.passwordEncrypted).trim() : '';
+
+    let newEncryptedPass: string | undefined = undefined;
+    if (rawPass !== '') {
+      newEncryptedPass = encryptPassword(rawPass) || '';
+    } else if (rawEncPass !== '') {
+      newEncryptedPass = encryptPassword(rawEncPass) || rawEncPass;
+    }
+
     if (dbData.id) {
       const idx = this.databases.findIndex((d) => d.id === dbData.id);
       if (idx !== -1) {
+        const existing = this.databases[idx];
+        const updatedEncrypted = newEncryptedPass !== undefined ? newEncryptedPass : existing.passwordEncrypted;
+
         this.databases[idx] = {
-          ...this.databases[idx],
+          ...existing,
           ...dbData,
+          password: '',
+          passwordEncrypted: updatedEncrypted,
           updatedAt: new Date().toISOString(),
         } as DatabaseEntity;
-        saved = this.databases[idx];
+        saved = {
+          ...this.databases[idx],
+          password: '',
+        };
       } else {
-        saved = dbData as DatabaseEntity;
+        saved = {
+          ...(dbData as DatabaseEntity),
+          password: '',
+          passwordEncrypted: newEncryptedPass || '',
+        };
       }
     } else {
       const newDb: DatabaseEntity = {
@@ -1871,7 +1903,8 @@ FROM pg_tablespace`,
         port: dbData.port || 5432,
         authMethod: dbData.authMethod || 'PASSWORD',
         username: dbData.username || '',
-        password: dbData.password || '',
+        password: '',
+        passwordEncrypted: newEncryptedPass || '',
         authKey: dbData.authKey || '',
         databaseName: dbData.databaseName || '',
         environment: dbData.environment || 'PRODUCTION',

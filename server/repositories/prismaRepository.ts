@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { PrismaClient, Role, DbType, ValueType, AlertLevel } from '@prisma/client';
 import { IStorageRepository } from './types';
-import { encryptPassword, decryptPassword } from '../utils/crypto';
+import { encryptPassword } from '../utils/crypto';
 import { sqlLogger } from '../utils/sqlLogger';
 import {
   User,
@@ -308,7 +308,7 @@ export class PrismaRepository implements IStorageRepository {
       pollIntervalMinutes: (d as any).pollIntervalMinutes ?? 5,
       note: (d as any).note || '',
       username: d.username || '',
-      password: decryptPassword(d.passwordEncrypted) || '',
+      password: '', // Plaintext password is NEVER returned over API to enhance security
       passwordEncrypted: d.passwordEncrypted || '',
       connectionConfig: (d.connectionConfig as any) || {},
       status: (d.status as any) || 'UP',
@@ -340,7 +340,7 @@ export class PrismaRepository implements IStorageRepository {
       pollIntervalMinutes: (d as any).pollIntervalMinutes ?? 5,
       note: (d as any).note || '',
       username: d.username || '',
-      password: decryptPassword(d.passwordEncrypted) || '',
+      password: '', // Plaintext password is NEVER returned over API to enhance security
       passwordEncrypted: d.passwordEncrypted || '',
       connectionConfig: (d.connectionConfig as any) || {},
       status: (d.status as any) || 'UP',
@@ -373,7 +373,18 @@ export class PrismaRepository implements IStorageRepository {
       }
     }
 
-    const encryptedPassword = encryptPassword(dbData.passwordEncrypted || dbData.password);
+    // Password handling:
+    // Only encrypt if a non-empty new password or encrypted string is provided
+    const rawPass = dbData.password !== undefined && dbData.password !== null ? String(dbData.password).trim() : '';
+    const rawEncPass = dbData.passwordEncrypted !== undefined && dbData.passwordEncrypted !== null ? String(dbData.passwordEncrypted).trim() : '';
+    
+    let encryptedPassword: string | undefined = undefined;
+    if (rawPass !== '') {
+      encryptedPassword = encryptPassword(rawPass) || '';
+    } else if (rawEncPass !== '') {
+      encryptedPassword = encryptPassword(rawEncPass) || rawEncPass;
+    }
+
     const tagsJson = Array.isArray(dbData.tags) ? dbData.tags : [];
     const pollInterval = dbData.pollIntervalMinutes ? Math.max(1, Number(dbData.pollIntervalMinutes)) : 5;
     const noteText = dbData.note !== undefined ? dbData.note : null;
@@ -394,7 +405,7 @@ export class PrismaRepository implements IStorageRepository {
           pollIntervalMinutes: pollInterval,
           note: noteText,
           username: dbData.username,
-          passwordEncrypted: encryptedPassword,
+          ...(encryptedPassword !== undefined ? { passwordEncrypted: encryptedPassword } : {}),
           connectionConfig: (dbData.connectionConfig as any) || {},
           status: dbData.status || 'UP',
           lastCheckAt: defaultLastCheckAt,

@@ -1,0 +1,160 @@
+name: Security Scanning & Vulnerability Assessment
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  schedule:
+    # Run a weekly baseline scan on Sundays at 02:00 UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+# Grant least-privilege permissions required for security jobs and SARIF uploads
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+# Cancel any in-progress runs of the same workflow on the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # 1. SECRET DETECTION: Scan repository history & commit diffs for leaked secrets
+  # ============================================================================
+  secret-detection:
+    name: Secret & Credential Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (Full Git History)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history so TruffleHog can scan previous commits
+
+      - name: TruffleHog OSS Secret Scanner
+        name: Run TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified --debug
+
+      - name: Gitleaks Secret Detector
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_SUMMARY: true
+
+  # ============================================================================
+  # 2. DEPENDENCY VULNERABILITY AUDIT: Check for vulnerable NPM packages
+  # ============================================================================
+  dependency-audit:
+    name: Dependency Vulnerability Audit (NPM)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Check Root & Monorepo Package Dependencies
+        run: |
+          echo "=== Auditing Root / Monorepo Dependencies ==="
+          if [ -f package-lock.json ] || [ -f package.json ]; then
+            npm audit --audit-level=high || echo "::warning title=Root Audit::High or critical vulnerabilities detected in root dependencies"
+          fi
+
+          if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
+            echo "=== Auditing Frontend Subproject Dependencies ==="
+            cd frontend
+            npm audit --audit-level=high || echo "::warning title=Frontend Audit::High or critical vulnerabilities detected in frontend dependencies"
+            cd ..
+          fi
+
+          if [ -d "backend" ] && [ -f "backend/package.json" ]; then
+            echo "=== Auditing Backend Subproject Dependencies ==="
+            cd backend
+            npm audit --audit-level=high || echo "::warning title=Backend Audit::High or critical vulnerabilities detected in backend dependencies"
+            cd ..
+          fi
+
+      - name: Dependency Review (Pull Requests Only)
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: true
+
+  # ============================================================================
+  # 3. STATIC APPLICATION SECURITY TESTING (SAST): CodeQL Analysis (JS/TS)
+  # ============================================================================
+  sast-codeql:
+    name: CodeQL Static Security Analysis (JS/TS)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript-typescript']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          upload: true
+
+  # ============================================================================
+  # 4. LIGHTWEIGHT SAST & LINTING: Semgrep Scanner for React and Express Flaws
+  # ============================================================================
+  sast-semgrep:
+    name: Semgrep SAST Rule Analysis (React & Express)
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep Security Rules
+        run: |
+          semgrep scan \
+            --config "p/security-audit" \
+            --config "p/secrets" \
+            --config "p/owasp-top-ten" \
+            --config "p/react" \
+            --config "p/express" \
+            --sarif \
+            --output semgrep-results.sarif || true
+
+      - name: Upload Semgrep SARIF Report to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep-results.sarif
+          category: "semgrep"
