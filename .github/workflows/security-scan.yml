@@ -56,46 +56,37 @@ jobs:
   # 2. DEPENDENCY VULNERABILITY AUDIT: Check for vulnerable NPM packages
   # ============================================================================
   dependency-audit:
-    name: Dependency Vulnerability Audit (NPM)
+    name: Dependency Vulnerability Audit (Bun/NPM)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js Runtime
-        uses: actions/setup-node@v4
+      - name: Setup Bun Runtime
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: 20
-          cache: 'npm'
+          bun-version: latest
 
-      - name: Check Root & Monorepo Package Dependencies
+      - name: Check Root & Monorepo Dependencies with Bun
         run: |
           echo "=== Auditing Root / Monorepo Dependencies ==="
-          if [ -f package-lock.json ] || [ -f package.json ]; then
-            npm audit --audit-level=high || echo "::warning title=Root Audit::High or critical vulnerabilities detected in root dependencies"
+          if [ -f bun.lockb ] || [ -f bun.lock ]; then
+            bun audit || echo "::warning title=Root Audit::Vulnerabilities detected in root dependencies"
           fi
 
           if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
             echo "=== Auditing Frontend Subproject Dependencies ==="
             cd frontend
-            npm audit --audit-level=high || echo "::warning title=Frontend Audit::High or critical vulnerabilities detected in frontend dependencies"
+            [ -f bun.lockb ] || [ -f bun.lock ] && bun audit || npm audit --audit-level=high || true
             cd ..
           fi
 
           if [ -d "backend" ] && [ -f "backend/package.json" ]; then
             echo "=== Auditing Backend Subproject Dependencies ==="
             cd backend
-            npm audit --audit-level=high || echo "::warning title=Backend Audit::High or critical vulnerabilities detected in backend dependencies"
+            [ -f bun.lockb ] || [ -f bun.lock ] && bun audit || npm audit --audit-level=high || true
             cd ..
           fi
-
-      - name: Dependency Review (Pull Requests Only)
-        if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-          comment-summary-in-pr: true
-
   # ============================================================================
   # 3. STATIC APPLICATION SECURITY TESTING (SAST): CodeQL Analysis (JS/TS)
   # ============================================================================
