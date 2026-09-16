@@ -1865,15 +1865,15 @@ FROM pg_tablespace`,
     let newEncryptedPass: string | undefined = undefined;
     if (rawPass !== '') {
       newEncryptedPass = encryptPassword(rawPass) || '';
-    } else if (rawEncPass !== '') {
-      newEncryptedPass = encryptPassword(rawEncPass) || rawEncPass;
+    } else if (!dbData.id && rawEncPass !== '') {
+      newEncryptedPass = rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass) || '');
     }
 
     if (dbData.id) {
       const idx = this.databases.findIndex((d) => d.id === dbData.id);
       if (idx !== -1) {
         const existing = this.databases[idx];
-        const updatedEncrypted = newEncryptedPass !== undefined ? newEncryptedPass : existing.passwordEncrypted;
+        const updatedEncrypted = newEncryptedPass !== undefined ? newEncryptedPass : (existing.passwordEncrypted || '');
 
         this.databases[idx] = {
           ...existing,
@@ -1890,7 +1890,7 @@ FROM pg_tablespace`,
         saved = {
           ...(dbData as DatabaseEntity),
           password: '',
-          passwordEncrypted: newEncryptedPass || '',
+          passwordEncrypted: newEncryptedPass || (rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass || 'db_secure_pass_2026!') || '')),
         };
       }
     } else {

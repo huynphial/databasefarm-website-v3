@@ -1,3 +1,8 @@
+import 'dotenv/config';
+import dotenv from 'dotenv';
+try {
+  dotenv.config();
+} catch {}
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -46,19 +51,43 @@ export function logCryptoStep(level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', stepNa
   }
 }
 
-const MASTER_KEY_ENV = process.env.AES_ENCRYPTION_KEY || 'default_master_dbfarm_aes256_key_32b!';
-const KEY = crypto.createHash('sha256').update(MASTER_KEY_ENV).digest();
+/**
+ * Dynamically resolves master key from environment in both production and development
+ */
+export function getMasterKey(): string {
+  if (!process.env.AES_ENCRYPTION_KEY) {
+    try {
+      dotenv.config();
+    } catch {}
+  }
+  return process.env.AES_ENCRYPTION_KEY || 'default_master_dbfarm_aes256_key_32b!';
+}
+
+/**
+ * Derives 256-bit AES key using SHA-256
+ */
+export function getDerivedKeyInfo(): { masterKey: string; key: Buffer; keyHex: string } {
+  const masterKey = getMasterKey();
+  const key = crypto.createHash('sha256').update(masterKey).digest();
+  return {
+    masterKey,
+    key,
+    keyHex: key.toString('hex'),
+  };
+}
 
 // Log master key initialization detail on startup directly to file
+const initKeyInfo = getDerivedKeyInfo();
 logCryptoStep('INFO', 'INIT_MASTER_KEY', {
   source: process.env.AES_ENCRYPTION_KEY ? 'process.env.AES_ENCRYPTION_KEY' : 'DEFAULT_FALLBACK',
-  masterKey: MASTER_KEY_ENV,
-  derivedKeyHex: KEY.toString('hex'),
-  derivedKeyBytes: KEY.length,
+  masterKey: initKeyInfo.masterKey,
+  derivedKeyHex: initKeyInfo.keyHex,
+  derivedKeyBytes: initKeyInfo.key.length,
 });
 
 /**
- * Checks if a given string is a valid AES-256-CBC ciphertext decryptable by current key
+ * Checks if a given string is a valid AES-256-CBC ciphertext decryptable by current key.
+ * Silent validation without continuous log spam.
  */
 export function isCiphertextValid(cipherText: string | null | undefined): boolean {
   if (!cipherText || typeof cipherText !== 'string' || !cipherText.startsWith('enc:')) {
@@ -66,57 +95,24 @@ export function isCiphertextValid(cipherText: string | null | undefined): boolea
   }
   const parts = cipherText.split(':');
   if (parts.length !== 3) {
-    logCryptoStep('DEBUG', 'VALIDATE_CIPHERTEXT_CHECK', {
-      status: 'INVALID',
-      reason: `Expected 3 parts separated by colons (enc:iv:cipher), found ${parts.length}`,
-      encryptText: cipherText,
-      masterKey: MASTER_KEY_ENV,
-    });
     return false;
   }
   const ivHex = parts[1];
   const encHex = parts[2];
   if (ivHex.length !== 32) {
-    logCryptoStep('DEBUG', 'VALIDATE_CIPHERTEXT_CHECK', {
-      status: 'INVALID',
-      reason: `IV length is ${ivHex.length} chars (expected 32 hex chars for 16 bytes)`,
-      ivHex,
-      encryptText: cipherText,
-      masterKey: MASTER_KEY_ENV,
-    });
     return false;
   }
   if (!/^[0-9a-fA-F]+$/.test(encHex) || encHex.length % 32 !== 0) {
-    logCryptoStep('DEBUG', 'VALIDATE_CIPHERTEXT_CHECK', {
-      status: 'INVALID',
-      reason: `Encrypted text length (${encHex.length}) is not a multiple of 32 (16 bytes AES block size in hex) or contains non-hex chars`,
-      encryptText: cipherText,
-      masterKey: MASTER_KEY_ENV,
-    });
     return false;
   }
   try {
+    const { key } = getDerivedKeyInfo();
     const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', KEY, iv);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
     let decrypted = decipher.update(encHex, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    const valid = decrypted.length >= 0;
-    logCryptoStep('DEBUG', 'VALIDATE_CIPHERTEXT_CHECK', {
-      status: valid ? 'VALID_DECRYPTABLE' : 'INVALID',
-      encryptText: cipherText,
-      decryptText: decrypted,
-      masterKey: MASTER_KEY_ENV,
-      ivHex,
-    });
-    return valid;
-  } catch (err: any) {
-    logCryptoStep('DEBUG', 'VALIDATE_CIPHERTEXT_CHECK', {
-      status: 'DECRYPTION_FAILED',
-      error: err?.message || String(err),
-      encryptText: cipherText,
-      masterKey: MASTER_KEY_ENV,
-      ivHex,
-    });
+    return decrypted.length >= 0;
+  } catch {
     return false;
   }
 }
@@ -125,20 +121,16 @@ export function isCiphertextValid(cipherText: string | null | undefined): boolea
  * Encrypts a plain-text database password using standard AES-256-CBC encryption.
  * Encrypted strings are prefixed with 'enc:<iv_hex>:<ciphertext_hex>'.
  * If the input is already a valid, currently-decryptable AES ciphertext, it is
- * preserved untouched (this is the only case where the input is not encrypted).
- * Everything else - including a string that merely starts with 'enc:' or looks
- * hex/base64-like but does NOT actually decrypt with the current key - is treated
- * as literal plaintext and encrypted as-is. We deliberately do NOT try to
- * "repair" or decode such strings: guessing at a hidden payload risks silently
- * replacing the real password with garbage, which is worse than just encrypting
- * the literal input.
+ * preserved untouched.
  */
 export function encryptPassword(plainText: string | null | undefined): string | null {
+  const { masterKey, key, keyHex } = getDerivedKeyInfo();
+
   logCryptoStep('DEBUG', 'ENCRYPT_STEP_1_INPUT_RECEIVED', {
     plainText: plainText ?? null,
     inputType: typeof plainText,
     isNullOrUndefined: plainText === null || plainText === undefined,
-    masterKey: MASTER_KEY_ENV,
+    masterKey,
   });
 
   if (!plainText || typeof plainText !== 'string' || plainText.trim() === '') {
@@ -152,18 +144,11 @@ export function encryptPassword(plainText: string | null | undefined): string | 
   const trimmed = plainText.trim();
 
   // Step 2: Check if already a valid, decryptable AES-256-CBC ciphertext
-  const isValidCipher = isCiphertextValid(trimmed);
-  logCryptoStep('DEBUG', 'ENCRYPT_STEP_2_VALIDATE_EXISTING', {
-    plainText: trimmed,
-    isValidDecipherableCiphertext: isValidCipher,
-    masterKey: MASTER_KEY_ENV,
-  });
-
-  if (isValidCipher) {
+  if (trimmed.startsWith('enc:') && isCiphertextValid(trimmed)) {
     logCryptoStep('INFO', 'ENCRYPT_STEP_2_PRESERVE_EXISTING', {
       message: 'Input is already a valid decryptable AES-256-CBC ciphertext. Preserving untouched.',
       encryptText: trimmed,
-      masterKey: MASTER_KEY_ENV,
+      masterKey,
     });
     return trimmed;
   }
@@ -184,7 +169,7 @@ export function encryptPassword(plainText: string | null | undefined): string | 
     const ivHex = iv.toString('hex');
     logCryptoStep('DEBUG', 'ENCRYPT_STEP_3_GENERATE_IV', {
       plainText: textToEncrypt,
-      masterKey: MASTER_KEY_ENV,
+      masterKey,
       ivByteLength: iv.length,
       ivHex,
     });
@@ -193,11 +178,11 @@ export function encryptPassword(plainText: string | null | undefined): string | 
     logCryptoStep('DEBUG', 'ENCRYPT_STEP_4_INIT_CIPHER', {
       algorithm: 'aes-256-cbc',
       plainText: textToEncrypt,
-      masterKey: MASTER_KEY_ENV,
-      derivedKeyHex: KEY.toString('hex'),
+      masterKey,
+      derivedKeyHex: keyHex,
       ivHex,
     });
-    const cipher = crypto.createCipheriv('aes-256-cbc', KEY, iv);
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
 
     // Step 5: Encrypt plaintext bytes to hex
     let encrypted = cipher.update(textToEncrypt, 'utf8', 'hex');
@@ -208,8 +193,8 @@ export function encryptPassword(plainText: string | null | undefined): string | 
     logCryptoStep('INFO', 'ENCRYPT_STEP_6_SUCCESS', {
       plainText: textToEncrypt,
       encryptText: result,
-      masterKey: MASTER_KEY_ENV,
-      derivedKeyHex: KEY.toString('hex'),
+      masterKey,
+      derivedKeyHex: keyHex,
       ivHex,
       ciphertextHex: encrypted,
     });
@@ -218,7 +203,7 @@ export function encryptPassword(plainText: string | null | undefined): string | 
   } catch (err: any) {
     logCryptoStep('ERROR', 'ENCRYPT_FAILED', {
       plainText: textToEncrypt,
-      masterKey: MASTER_KEY_ENV,
+      masterKey,
       errorMessage: err?.message || String(err),
       errorStack: err?.stack,
     });
@@ -231,11 +216,13 @@ export function encryptPassword(plainText: string | null | undefined): string | 
  * Returns the plain text string or fallback without throwing unhandled unpadding errors.
  */
 export function decryptPassword(cipherText: string | null | undefined): string | null {
+  const { masterKey, key, keyHex } = getDerivedKeyInfo();
+
   logCryptoStep('DEBUG', 'DECRYPT_STEP_1_INPUT_RECEIVED', {
     encryptText: cipherText ?? null,
     inputType: typeof cipherText,
     isNullOrUndefined: cipherText === null || cipherText === undefined,
-    masterKey: MASTER_KEY_ENV,
+    masterKey,
   });
 
   if (!cipherText || typeof cipherText !== 'string') return null;
@@ -244,7 +231,7 @@ export function decryptPassword(cipherText: string | null | undefined): string |
       message: 'String does not start with "enc:" prefix, returning raw string as plain text',
       plainText: cipherText,
       encryptText: cipherText,
-      masterKey: MASTER_KEY_ENV,
+      masterKey,
     });
     return cipherText;
   }
@@ -254,7 +241,7 @@ export function decryptPassword(cipherText: string | null | undefined): string |
     logCryptoStep('WARN', 'DECRYPT_INVALID_PARTS', {
       message: `Expected 3 parts separated by colons, found ${parts.length}. Returning raw string.`,
       encryptText: cipherText,
-      masterKey: MASTER_KEY_ENV,
+      masterKey,
     });
     return cipherText;
   }
@@ -267,13 +254,13 @@ export function decryptPassword(cipherText: string | null | undefined): string |
       logCryptoStep('DEBUG', 'DECRYPT_STEP_2_INIT_DECIPHER', {
         algorithm: 'aes-256-cbc',
         encryptText: cipherText,
-        masterKey: MASTER_KEY_ENV,
-        derivedKeyHex: KEY.toString('hex'),
+        masterKey,
+        derivedKeyHex: keyHex,
         ivHex,
         ciphertextHex: encHex,
       });
       const iv = Buffer.from(ivHex, 'hex');
-      const decipher = crypto.createDecipheriv('aes-256-cbc', KEY, iv);
+      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
       let decrypted = decipher.update(encHex, 'hex', 'utf8');
       decrypted += decipher.final('utf8');
 
@@ -281,8 +268,8 @@ export function decryptPassword(cipherText: string | null | undefined): string |
         encryptText: cipherText,
         decryptText: decrypted,
         plainText: decrypted,
-        masterKey: MASTER_KEY_ENV,
-        derivedKeyHex: KEY.toString('hex'),
+        masterKey,
+        derivedKeyHex: keyHex,
         ivHex,
       });
 
@@ -291,8 +278,8 @@ export function decryptPassword(cipherText: string | null | undefined): string |
       logCryptoStep('WARN', 'DECRYPT_UNPADDING_OR_KEY_MISMATCH', {
         errorMessage: err?.message || String(err),
         encryptText: cipherText,
-        masterKey: MASTER_KEY_ENV,
-        derivedKeyHex: KEY.toString('hex'),
+        masterKey,
+        derivedKeyHex: keyHex,
         ivHex,
         ciphertextHex: encHex,
         note: 'Decryption failed (e.g. invalid padding byte or key mismatch). Returning stored raw string.',
@@ -301,7 +288,7 @@ export function decryptPassword(cipherText: string | null | undefined): string |
   } else {
     logCryptoStep('WARN', 'DECRYPT_INVALID_HEX_FORMAT', {
       encryptText: cipherText,
-      masterKey: MASTER_KEY_ENV,
+      masterKey,
       ivHexLength: ivHex.length,
       encHexLength: encHex.length,
       isHexChars: /^[0-9a-fA-F]+$/.test(encHex),

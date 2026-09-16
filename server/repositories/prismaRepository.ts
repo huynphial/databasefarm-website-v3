@@ -295,44 +295,30 @@ export class PrismaRepository implements IStorageRepository {
       },
     });
 
-    return dbs.map((d) => {
-      let finalEncrypted = d.passwordEncrypted || '';
-      if (finalEncrypted && !isCiphertextValid(finalEncrypted)) {
-        const repaired = encryptPassword(finalEncrypted);
-        if (repaired && repaired !== finalEncrypted) {
-          finalEncrypted = repaired;
-          this.prisma.database.update({
-            where: { id: d.id },
-            data: { passwordEncrypted: repaired },
-          }).catch(() => {});
-        }
-      }
-
-      return {
-        id: d.id,
-        name: d.name,
-        databaseSystem: (d as any).databaseSystem || (d as any).database_system || '',
-        dbType: (d.dbType as any) || ((d as any).databaseEngine ? (d as any).databaseEngine.dbCode : 'POSTGRES'),
-        databaseEngineId: (d as any).databaseEngineId || undefined,
-        host: d.host,
-        port: d.port,
-        pollId: (d as any).pollId ?? 0,
-        tags: Array.isArray((d as any).tags) ? ((d as any).tags as string[]) : [],
-        pollIntervalMinutes: (d as any).pollIntervalMinutes ?? 5,
-        note: (d as any).note || '',
-        username: d.username || '',
-        password: '', // Plaintext password is NEVER returned over API to enhance security
-        passwordEncrypted: finalEncrypted,
-        connectionConfig: (d.connectionConfig as any) || {},
-        status: (d.status as any) || 'UP',
-        lastCheckAt: d.lastCheckAt ? d.lastCheckAt.toISOString() : undefined,
-        isEnabled: d.isEnabled,
-        groupIds: d.groups.map((g) => g.groupId),
-        metricIds: d.metrics.map((m) => m.metricId),
-        createdAt: d.createdAt.toISOString(),
-        updatedAt: d.updatedAt.toISOString(),
-      };
-    });
+    return dbs.map((d) => ({
+      id: d.id,
+      name: d.name,
+      databaseSystem: (d as any).databaseSystem || (d as any).database_system || '',
+      dbType: (d.dbType as any) || ((d as any).databaseEngine ? (d as any).databaseEngine.dbCode : 'POSTGRES'),
+      databaseEngineId: (d as any).databaseEngineId || undefined,
+      host: d.host,
+      port: d.port,
+      pollId: (d as any).pollId ?? 0,
+      tags: Array.isArray((d as any).tags) ? ((d as any).tags as string[]) : [],
+      pollIntervalMinutes: (d as any).pollIntervalMinutes ?? 5,
+      note: (d as any).note || '',
+      username: d.username || '',
+      password: '', // Plaintext password is NEVER returned over API to enhance security
+      passwordEncrypted: d.passwordEncrypted || '',
+      connectionConfig: (d.connectionConfig as any) || {},
+      status: (d.status as any) || 'UP',
+      lastCheckAt: d.lastCheckAt ? d.lastCheckAt.toISOString() : undefined,
+      isEnabled: d.isEnabled,
+      groupIds: d.groups.map((g) => g.groupId),
+      metricIds: d.metrics.map((m) => m.metricId),
+      createdAt: d.createdAt.toISOString(),
+      updatedAt: d.updatedAt.toISOString(),
+    }));
   }
 
   async getDatabaseById(id: string): Promise<DatabaseEntity | null> {
@@ -341,18 +327,6 @@ export class PrismaRepository implements IStorageRepository {
       include: { groups: true, metrics: true, databaseEngine: true },
     });
     if (!d) return null;
-
-    let finalEncrypted = d.passwordEncrypted || '';
-    if (finalEncrypted && !isCiphertextValid(finalEncrypted)) {
-      const repaired = encryptPassword(finalEncrypted);
-      if (repaired && repaired !== finalEncrypted) {
-        finalEncrypted = repaired;
-        this.prisma.database.update({
-          where: { id: d.id },
-          data: { passwordEncrypted: repaired },
-        }).catch(() => {});
-      }
-    }
 
     return {
       id: d.id,
@@ -368,7 +342,7 @@ export class PrismaRepository implements IStorageRepository {
       note: (d as any).note || '',
       username: d.username || '',
       password: '', // Plaintext password is NEVER returned over API to enhance security
-      passwordEncrypted: finalEncrypted,
+      passwordEncrypted: d.passwordEncrypted || '',
       connectionConfig: (d.connectionConfig as any) || {},
       status: (d.status as any) || 'UP',
       lastCheckAt: d.lastCheckAt ? d.lastCheckAt.toISOString() : undefined,
@@ -401,16 +375,18 @@ export class PrismaRepository implements IStorageRepository {
     }
 
     // Password handling:
-    // Only encrypt if a non-empty new password or encrypted string is provided
+    // Only encrypt if a non-empty new plaintext password is provided (rawPass !== '').
+    // If rawPass is empty (such as when editing DB metadata or toggling enable/disable),
+    // NEVER re-encrypt or overwrite the existing passwordEncrypted field.
     const rawPass = dbData.password !== undefined && dbData.password !== null ? String(dbData.password).trim() : '';
     const rawEncPass = dbData.passwordEncrypted !== undefined && dbData.passwordEncrypted !== null ? String(dbData.passwordEncrypted).trim() : '';
     
     let encryptedPassword: string | undefined = undefined;
     if (rawPass !== '') {
       encryptedPassword = encryptPassword(rawPass) || '';
-    } else if (rawEncPass !== '') {
-      // Validate/repair ciphertext format to ensure clean AES-256-CBC encryption without unpadding errors
-      encryptedPassword = encryptPassword(rawEncPass) || rawEncPass;
+    } else if (!id && rawEncPass !== '') {
+      // For NEW database creation (e.g. JSON import) with pre-supplied password or ciphertext
+      encryptedPassword = rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass) || '');
     }
 
     const tagsJson = Array.isArray(dbData.tags) ? dbData.tags : [];
@@ -451,7 +427,9 @@ export class PrismaRepository implements IStorageRepository {
           pollIntervalMinutes: pollInterval,
           note: noteText,
           username: dbData.username || 'dbmon_reader',
-          passwordEncrypted: encryptedPassword !== undefined ? encryptedPassword : (encryptPassword('db_secure_pass_2026!') || ''),
+          passwordEncrypted: encryptedPassword !== undefined && encryptedPassword !== ''
+            ? encryptedPassword
+            : (rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass || 'db_secure_pass_2026!') || '')),
           connectionConfig: (dbData.connectionConfig as any) || {},
           status: dbData.status || 'UP',
           lastCheckAt: defaultLastCheckAt,
@@ -472,7 +450,9 @@ export class PrismaRepository implements IStorageRepository {
           pollIntervalMinutes: pollInterval,
           note: noteText,
           username: dbData.username || 'dbmon_reader',
-          passwordEncrypted: encryptedPassword !== undefined ? encryptedPassword : (encryptPassword('db_secure_pass_2026!') || ''),
+          passwordEncrypted: encryptedPassword !== undefined && encryptedPassword !== ''
+            ? encryptedPassword
+            : (rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass || 'db_secure_pass_2026!') || '')),
           connectionConfig: (dbData.connectionConfig as any) || {},
           status: dbData.status || 'UP',
           lastCheckAt: defaultLastCheckAt,
