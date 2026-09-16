@@ -493,6 +493,39 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     });
   };
 
+  const isDatabaseDuplicate = (item: { host?: string; port?: number | string; username?: string }) => {
+    const targetHost = (item.host || '').trim().toLowerCase();
+    const targetPort = Number(item.port);
+    const targetUsername = (item.username || '').trim().toLowerCase();
+    if (!targetHost || !targetPort || !targetUsername) return false;
+    return databases.some((d) => {
+      const dHost = (d.host || '').trim().toLowerCase();
+      const dPort = Number(d.port);
+      const dUsername = (d.username || '').trim().toLowerCase();
+      return dHost === targetHost && dPort === targetPort && dUsername === targetUsername;
+    });
+  };
+
+  const findExistingDatabase = (item: { id?: string; host?: string; port?: number | string; username?: string; name?: string }) => {
+    const targetHost = (item.host || '').trim().toLowerCase();
+    const targetPort = Number(item.port);
+    const targetUsername = (item.username || '').trim().toLowerCase();
+    if (targetHost && targetPort && targetUsername) {
+      const byCoords = databases.find((d) => {
+        const dHost = (d.host || '').trim().toLowerCase();
+        const dPort = Number(d.port);
+        const dUsername = (d.username || '').trim().toLowerCase();
+        return dHost === targetHost && dPort === targetPort && dUsername === targetUsername;
+      });
+      if (byCoords) return byCoords;
+    }
+    if (item.id) {
+      const byId = databases.find((d) => d.id === item.id);
+      if (byId) return byId;
+    }
+    return undefined;
+  };
+
   const parseJsonContent = (content: string) => {
     setImportFileError(null);
     if (!content || !content.trim()) {
@@ -631,9 +664,15 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         };
       });
 
-      // 4. Normalize Databases and check for duplicate IDs
+      // 4. Normalize Databases and check for duplicates (by IP, Port, Username or duplicate ID)
       const normalizedDbs = Array.from(uniqueDbsMap.values()).map((db: any) => {
         const isDuplicateId = Boolean(db.id && databases.some((edb) => edb.id === db.id));
+        const existingMatchingDb = findExistingDatabase(db);
+        const isDuplicateCoords = Boolean(existingMatchingDb && (
+          (existingMatchingDb.host || '').trim().toLowerCase() === (db.host || '').trim().toLowerCase() &&
+          Number(existingMatchingDb.port) === Number(db.port) &&
+          (existingMatchingDb.username || '').trim().toLowerCase() === (db.username || '').trim().toLowerCase()
+        ));
         const rawPass = (db.password || '').trim();
         const rawEncPass = (db.passwordEncrypted || db.ciphertext || '').trim();
         const isEnc = rawEncPass.startsWith('enc:') || rawPass.startsWith('enc:');
@@ -664,6 +703,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           connectionConfig: db.connectionConfig || {},
           groupIds: Array.isArray(db.groupIds) ? db.groupIds : [],
           isDuplicateId,
+          isDuplicateCoords,
+          existingDbName: existingMatchingDb?.name,
         };
       });
 
@@ -694,7 +735,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       });
 
       const duplicateGroupsCount = normalizedGroups.filter((g) => g.isDuplicateId).length;
-      const duplicateDatabasesCount = normalizedDbs.filter((d) => d.isDuplicateId).length;
+      const duplicateDatabasesCount = normalizedDbs.filter((d) => d.isDuplicateCoords || (d.isDuplicateId && !importGenerateNewIds)).length;
       const duplicateMethodsCount = normalizedMethods.filter((m) => m.isDuplicateId).length;
       const existingMethodsCount = normalizedMethods.filter((m) => m.isExistingMethod).length;
 
@@ -755,6 +796,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
       // Method ID remap table so group notificationMappings point to the correct method ID
       const methodIdRemap = new Map<string, string>();
+      // Database ID remap table so group databaseIds point to existing or newly created DB records
+      const dbIdRemap = new Map<string, string>();
 
       // STEP 1: Import all Alert Notification Methods (replace existing by default)
       const currentMethodIds = new Set(alertMethods.map((m) => m.id));
@@ -825,12 +868,29 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         }
       }
 
-      // STEP 2: Import all Databases (with encrypted passwords, skip if id duplicate)
+      // STEP 2: Import all Databases (skip if duplicate by (host, port, username) or existing ID)
       const currentDbIds = new Set(databases.map((d) => d.id));
       const knownDbs = [...databases];
 
       for (const candidate of importPreview.bundledDatabases) {
+        // Check if database already exists in Prisma storage table `database` by (host/IP, port, username)
+        const existingDb = findExistingDatabase(candidate);
+        if (existingDb) {
+          if (candidate.id) {
+            dbIdRemap.set(candidate.id, existingDb.id);
+          }
+          if (candidate.name) {
+            dbIdRemap.set(candidate.name, existingDb.id);
+          }
+          skippedDatabasesCount++;
+          continue;
+        }
+
+        // Check if ID duplicate
         if (candidate.id && currentDbIds.has(candidate.id) && !importGenerateNewIds) {
+          if (candidate.id) {
+            dbIdRemap.set(candidate.id, candidate.id);
+          }
           skippedDatabasesCount++;
           continue;
         }
@@ -844,6 +904,13 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         const dbId = importGenerateNewIds
           ? `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`
           : candidate.id || `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
+
+        if (candidate.id) {
+          dbIdRemap.set(candidate.id, dbId);
+        }
+        if (candidate.name) {
+          dbIdRemap.set(candidate.name, dbId);
+        }
 
         const dbSystem = (candidate.databaseSystem || candidate.database_system || candidate.databaseSystemName || candidate.database_system_name || candidate.system || candidate.systemName || '').trim();
 
@@ -894,7 +961,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           continue;
         }
 
-        // Resolve assigned databases
+        // Resolve assigned databases using dbIdRemap and knownDbs
         const rawDbIdentifiers = [
           ...(item.databaseIds || []),
           ...(item.linkedDatabases || []).map((d: any) => d.id || d.name),
@@ -902,11 +969,12 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
         const assignedDbIds: string[] = [];
         Array.from(new Set(rawDbIdentifiers)).forEach((idOrName) => {
-          const match = knownDbs.find((d) => d.id === idOrName || d.name.toLowerCase() === idOrName.toLowerCase());
+          const mappedId = dbIdRemap.get(idOrName) || idOrName;
+          const match = knownDbs.find((d) => d.id === mappedId || d.id === idOrName || d.name.toLowerCase() === idOrName.toLowerCase());
           if (match) {
             if (!assignedDbIds.includes(match.id)) assignedDbIds.push(match.id);
-          } else if (typeof idOrName === 'string' && idOrName.startsWith('db-')) {
-            if (!assignedDbIds.includes(idOrName)) assignedDbIds.push(idOrName);
+          } else if (typeof mappedId === 'string' && mappedId.startsWith('db-')) {
+            if (!assignedDbIds.includes(mappedId)) assignedDbIds.push(mappedId);
           }
         });
 
@@ -1702,7 +1770,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                     </span>
                   )}
                   <span className="bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded font-mono text-[10px]">
-                    {importPreview.duplicateGroupsCount + importPreview.duplicateDatabasesCount} Duplicate Group/DB IDs will be skipped
+                    {importPreview.duplicateGroupsCount + importPreview.duplicateDatabasesCount} Existing/Duplicate will be skipped
                   </span>
                 </div>
               </div>
@@ -1712,7 +1780,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-semibold">Import Rule: </span>
-                  All databases, database groups, and alert notification methods will be imported to the database (including passwords (enc) and notification channel configs). Existing Alert Notification Methods are <strong>replaced and updated with the imported configuration by default</strong>. Duplicate Database and Group IDs are skipped.
+                  All databases, database groups, and alert notification methods will be imported to the database. Databases already present in storage (matching IP, Port, Username) or with duplicate IDs will be skipped automatically while preserving group associations. Existing Alert Notification Methods are <strong>replaced and updated with the imported configuration by default</strong>.
                 </div>
               </div>
 
@@ -1865,7 +1933,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                             <span className="font-mono text-[10px] text-slate-400">({db.id || 'no-id'})</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {db.isDuplicateId && !importGenerateNewIds ? (
+                            {db.isDuplicateCoords ? (
+                              <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                                Existing in DB (Will skip)
+                              </span>
+                            ) : db.isDuplicateId && !importGenerateNewIds ? (
                               <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
                                 Duplicate ID (Will skip)
                               </span>
