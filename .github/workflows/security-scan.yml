@@ -39,7 +39,6 @@ jobs:
           fetch-depth: 0 # Fetch all history so TruffleHog can scan previous commits
 
       - name: TruffleHog OSS Secret Scanner
-        name: Run TruffleHog OSS
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
