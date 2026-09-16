@@ -31,8 +31,14 @@ export function isCiphertextValid(cipherText: string | null | undefined): boolea
 /**
  * Encrypts a plain-text database password using standard AES-256-CBC encryption.
  * Encrypted strings are prefixed with 'enc:<iv_hex>:<ciphertext_hex>'.
- * If the input is already a valid decryptable AES ciphertext, it is preserved.
- * If the input is an invalid 'enc:' string (e.g. fake base64 or corrupted), it is repaired and re-encrypted.
+ * If the input is already a valid, currently-decryptable AES ciphertext, it is
+ * preserved untouched (this is the only case where the input is not encrypted).
+ * Everything else - including a string that merely starts with 'enc:' or looks
+ * hex/base64-like but does NOT actually decrypt with the current key - is treated
+ * as literal plaintext and encrypted as-is. We deliberately do NOT try to
+ * "repair" or decode such strings: guessing at a hidden payload risks silently
+ * replacing the real password with garbage, which is worse than just encrypting
+ * the literal input.
  */
 export function encryptPassword(plainText: string | null | undefined): string | null {
   if (!plainText || typeof plainText !== 'string' || plainText.trim() === '') {
@@ -46,27 +52,7 @@ export function encryptPassword(plainText: string | null | undefined): string | 
     return trimmed;
   }
 
-  let textToEncrypt = trimmed;
-
-  // If prefixed with enc: but not valid AES-256-CBC hex ciphertext, extract the underlying payload
-  if (trimmed.startsWith('enc:')) {
-    const parts = trimmed.split(':');
-    if (parts.length >= 3) {
-      const payload = parts.slice(2).join(':');
-      try {
-        const decoded = Buffer.from(payload, 'base64').toString('utf8');
-        if (/^[\x20-\x7E\s]+$/.test(decoded) && decoded.length > 0) {
-          textToEncrypt = decoded;
-        } else {
-          textToEncrypt = payload;
-        }
-      } catch {
-        textToEncrypt = payload;
-      }
-    } else {
-      textToEncrypt = trimmed.replace(/^enc:/, '');
-    }
-  }
+  const textToEncrypt = trimmed;
 
   if (!textToEncrypt || textToEncrypt.trim() === '') {
     return null;
@@ -108,19 +94,12 @@ export function decryptPassword(cipherText: string | null | undefined): string |
       decrypted += decipher.final('utf8');
       return decrypted;
     } catch (err: any) {
-      // Unpadding error or invalid key - do not crash
+      // Unpadding error or invalid key - do not crash, and do not guess at the
+      // original value. Fall through and return the raw stored string so the
+      // caller can tell decryption failed, instead of silently returning
+      // fabricated/garbage text.
       console.warn('Password AES-256-CBC decryption unpadding warning:', err?.message || err);
     }
-  }
-
-  // Fallback: check if the payload was base64 encoded
-  try {
-    const b64 = Buffer.from(encHex, 'base64').toString('utf8');
-    if (/^[\x20-\x7E\s]+$/.test(b64) && b64.length > 0) {
-      return b64;
-    }
-  } catch {
-    // Ignore fallback failure
   }
 
   return cipherText;
