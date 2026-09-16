@@ -354,13 +354,6 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     if (db.passwordEncrypted) {
       return db.passwordEncrypted;
     }
-    if (db.password) {
-      try {
-        return `enc:24be969ea89dd77dc256beab28bd03af:${btoa(unescape(encodeURIComponent(db.password)))}`;
-      } catch {
-        return `enc:24be969ea89dd77dc256beab28bd03af:${db.password}`;
-      }
-    }
     return '';
   };
 

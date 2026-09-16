@@ -318,13 +318,6 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     if (db.passwordEncrypted) {
       return db.passwordEncrypted;
     }
-    if (db.password) {
-      try {
-        return `enc:24be969ea89dd77dc256beab28bd03af:${btoa(unescape(encodeURIComponent(db.password)))}`;
-      } catch {
-        return `enc:24be969ea89dd77dc256beab28bd03af:${db.password}`;
-      }
-    }
     return '';
   };
 
@@ -641,10 +634,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       // 4. Normalize Databases and check for duplicate IDs
       const normalizedDbs = Array.from(uniqueDbsMap.values()).map((db: any) => {
         const isDuplicateId = Boolean(db.id && databases.some((edb) => edb.id === db.id));
-        const rawPass = db.passwordEncrypted || db.ciphertext || db.password || '';
-        const cipherPass = rawPass.startsWith('enc:')
-          ? rawPass
-          : (rawPass ? `enc:24be969ea89dd77dc256beab28bd03af:${btoa(unescape(encodeURIComponent(rawPass)))}` : '');
+        const rawPass = (db.password || '').trim();
+        const rawEncPass = (db.passwordEncrypted || db.ciphertext || '').trim();
+        const isEnc = rawEncPass.startsWith('enc:') || rawPass.startsWith('enc:');
+        const cipherPass = rawEncPass.startsWith('enc:') ? rawEncPass : (rawPass.startsWith('enc:') ? rawPass : '');
+        const plainPass = !isEnc ? (rawPass || rawEncPass) : '';
 
         const databaseSystem = (db.databaseSystem || db.database_system || db.databaseSystemName || db.database_system_name || db.system || db.systemName || '').trim();
 
@@ -659,8 +653,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           pollId: Number(db.pollId) || 0,
           databaseNameOrSid: db.databaseNameOrSid || db.connectionConfig?.databaseName || db.connectionConfig?.serviceName || '',
           username: db.username || db.connectionConfig?.username || '',
-          password: rawPass,
-          passwordEncrypted: cipherPass || rawPass,
+          password: plainPass,
+          passwordEncrypted: cipherPass,
           ciphertext: cipherPass,
           tags: Array.isArray(db.tags) ? db.tags : ['PRODUCTION'],
           pollIntervalMinutes: Number(db.pollIntervalMinutes) || 5,
@@ -841,10 +835,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           continue;
         }
 
-        const rawPass = candidate.passwordEncrypted || candidate.ciphertext || candidate.password || '';
-        const cipherPass = rawPass.startsWith('enc:')
-          ? rawPass
-          : (rawPass ? `enc:24be969ea89dd77dc256beab28bd03af:${btoa(unescape(encodeURIComponent(rawPass)))}` : '');
+        const rawPass = (candidate.password || '').trim();
+        const rawEncPass = (candidate.passwordEncrypted || candidate.ciphertext || '').trim();
+        const isEnc = rawEncPass.startsWith('enc:') || rawPass.startsWith('enc:');
+        const cipherPass = rawEncPass.startsWith('enc:') ? rawEncPass : (rawPass.startsWith('enc:') ? rawPass : '');
+        const plainPass = !isEnc ? (rawPass || rawEncPass) : '';
 
         const dbId = importGenerateNewIds
           ? `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`
@@ -865,8 +860,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           pollIntervalMinutes: Number(candidate.pollIntervalMinutes) || 5,
           note: candidate.note || '',
           username: candidate.username || candidate.connectionConfig?.username || '',
-          password: rawPass,
-          passwordEncrypted: cipherPass || rawPass,
+          password: plainPass,
+          passwordEncrypted: cipherPass,
           isEnabled: candidate.isEnabled !== false,
           status: (candidate.status as any) || 'UP',
           connectionConfig: {

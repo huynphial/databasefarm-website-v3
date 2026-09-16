@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { PrismaClient, Role, DbType, ValueType, AlertLevel } from '@prisma/client';
 import { IStorageRepository } from './types';
-import { encryptPassword } from '../utils/crypto';
+import { encryptPassword, isCiphertextValid, decryptPassword } from '../utils/crypto';
 import { sqlLogger } from '../utils/sqlLogger';
 import {
   User,
@@ -295,30 +295,44 @@ export class PrismaRepository implements IStorageRepository {
       },
     });
 
-    return dbs.map((d) => ({
-      id: d.id,
-      name: d.name,
-      databaseSystem: (d as any).databaseSystem || (d as any).database_system || '',
-      dbType: (d.dbType as any) || ((d as any).databaseEngine ? (d as any).databaseEngine.dbCode : 'POSTGRES'),
-      databaseEngineId: (d as any).databaseEngineId || undefined,
-      host: d.host,
-      port: d.port,
-      pollId: (d as any).pollId ?? 0,
-      tags: Array.isArray((d as any).tags) ? ((d as any).tags as string[]) : [],
-      pollIntervalMinutes: (d as any).pollIntervalMinutes ?? 5,
-      note: (d as any).note || '',
-      username: d.username || '',
-      password: '', // Plaintext password is NEVER returned over API to enhance security
-      passwordEncrypted: d.passwordEncrypted || '',
-      connectionConfig: (d.connectionConfig as any) || {},
-      status: (d.status as any) || 'UP',
-      lastCheckAt: d.lastCheckAt ? d.lastCheckAt.toISOString() : undefined,
-      isEnabled: d.isEnabled,
-      groupIds: d.groups.map((g) => g.groupId),
-      metricIds: d.metrics.map((m) => m.metricId),
-      createdAt: d.createdAt.toISOString(),
-      updatedAt: d.updatedAt.toISOString(),
-    }));
+    return dbs.map((d) => {
+      let finalEncrypted = d.passwordEncrypted || '';
+      if (finalEncrypted && !isCiphertextValid(finalEncrypted)) {
+        const repaired = encryptPassword(finalEncrypted);
+        if (repaired && repaired !== finalEncrypted) {
+          finalEncrypted = repaired;
+          this.prisma.database.update({
+            where: { id: d.id },
+            data: { passwordEncrypted: repaired },
+          }).catch(() => {});
+        }
+      }
+
+      return {
+        id: d.id,
+        name: d.name,
+        databaseSystem: (d as any).databaseSystem || (d as any).database_system || '',
+        dbType: (d.dbType as any) || ((d as any).databaseEngine ? (d as any).databaseEngine.dbCode : 'POSTGRES'),
+        databaseEngineId: (d as any).databaseEngineId || undefined,
+        host: d.host,
+        port: d.port,
+        pollId: (d as any).pollId ?? 0,
+        tags: Array.isArray((d as any).tags) ? ((d as any).tags as string[]) : [],
+        pollIntervalMinutes: (d as any).pollIntervalMinutes ?? 5,
+        note: (d as any).note || '',
+        username: d.username || '',
+        password: '', // Plaintext password is NEVER returned over API to enhance security
+        passwordEncrypted: finalEncrypted,
+        connectionConfig: (d.connectionConfig as any) || {},
+        status: (d.status as any) || 'UP',
+        lastCheckAt: d.lastCheckAt ? d.lastCheckAt.toISOString() : undefined,
+        isEnabled: d.isEnabled,
+        groupIds: d.groups.map((g) => g.groupId),
+        metricIds: d.metrics.map((m) => m.metricId),
+        createdAt: d.createdAt.toISOString(),
+        updatedAt: d.updatedAt.toISOString(),
+      };
+    });
   }
 
   async getDatabaseById(id: string): Promise<DatabaseEntity | null> {
@@ -327,6 +341,19 @@ export class PrismaRepository implements IStorageRepository {
       include: { groups: true, metrics: true, databaseEngine: true },
     });
     if (!d) return null;
+
+    let finalEncrypted = d.passwordEncrypted || '';
+    if (finalEncrypted && !isCiphertextValid(finalEncrypted)) {
+      const repaired = encryptPassword(finalEncrypted);
+      if (repaired && repaired !== finalEncrypted) {
+        finalEncrypted = repaired;
+        this.prisma.database.update({
+          where: { id: d.id },
+          data: { passwordEncrypted: repaired },
+        }).catch(() => {});
+      }
+    }
+
     return {
       id: d.id,
       name: d.name,
@@ -341,7 +368,7 @@ export class PrismaRepository implements IStorageRepository {
       note: (d as any).note || '',
       username: d.username || '',
       password: '', // Plaintext password is NEVER returned over API to enhance security
-      passwordEncrypted: d.passwordEncrypted || '',
+      passwordEncrypted: finalEncrypted,
       connectionConfig: (d.connectionConfig as any) || {},
       status: (d.status as any) || 'UP',
       lastCheckAt: d.lastCheckAt ? d.lastCheckAt.toISOString() : undefined,
@@ -382,6 +409,7 @@ export class PrismaRepository implements IStorageRepository {
     if (rawPass !== '') {
       encryptedPassword = encryptPassword(rawPass) || '';
     } else if (rawEncPass !== '') {
+      // Validate/repair ciphertext format to ensure clean AES-256-CBC encryption without unpadding errors
       encryptedPassword = encryptPassword(rawEncPass) || rawEncPass;
     }
 
@@ -423,7 +451,7 @@ export class PrismaRepository implements IStorageRepository {
           pollIntervalMinutes: pollInterval,
           note: noteText,
           username: dbData.username || 'dbmon_reader',
-          passwordEncrypted: encryptedPassword || '',
+          passwordEncrypted: encryptedPassword !== undefined ? encryptedPassword : (encryptPassword('db_secure_pass_2026!') || ''),
           connectionConfig: (dbData.connectionConfig as any) || {},
           status: dbData.status || 'UP',
           lastCheckAt: defaultLastCheckAt,
@@ -444,7 +472,7 @@ export class PrismaRepository implements IStorageRepository {
           pollIntervalMinutes: pollInterval,
           note: noteText,
           username: dbData.username || 'dbmon_reader',
-          passwordEncrypted: encryptedPassword || '',
+          passwordEncrypted: encryptedPassword !== undefined ? encryptedPassword : (encryptPassword('db_secure_pass_2026!') || ''),
           connectionConfig: (dbData.connectionConfig as any) || {},
           status: dbData.status || 'UP',
           lastCheckAt: defaultLastCheckAt,
