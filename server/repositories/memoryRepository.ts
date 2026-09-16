@@ -1865,6 +1865,8 @@ FROM pg_tablespace`,
     let newEncryptedPass: string | undefined = undefined;
     if (rawPass !== '') {
       newEncryptedPass = encryptPassword(rawPass) || '';
+    } else if (dbData.passwordEncrypted !== undefined) {
+      newEncryptedPass = rawEncPass.startsWith('enc:') ? rawEncPass : (rawEncPass !== '' ? (encryptPassword(rawEncPass) || '') : '');
     } else if (!dbData.id && rawEncPass !== '') {
       newEncryptedPass = rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass) || '');
     }
@@ -1890,7 +1892,7 @@ FROM pg_tablespace`,
         saved = {
           ...(dbData as DatabaseEntity),
           password: '',
-          passwordEncrypted: newEncryptedPass || (rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass || 'db_secure_pass_2026!') || '')),
+          passwordEncrypted: newEncryptedPass !== undefined ? newEncryptedPass : (rawEncPass.startsWith('enc:') ? rawEncPass : (rawEncPass !== '' ? (encryptPassword(rawEncPass) || '') : '')),
         };
       }
     } else {

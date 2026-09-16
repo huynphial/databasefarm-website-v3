@@ -384,10 +384,17 @@ export class PrismaRepository implements IStorageRepository {
     let encryptedPassword: string | undefined = undefined;
     if (rawPass !== '') {
       encryptedPassword = encryptPassword(rawPass) || '';
+    } else if (dbData.passwordEncrypted !== undefined) {
+      // If passwordEncrypted is explicitly provided (even if empty ''), respect it directly!
+      encryptedPassword = rawEncPass.startsWith('enc:') ? rawEncPass : (rawEncPass !== '' ? (encryptPassword(rawEncPass) || '') : '');
     } else if (!id && rawEncPass !== '') {
       // For NEW database creation (e.g. JSON import) with pre-supplied password or ciphertext
       encryptedPassword = rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass) || '');
     }
+
+    const computedPasswordEncrypted = encryptedPassword !== undefined
+      ? encryptedPassword
+      : (rawEncPass !== '' ? (rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass) || '')) : '');
 
     const tagsJson = Array.isArray(dbData.tags) ? dbData.tags : [];
     const pollInterval = dbData.pollIntervalMinutes ? Math.max(1, Number(dbData.pollIntervalMinutes)) : 5;
@@ -427,9 +434,7 @@ export class PrismaRepository implements IStorageRepository {
           pollIntervalMinutes: pollInterval,
           note: noteText,
           username: dbData.username || 'dbmon_reader',
-          passwordEncrypted: encryptedPassword !== undefined && encryptedPassword !== ''
-            ? encryptedPassword
-            : (rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass || 'db_secure_pass_2026!') || '')),
+          passwordEncrypted: computedPasswordEncrypted,
           connectionConfig: (dbData.connectionConfig as any) || {},
           status: dbData.status || 'UP',
           lastCheckAt: defaultLastCheckAt,
@@ -450,9 +455,7 @@ export class PrismaRepository implements IStorageRepository {
           pollIntervalMinutes: pollInterval,
           note: noteText,
           username: dbData.username || 'dbmon_reader',
-          passwordEncrypted: encryptedPassword !== undefined && encryptedPassword !== ''
-            ? encryptedPassword
-            : (rawEncPass.startsWith('enc:') ? rawEncPass : (encryptPassword(rawEncPass || 'db_secure_pass_2026!') || '')),
+          passwordEncrypted: computedPasswordEncrypted,
           connectionConfig: (dbData.connectionConfig as any) || {},
           status: dbData.status || 'UP',
           lastCheckAt: defaultLastCheckAt,

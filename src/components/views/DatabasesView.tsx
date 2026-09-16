@@ -34,6 +34,7 @@ import {
   FileUp,
   Layers,
   Lock,
+  User,
   ArrowRight,
   RotateCcw
 } from 'lucide-react';
@@ -211,6 +212,10 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   } | null>(null);
   const [importAssignGroupIds, setImportAssignGroupIds] = useState<string[]>([]);
   const [importGenerateNewIds, setImportGenerateNewIds] = useState<boolean>(true);
+  const [importOverrideCredentials, setImportOverrideCredentials] = useState<boolean>(false);
+  const [importCustomUsername, setImportCustomUsername] = useState<string>('');
+  const [importCustomPassword, setImportCustomPassword] = useState<string>('');
+  const [showImportPassword, setShowImportPassword] = useState<boolean>(false);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -508,8 +513,10 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     const pollIntervalMinutes = Number(raw.pollIntervalMinutes) || 5;
     const note = raw.note || '';
     const username = raw.username || raw.connectionConfig?.username || '';
-    const password = raw.ciphertext || raw.passwordEncrypted || raw.password || '';
-    const passwordEncrypted = raw.passwordEncrypted || raw.ciphertext || (password.startsWith('enc:') ? password : '');
+    const rawPass = raw.password !== undefined && raw.password !== null ? String(raw.password).trim() : '';
+    const rawCipher = (raw.ciphertext || raw.passwordEncrypted) ? String(raw.ciphertext || raw.passwordEncrypted).trim() : '';
+    const password = rawPass || rawCipher || '';
+    const passwordEncrypted = rawCipher || (password.startsWith('enc:') ? password : '');
     const databaseNameOrSid =
       raw.databaseNameOrSid || raw.connectionConfig?.databaseName || raw.connectionConfig?.serviceName || '';
     const sslMode = raw.sslMode || raw.connectionConfig?.sslMode || 'require';
@@ -581,6 +588,21 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
     }
   };
 
+  const isDatabaseDuplicate = (item: { host: string; port: number | string; username?: string }) => {
+    const targetHost = (item.host || '').trim().toLowerCase();
+    const targetPort = Number(item.port);
+    const effectiveUsername = (importOverrideCredentials && importCustomUsername.trim() !== '')
+      ? importCustomUsername.trim()
+      : (item.username || '');
+    const targetUsername = effectiveUsername.toLowerCase();
+    return databases.some((d) => {
+      const dHost = (d.host || '').trim().toLowerCase();
+      const dPort = Number(d.port);
+      const dUsername = (d.username || '').trim().toLowerCase();
+      return dHost === targetHost && dPort === targetPort && dUsername === targetUsername;
+    });
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -602,13 +624,41 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
 
     setIsImporting(true);
     try {
-      let count = 0;
+      let importedCount = 0;
+      let skippedCount = 0;
+
       for (const item of importPreview.databases) {
+        // Skip database if IP/host, port, and username already exist in the database table
+        if (isDatabaseDuplicate(item)) {
+          skippedCount++;
+          continue;
+        }
+
         const dbId = importGenerateNewIds
           ? `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`
           : item.id || `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
 
         const mergedGroups = Array.from(new Set([...(item.groupIds || []), ...importAssignGroupIds]));
+
+        const finalUsername = (importOverrideCredentials && importCustomUsername.trim() !== '')
+          ? importCustomUsername.trim()
+          : (item.username || '');
+
+        const hasCustomPassword = importOverrideCredentials && importCustomPassword !== '';
+        let finalPassword = '';
+        let finalPasswordEncrypted: string = '';
+
+        if (hasCustomPassword) {
+          finalPassword = importCustomPassword;
+          finalPasswordEncrypted = ''; // Let backend encrypt plaintext custom password into passwordEncrypted
+        } else if (item.password || item.passwordEncrypted) {
+          finalPassword = item.password || '';
+          finalPasswordEncrypted = item.passwordEncrypted || (item.password?.startsWith('enc:') ? item.password : '');
+        } else {
+          // When password JSON import is empty, set password and passwordEncrypted to empty string ''
+          finalPassword = '';
+          finalPasswordEncrypted = '';
+        }
 
         const payload: Partial<DatabaseEntity> = {
           id: dbId,
@@ -620,13 +670,13 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           tags: item.tags,
           pollIntervalMinutes: Number(item.pollIntervalMinutes) || 5,
           note: item.note,
-          username: item.username,
-          password: item.password, // Password format used directly as saved in DB (AES ciphertext or plain text)
-          passwordEncrypted: item.passwordEncrypted || (item.password?.startsWith('enc:') ? item.password : undefined),
+          username: finalUsername,
+          password: finalPassword,
+          passwordEncrypted: finalPasswordEncrypted,
           isEnabled: item.isEnabled !== false,
           status: item.status || 'UP',
           connectionConfig: {
-            username: item.username,
+            username: finalUsername,
             ...(item.dbType === 'ORACLE'
               ? { serviceName: item.databaseNameOrSid }
               : { databaseName: item.databaseNameOrSid }),
@@ -637,20 +687,34 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
         };
 
         await onSaveDatabase(payload);
-        count++;
+        importedCount++;
       }
 
-      toast({
-        title: t('databases.dbsImported'),
-        description: t('databases.dbsImportedDesc', { count }),
-        type: 'success',
-      });
+      if (importedCount > 0) {
+        toast({
+          title: t('databases.dbsImported'),
+          description: skippedCount > 0
+            ? `${importedCount} database(s) imported. Skipped ${skippedCount} existing database(s) with matching IP, port, and username.`
+            : `${importedCount} database(s) imported successfully.`,
+          type: 'success',
+        });
+      } else if (skippedCount > 0) {
+        toast({
+          title: 'Import Skipped',
+          description: `All ${skippedCount} database(s) were skipped because matching (IP, Port, Username) already exist in the database table.`,
+          type: 'info',
+        });
+      }
 
       setIsImportModalOpen(false);
       setImportJsonText('');
       setImportPreview(null);
       setImportFileError(null);
       setImportAssignGroupIds([]);
+      setImportOverrideCredentials(false);
+      setImportCustomUsername('');
+      setImportCustomPassword('');
+      setShowImportPassword(false);
       onRefresh?.();
     } catch (err: any) {
       toast({
@@ -2146,112 +2210,231 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           )}
 
           {/* Import Preview Section */}
-          {importPreview && (
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  {t('databases.validatedCount', { count: importPreview.databases.length })}
-                </span>
-                <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                  {importPreview.type}
-                </span>
-              </div>
+          {importPreview && (() => {
+            const toImportCount = importPreview.databases.filter((d) => !isDatabaseDuplicate(d)).length;
+            const duplicateCount = importPreview.databases.length - toImportCount;
 
-              {/* Scrollable list of parsed databases */}
-              <div className="max-h-48 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-200">
-                {importPreview.databases.map((db, idx) => {
-                  const cfg = getDbEngineConfig(db.dbType);
-                  const badgeClass = getDbEngineBadgeClass(db.dbType);
-                  return (
-                    <div key={idx} className="pt-2 first:pt-0 flex items-center justify-between text-xs">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeClass}`}
-                          >
-                            {cfg?.name || db.dbType}
-                          </span>
-                          <span className="font-bold text-slate-900">{db.name}</span>
-                          {db.databaseSystem && (
-                            <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
-                              {db.databaseSystem}
-                            </span>
-                          )}
-                          {db.id && (
-                            <span className="text-[10px] text-slate-400 font-mono">({db.id})</span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-slate-500 font-mono">
-                          {db.host}:{db.port} • User: {db.username || '<none>'}
-                          {db.password && (
-                            <span className="ml-2 inline-flex items-center gap-0.5 text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 text-[9px] font-sans">
-                              <Lock className="w-2.5 h-2.5" /> Password Set
-                            </span>
-                          )}
-                        </div>
-                      </div>
+            return (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      {t('databases.validatedCount', { count: importPreview.databases.length })}
+                    </span>
+                    <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                      {importPreview.type}
+                    </span>
+                  </div>
 
-                      <div className="flex items-center gap-1">
-                        {db.tags && db.tags.length > 0 && (
-                          <div className="flex gap-1">
-                            {db.tags.slice(0, 2).map((t, ti) => (
-                              <span key={ti} className="text-[9px] font-semibold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
-                                {t}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Import Options */}
-              <div className="pt-3 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-700 block">{t('databases.idAssignmentStrategy')}</label>
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-700 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={importGenerateNewIds}
-                      onChange={(e) => setImportGenerateNewIds(e.target.checked)}
-                      className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                    />
-                    <span>{t('databases.generateFreshIds')}</span>
-                  </label>
-                  <p className="text-[10px] text-slate-400">{t('databases.uncheckToUpdate')}</p>
+                  {/* Breakdown badge */}
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    <span className="font-bold px-2 py-0.5 rounded bg-emerald-100/70 text-emerald-800 border border-emerald-300">
+                      {toImportCount} to import
+                    </span>
+                    {duplicateCount > 0 && (
+                      <span className="font-bold px-2 py-0.5 rounded bg-amber-100/70 text-amber-800 border border-amber-300">
+                        {duplicateCount} duplicate(s) to skip
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {groups.length > 0 && (
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-slate-700 block">{t('databases.attachToGroupsLabel')}</label>
-                    <div className="max-h-24 overflow-y-auto space-y-1 bg-white p-2 rounded border border-slate-300">
-                      {groups.map((grp) => (
-                        <label key={grp.id} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={importAssignGroupIds.includes(grp.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setImportAssignGroupIds([...importAssignGroupIds, grp.id]);
-                              } else {
-                                setImportAssignGroupIds(importAssignGroupIds.filter((id) => id !== grp.id));
-                              }
-                            }}
-                            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          />
-                          <FolderKanban className="w-3 h-3 text-indigo-500" />
-                          <span className="truncate">{grp.name}</span>
-                        </label>
-                      ))}
+                {/* Scrollable list of parsed databases */}
+                <div className="max-h-52 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-200">
+                  {importPreview.databases.map((db, idx) => {
+                    const cfg = getDbEngineConfig(db.dbType);
+                    const badgeClass = getDbEngineBadgeClass(db.dbType);
+                    const isDup = isDatabaseDuplicate(db);
+                    const effectiveUser = (importOverrideCredentials && importCustomUsername.trim() !== '')
+                      ? importCustomUsername.trim()
+                      : (db.username || '');
+                    const hasCustomPassword = importOverrideCredentials && importCustomPassword !== '';
+                    const hasPassword = hasCustomPassword || Boolean(db.password);
+
+                    return (
+                      <div
+                        key={idx}
+                        className={cn(
+                          'pt-2 first:pt-0 flex flex-wrap items-center justify-between gap-2 text-xs p-2 rounded-lg transition-colors',
+                          isDup ? 'bg-amber-50/40 border border-amber-200/60' : 'hover:bg-slate-100/60'
+                        )}
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeClass}`}
+                            >
+                              {cfg?.name || db.dbType}
+                            </span>
+                            <span className="font-bold text-slate-900">{db.name}</span>
+                            {db.databaseSystem && (
+                              <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                                {db.databaseSystem}
+                              </span>
+                            )}
+                            {db.id && (
+                              <span className="text-[10px] text-slate-400 font-mono">({db.id})</span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1.5 flex-wrap">
+                            <span>
+                              {db.host}:{db.port} • User: <strong className={importOverrideCredentials && importCustomUsername.trim() ? "text-indigo-700" : "text-slate-700"}>{effectiveUser || '<none>'}</strong>
+                            </span>
+                            {hasPassword && (
+                              <span className="inline-flex items-center gap-0.5 text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 text-[9px] font-sans">
+                                <Lock className="w-2.5 h-2.5" /> {hasCustomPassword ? 'New Password Set' : 'Password Set'}
+                              </span>
+                            )}
+                            {importOverrideCredentials && (importCustomUsername.trim() || importCustomPassword) && (
+                              <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                                Uniform Account
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {isDup ? (
+                            <span
+                              title="A database with matching host/IP, port, and username already exists in the database table and will be skipped"
+                              className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 shadow-2xs"
+                            >
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              Skip (Duplicate IP:Port:User)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              Ready to Import
+                            </span>
+                          )}
+
+                          {db.tags && db.tags.length > 0 && (
+                            <div className="flex gap-1">
+                              {db.tags.slice(0, 2).map((t, ti) => (
+                                <span key={ti} className="text-[9px] font-semibold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Import Options */}
+                <div className="pt-3 border-t border-slate-200 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-700 block">{t('databases.idAssignmentStrategy')}</label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={importGenerateNewIds}
+                          onChange={(e) => setImportGenerateNewIds(e.target.checked)}
+                          className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <span>{t('databases.generateFreshIds')}</span>
+                      </label>
+                      <p className="text-[10px] text-slate-400">{t('databases.uncheckToUpdate')}</p>
                     </div>
+
+                    {groups.length > 0 && (
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-700 block">{t('databases.attachToGroupsLabel')}</label>
+                        <div className="max-h-24 overflow-y-auto space-y-1 bg-white p-2 rounded border border-slate-300">
+                          {groups.map((grp) => (
+                            <label key={grp.id} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={importAssignGroupIds.includes(grp.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setImportAssignGroupIds([...importAssignGroupIds, grp.id]);
+                                  } else {
+                                    setImportAssignGroupIds(importAssignGroupIds.filter((id) => id !== grp.id));
+                                  }
+                                }}
+                                className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                              />
+                              <FolderKanban className="w-3 h-3 text-indigo-500" />
+                              <span className="truncate">{grp.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+
+                  {/* Single Uniform Account (Username & Password) Override */}
+                  <div className="bg-white p-3 rounded-lg border border-slate-300 space-y-2.5">
+                    <label className="flex items-start gap-2.5 cursor-pointer text-slate-800 text-xs select-none">
+                      <input
+                        type="checkbox"
+                        checked={importOverrideCredentials}
+                        onChange={(e) => setImportOverrideCredentials(e.target.checked)}
+                        className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <div>
+                        <span className="font-bold text-slate-900 block">
+                          {t('databases.overrideCredentialsLabel')}
+                        </span>
+                        <span className="text-[11px] text-slate-500 block">
+                          {t('databases.overrideCredentialsDesc')}
+                        </span>
+                      </div>
+                    </label>
+
+                    {importOverrideCredentials && (
+                      <div className="pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-700 block">
+                            {t('databases.newUsernameLabel')}
+                          </label>
+                          <div className="relative">
+                            <User className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              value={importCustomUsername}
+                              onChange={(e) => setImportCustomUsername(e.target.value)}
+                              placeholder={t('databases.newUsernamePlaceholder')}
+                              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-700 block">
+                            {t('databases.newPasswordLabel')}
+                          </label>
+                          <div className="relative">
+                            <Lock className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              type={showImportPassword ? 'text' : 'password'}
+                              value={importCustomPassword}
+                              onChange={(e) => setImportCustomPassword(e.target.value)}
+                              placeholder={t('databases.newPasswordPlaceholder')}
+                              className="w-full pl-8 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowImportPassword(!showImportPassword)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            >
+                              {showImportPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Action Footer */}
           <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
@@ -2263,31 +2446,48 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
                 setImportPreview(null);
                 setImportFileError(null);
                 setImportAssignGroupIds([]);
+                setImportOverrideCredentials(false);
+                setImportCustomUsername('');
+                setImportCustomPassword('');
+                setShowImportPassword(false);
               }}
               className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
             >
               {t('common.cancel')}
             </button>
-            <button
-              type="button"
-              disabled={!importPreview || importPreview.databases.length === 0 || isImporting}
-              onClick={handleExecuteImport}
-              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-            >
-              {isImporting ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>{t('databases.importing')}</span>
-                </>
-              ) : (
-                <>
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>
-                    {t('databases.importDatabasesCount', { count: importPreview ? importPreview.databases.length : '' })}
-                  </span>
-                </>
-              )}
-            </button>
+            {(() => {
+              const toImportCount = importPreview ? importPreview.databases.filter((d) => !isDatabaseDuplicate(d)).length : 0;
+              const hasItems = importPreview && importPreview.databases.length > 0;
+              const isAllDuplicates = hasItems && toImportCount === 0;
+
+              return (
+                <button
+                  type="button"
+                  disabled={!hasItems || toImportCount === 0 || isImporting}
+                  onClick={handleExecuteImport}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  {isImporting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>{t('databases.importing')}</span>
+                    </>
+                  ) : isAllDuplicates ? (
+                    <>
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
+                      <span>All Databases Already Exist (0 to Import)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>
+                        Import {toImportCount} Database{toImportCount === 1 ? '' : 's'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              );
+            })()}
           </div>
         </div>
       </Dialog>
