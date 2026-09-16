@@ -9,8 +9,8 @@ function ensureLogsDirectory(): void {
     if (!fs.existsSync(LOGS_DIR)) {
       fs.mkdirSync(LOGS_DIR, { recursive: true });
     }
-  } catch (err) {
-    console.error('[CryptoLogger] Failed to create logs directory:', err);
+  } catch {
+    // Silent fail without console
   }
 }
 
@@ -30,7 +30,7 @@ function formatTimestamp(): string {
 }
 
 /**
- * Append step-by-step crypto trace log to crypto log file and console
+ * Append step-by-step crypto trace log to crypto log file (no console logging)
  */
 export function logCryptoStep(level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', stepName: string, details: Record<string, any> | string): void {
   try {
@@ -38,37 +38,23 @@ export function logCryptoStep(level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR', stepNa
     const detailsStr = typeof details === 'string' ? details : JSON.stringify(details);
     const logLine = `[${timeStr}] [${level}] [${stepName}] ${detailsStr}\n`;
 
-    // Append to file
+    // Append to file only - do not print to console
     const logPath = getCryptoLogFilePath();
-    fs.appendFile(logPath, logLine, 'utf8', (err) => {
-      if (err) {
-        console.error('[CryptoLogger] Error writing to log file:', err);
-      }
-    });
-
-    // Also output to console in development / server logs for immediate visibility
-    if (level === 'ERROR') {
-      console.error(`[CRYPTO] [${stepName}]`, details);
-    } else if (level === 'WARN') {
-      console.warn(`[CRYPTO] [${stepName}]`, details);
-    } else {
-      console.log(`[CRYPTO] [${stepName}]`, details);
-    }
-  } catch (err) {
-    console.error('[CryptoLogger] Logging failure:', err);
+    fs.appendFile(logPath, logLine, 'utf8', () => {});
+  } catch {
+    // Silent fail
   }
 }
 
 const MASTER_KEY_ENV = process.env.AES_ENCRYPTION_KEY || 'default_master_dbfarm_aes256_key_32b!';
 const KEY = crypto.createHash('sha256').update(MASTER_KEY_ENV).digest();
 
-// Log master key initialization detail on startup
+// Log master key initialization detail on startup directly to file
 logCryptoStep('INFO', 'INIT_MASTER_KEY', {
   source: process.env.AES_ENCRYPTION_KEY ? 'process.env.AES_ENCRYPTION_KEY' : 'DEFAULT_FALLBACK',
-  rawKeyLength: MASTER_KEY_ENV.length,
-  derivedKeyAlgorithm: 'sha256',
+  masterKey: MASTER_KEY_ENV,
+  derivedKeyHex: KEY.toString('hex'),
   derivedKeyBytes: KEY.length,
-  derivedKeyFingerprintHex: KEY.toString('hex').substring(0, 16) + '...' + KEY.toString('hex').substring(48),
 });
 
 /**
@@ -83,7 +69,8 @@ export function isCiphertextValid(cipherText: string | null | undefined): boolea
     logCryptoStep('DEBUG', 'VALIDATE_CIPHERTEXT_CHECK', {
       status: 'INVALID',
       reason: `Expected 3 parts separated by colons (enc:iv:cipher), found ${parts.length}`,
-      samplePreview: cipherText.substring(0, 20) + '...',
+      encryptText: cipherText,
+      masterKey: MASTER_KEY_ENV,
     });
     return false;
   }
@@ -94,6 +81,8 @@ export function isCiphertextValid(cipherText: string | null | undefined): boolea
       status: 'INVALID',
       reason: `IV length is ${ivHex.length} chars (expected 32 hex chars for 16 bytes)`,
       ivHex,
+      encryptText: cipherText,
+      masterKey: MASTER_KEY_ENV,
     });
     return false;
   }
@@ -101,6 +90,8 @@ export function isCiphertextValid(cipherText: string | null | undefined): boolea
     logCryptoStep('DEBUG', 'VALIDATE_CIPHERTEXT_CHECK', {
       status: 'INVALID',
       reason: `Encrypted text length (${encHex.length}) is not a multiple of 32 (16 bytes AES block size in hex) or contains non-hex chars`,
+      encryptText: cipherText,
+      masterKey: MASTER_KEY_ENV,
     });
     return false;
   }
@@ -112,17 +103,19 @@ export function isCiphertextValid(cipherText: string | null | undefined): boolea
     const valid = decrypted.length >= 0;
     logCryptoStep('DEBUG', 'VALIDATE_CIPHERTEXT_CHECK', {
       status: valid ? 'VALID_DECRYPTABLE' : 'INVALID',
+      encryptText: cipherText,
+      decryptText: decrypted,
+      masterKey: MASTER_KEY_ENV,
       ivHex,
-      ciphertextLength: encHex.length,
-      decryptedLen: decrypted.length,
     });
     return valid;
   } catch (err: any) {
     logCryptoStep('DEBUG', 'VALIDATE_CIPHERTEXT_CHECK', {
       status: 'DECRYPTION_FAILED',
       error: err?.message || String(err),
+      encryptText: cipherText,
+      masterKey: MASTER_KEY_ENV,
       ivHex,
-      ciphertextLength: encHex.length,
     });
     return false;
   }
@@ -142,15 +135,16 @@ export function isCiphertextValid(cipherText: string | null | undefined): boolea
  */
 export function encryptPassword(plainText: string | null | undefined): string | null {
   logCryptoStep('DEBUG', 'ENCRYPT_STEP_1_INPUT_RECEIVED', {
+    plainText: plainText ?? null,
     inputType: typeof plainText,
     isNullOrUndefined: plainText === null || plainText === undefined,
-    inputLength: plainText ? plainText.length : 0,
-    startsWithEncPrefix: typeof plainText === 'string' && plainText.startsWith('enc:'),
+    masterKey: MASTER_KEY_ENV,
   });
 
   if (!plainText || typeof plainText !== 'string' || plainText.trim() === '') {
     logCryptoStep('DEBUG', 'ENCRYPT_STEP_1_ABORT_EMPTY', {
       reason: 'Empty or non-string input received, returning null',
+      plainText: plainText ?? null,
     });
     return null;
   }
@@ -160,15 +154,16 @@ export function encryptPassword(plainText: string | null | undefined): string | 
   // Step 2: Check if already a valid, decryptable AES-256-CBC ciphertext
   const isValidCipher = isCiphertextValid(trimmed);
   logCryptoStep('DEBUG', 'ENCRYPT_STEP_2_VALIDATE_EXISTING', {
-    inputTrimmedLength: trimmed.length,
+    plainText: trimmed,
     isValidDecipherableCiphertext: isValidCipher,
+    masterKey: MASTER_KEY_ENV,
   });
 
   if (isValidCipher) {
     logCryptoStep('INFO', 'ENCRYPT_STEP_2_PRESERVE_EXISTING', {
       message: 'Input is already a valid decryptable AES-256-CBC ciphertext. Preserving untouched.',
-      cipherPrefix: trimmed.substring(0, 20) + '...',
-      totalLength: trimmed.length,
+      encryptText: trimmed,
+      masterKey: MASTER_KEY_ENV,
     });
     return trimmed;
   }
@@ -178,6 +173,7 @@ export function encryptPassword(plainText: string | null | undefined): string | 
   if (!textToEncrypt || textToEncrypt.trim() === '') {
     logCryptoStep('WARN', 'ENCRYPT_STEP_2_ABORT_BLANK', {
       reason: 'textToEncrypt is blank after trimming, returning null',
+      plainText,
     });
     return null;
   }
@@ -187,6 +183,8 @@ export function encryptPassword(plainText: string | null | undefined): string | 
     const iv = crypto.randomBytes(16);
     const ivHex = iv.toString('hex');
     logCryptoStep('DEBUG', 'ENCRYPT_STEP_3_GENERATE_IV', {
+      plainText: textToEncrypt,
+      masterKey: MASTER_KEY_ENV,
       ivByteLength: iv.length,
       ivHex,
     });
@@ -194,36 +192,36 @@ export function encryptPassword(plainText: string | null | undefined): string | 
     // Step 4: Initialize AES-256-CBC cipher with derived KEY and IV
     logCryptoStep('DEBUG', 'ENCRYPT_STEP_4_INIT_CIPHER', {
       algorithm: 'aes-256-cbc',
-      keyBytes: KEY.length,
-      ivBytes: iv.length,
+      plainText: textToEncrypt,
+      masterKey: MASTER_KEY_ENV,
+      derivedKeyHex: KEY.toString('hex'),
+      ivHex,
     });
     const cipher = crypto.createCipheriv('aes-256-cbc', KEY, iv);
 
     // Step 5: Encrypt plaintext bytes to hex
     let encrypted = cipher.update(textToEncrypt, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    logCryptoStep('DEBUG', 'ENCRYPT_STEP_5_TRANSFORM_CIPHERTEXT', {
-      plainTextLength: textToEncrypt.length,
-      cipherTextHexLength: encrypted.length,
-      cipherBlocks: encrypted.length / 32,
-    });
 
     // Step 6: Construct formatted encrypted string
     const result = `enc:${ivHex}:${encrypted}`;
     logCryptoStep('INFO', 'ENCRYPT_STEP_6_SUCCESS', {
-      outputFormat: 'enc:<iv_hex>:<ciphertext_hex>',
-      outputLength: result.length,
+      plainText: textToEncrypt,
+      encryptText: result,
+      masterKey: MASTER_KEY_ENV,
+      derivedKeyHex: KEY.toString('hex'),
       ivHex,
-      ciphertextHexPreview: encrypted.substring(0, 16) + '...' + encrypted.substring(Math.max(0, encrypted.length - 16)),
+      ciphertextHex: encrypted,
     });
 
     return result;
   } catch (err: any) {
     logCryptoStep('ERROR', 'ENCRYPT_FAILED', {
+      plainText: textToEncrypt,
+      masterKey: MASTER_KEY_ENV,
       errorMessage: err?.message || String(err),
       errorStack: err?.stack,
     });
-    console.error('Password encryption error:', err);
     return null;
   }
 }
@@ -234,16 +232,19 @@ export function encryptPassword(plainText: string | null | undefined): string | 
  */
 export function decryptPassword(cipherText: string | null | undefined): string | null {
   logCryptoStep('DEBUG', 'DECRYPT_STEP_1_INPUT_RECEIVED', {
+    encryptText: cipherText ?? null,
     inputType: typeof cipherText,
     isNullOrUndefined: cipherText === null || cipherText === undefined,
-    inputLength: cipherText ? cipherText.length : 0,
-    startsWithEncPrefix: typeof cipherText === 'string' && cipherText.startsWith('enc:'),
+    masterKey: MASTER_KEY_ENV,
   });
 
   if (!cipherText || typeof cipherText !== 'string') return null;
   if (!cipherText.startsWith('enc:')) {
     logCryptoStep('DEBUG', 'DECRYPT_PASSTHROUGH_NOT_ENCRYPTED', {
       message: 'String does not start with "enc:" prefix, returning raw string as plain text',
+      plainText: cipherText,
+      encryptText: cipherText,
+      masterKey: MASTER_KEY_ENV,
     });
     return cipherText;
   }
@@ -252,6 +253,8 @@ export function decryptPassword(cipherText: string | null | undefined): string |
   if (parts.length !== 3) {
     logCryptoStep('WARN', 'DECRYPT_INVALID_PARTS', {
       message: `Expected 3 parts separated by colons, found ${parts.length}. Returning raw string.`,
+      encryptText: cipherText,
+      masterKey: MASTER_KEY_ENV,
     });
     return cipherText;
   }
@@ -263,8 +266,11 @@ export function decryptPassword(cipherText: string | null | undefined): string |
     try {
       logCryptoStep('DEBUG', 'DECRYPT_STEP_2_INIT_DECIPHER', {
         algorithm: 'aes-256-cbc',
+        encryptText: cipherText,
+        masterKey: MASTER_KEY_ENV,
+        derivedKeyHex: KEY.toString('hex'),
         ivHex,
-        ciphertextHexLength: encHex.length,
+        ciphertextHex: encHex,
       });
       const iv = Buffer.from(ivHex, 'hex');
       const decipher = crypto.createDecipheriv('aes-256-cbc', KEY, iv);
@@ -272,22 +278,30 @@ export function decryptPassword(cipherText: string | null | undefined): string |
       decrypted += decipher.final('utf8');
 
       logCryptoStep('INFO', 'DECRYPT_STEP_3_SUCCESS', {
+        encryptText: cipherText,
+        decryptText: decrypted,
+        plainText: decrypted,
+        masterKey: MASTER_KEY_ENV,
+        derivedKeyHex: KEY.toString('hex'),
         ivHex,
-        decryptedLength: decrypted.length,
       });
 
       return decrypted;
     } catch (err: any) {
       logCryptoStep('WARN', 'DECRYPT_UNPADDING_OR_KEY_MISMATCH', {
         errorMessage: err?.message || String(err),
+        encryptText: cipherText,
+        masterKey: MASTER_KEY_ENV,
+        derivedKeyHex: KEY.toString('hex'),
         ivHex,
-        ciphertextHexLength: encHex.length,
+        ciphertextHex: encHex,
         note: 'Decryption failed (e.g. invalid padding byte or key mismatch). Returning stored raw string.',
       });
-      console.warn('Password AES-256-CBC decryption unpadding warning:', err?.message || err);
     }
   } else {
     logCryptoStep('WARN', 'DECRYPT_INVALID_HEX_FORMAT', {
+      encryptText: cipherText,
+      masterKey: MASTER_KEY_ENV,
       ivHexLength: ivHex.length,
       encHexLength: encHex.length,
       isHexChars: /^[0-9a-fA-F]+$/.test(encHex),
