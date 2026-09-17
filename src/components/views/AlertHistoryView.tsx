@@ -362,9 +362,6 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({
         else if (row.clearedByName && row.clearedByName !== 'System Auto-Clear') {
           resolverLabel = row.clearedByName;
           resolverStyle = 'text-slate-700 font-medium';
-        } else {
-          resolverLabel = 'Clear normal';
-          resolverStyle = 'text-slate-600 font-medium';
         }
 
         return (

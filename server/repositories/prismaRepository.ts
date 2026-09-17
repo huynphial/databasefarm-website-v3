@@ -101,11 +101,9 @@ export class PrismaRepository implements IStorageRepository {
     if (!hasLoaded) {
       try {
         users = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM users ORDER BY username ASC');
-        hasLoaded = true;
       } catch (e1) {
         try {
           users = await (this.prisma as any).$queryRawUnsafe('SELECT * FROM user ORDER BY username ASC');
-          hasLoaded = true;
         } catch (e2) {}
       }
     }
@@ -1582,13 +1580,11 @@ export class PrismaRepository implements IStorageRepository {
         records = await (this.prisma as any).$queryRawUnsafe(
           `SELECT * FROM system_settings WHERE name IN ('autoClearResolvedAlerts', 'showInfoTips', 'SESSION_TIMEOUT_MINUTES', 'annual_license_key')`
         );
-        hasLoaded = true;
       } catch (e1) {
         try {
           records = await (this.prisma as any).$queryRawUnsafe(
             `SELECT * FROM system_setting WHERE name IN ('autoClearResolvedAlerts', 'showInfoTips', 'SESSION_TIMEOUT_MINUTES', 'annual_license_key')`
           );
-          hasLoaded = true;
         } catch (e2) {}
       }
     }
@@ -1770,7 +1766,6 @@ export class PrismaRepository implements IStorageRepository {
         logs = await (this.prisma as any).$queryRawUnsafe(
           `SELECT * FROM audit_logs ${whereSql} ORDER BY created_at DESC ${limitSql}`
         );
-        hasLoaded = true;
       } catch (rawErr1) {
         try {
           const conditions2: string[] = [];
@@ -1788,13 +1783,11 @@ export class PrismaRepository implements IStorageRepository {
           logs = await (this.prisma as any).$queryRawUnsafe(
             `SELECT * FROM audit_logs ${whereSql2} ORDER BY createdAt DESC ${limitSql}`
           );
-          hasLoaded = true;
         } catch (rawErr2) {
           try {
             logs = await (this.prisma as any).$queryRawUnsafe(
               `SELECT * FROM audit_log ${whereSql} ORDER BY created_at DESC ${limitSql}`
             );
-            hasLoaded = true;
           } catch (rawErr3) {}
         }
       }
@@ -2365,7 +2358,6 @@ export class PrismaRepository implements IStorageRepository {
                 },
               }));
             }
-            hasLoaded = true;
           } catch (rawSqlErr) {
             // raw sql query fallback catch
           }
