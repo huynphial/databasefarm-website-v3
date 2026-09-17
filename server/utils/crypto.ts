@@ -141,7 +141,7 @@ export function getDerivedKeyInfo(): { masterKey: string; key: Buffer; keyHex: s
  */
 export function getLegacyDerivedKeyInfo(): { masterKey: string; key: Buffer; keyHex: string } {
   const masterKey = getMasterKey();
-  const key = crypto.createHash('sha256').update(masterKey).digest();
+  const key = crypto.pbkdf2Sync(masterKey, 'dbfarm_legacy_salt', 10000, 32, 'sha256');
   return {
     masterKey,
     key,

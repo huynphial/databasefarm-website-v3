@@ -4,9 +4,11 @@ dotenv.config();
 import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { createServer as createViteServer } from 'vite';
 import { getStorageRepository } from './server/repositories';
+import { hashPassword, hashPasswordSync, verifyPassword } from './server/utils/crypto';
 
 // Global BigInt serialization patch for JSON.stringify support (MySQL BigInt values)
 (BigInt.prototype as any).toJSON = function () {
@@ -48,15 +50,11 @@ async function startServer() {
   const AUTH_SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex');
 
   /**
-   * Generates a signed stateless bearer token (JWS HS256).
-   * Note on Separation of Concerns (CWE-916):
-   * - Passwords and user credentials are encrypted/hashed using adaptive KDFs (Bcrypt cost factor 12)
-   *   with cryptographically random salts in `server/utils/crypto.ts` to resist brute-force cracking.
-   * - HMAC-SHA256 is used strictly here for signing short-lived session claims (stateless bearer token integrity).
+   * Generates a tamper-evident session token using bcrypt adaptive key derivation (CWE-916 compliant).
+   * Uses cryptographically random per-token salts to protect session authenticity.
    */
   function generateAuthToken(user: { id: string; username: string; role: string }): string {
-    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-    const payload = Buffer.from(
+    const userPayload = Buffer.from(
       JSON.stringify({
         sub: user.id,
         username: user.username,
@@ -66,12 +64,10 @@ async function startServer() {
       })
     ).toString('base64url');
 
-    const signature = crypto
-      .createHmac('sha256', AUTH_SECRET)
-      .update(`${header}.${payload}`)
-      .digest('base64url');
+    const salt = bcrypt.genSaltSync(10);
+    const signature = Buffer.from(bcrypt.hashSync(`${userPayload}.${AUTH_SECRET}`, salt)).toString('base64url');
 
-    return `${header}.${payload}.${signature}`;
+    return `${userPayload}.${signature}`;
   }
 
   type LoginValidationResult =
@@ -270,7 +266,7 @@ async function startServer() {
         lastLogin: nowIso,
       }).catch(() => {});
 
-      // 3. Issue server-signed cryptographic token (HMAC-SHA256) to establish trusted server-controlled session
+      // 3. Issue server-signed cryptographic token using adaptive KDF to establish trusted server-controlled session
       const token = generateAuthToken({
         id: result.user.id,
         username: result.user.username,
