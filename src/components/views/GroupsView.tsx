@@ -544,12 +544,12 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
       if (parsed.type === 'DATABASE_GROUPS_BUNDLE' && Array.isArray(parsed.groups)) {
         rawGroups = parsed.groups;
-        rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : (Array.isArray(parsed.databaseList) ? parsed.databaseList : (Array.isArray(parsed.dbs) ? parsed.dbs : []));
+        rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : (Array.isArray(parsed.databaseList) ? parsed.databaseList : (Array.isArray(parsed.dbs) ? parsed.dbs : (Array.isArray(parsed.database_list) ? parsed.database_list : [])));
         rawBundledMethods = Array.isArray(parsed.notificationMethods) ? parsed.notificationMethods : (Array.isArray(parsed.alertMethods) ? parsed.alertMethods : []);
         bundleType = 'BUNDLE';
       } else if (Array.isArray(parsed.groups)) {
         rawGroups = parsed.groups;
-        rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : (Array.isArray(parsed.databaseList) ? parsed.databaseList : (Array.isArray(parsed.dbs) ? parsed.dbs : []));
+        rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : (Array.isArray(parsed.databaseList) ? parsed.databaseList : (Array.isArray(parsed.dbs) ? parsed.dbs : (Array.isArray(parsed.database_list) ? parsed.database_list : [])));
         rawBundledMethods = Array.isArray(parsed.notificationMethods) ? parsed.notificationMethods : (Array.isArray(parsed.alertMethods) ? parsed.alertMethods : []);
         bundleType = 'BUNDLE';
       } else if (Array.isArray(parsed)) {
@@ -562,7 +562,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       } else if (parsed && typeof parsed === 'object') {
         if (Array.isArray(parsed.databases) || Array.isArray(parsed.databaseList) || Array.isArray(parsed.dbs) || Array.isArray(parsed.groups)) {
           rawGroups = Array.isArray(parsed.groups) ? parsed.groups : [];
-          rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : (Array.isArray(parsed.databaseList) ? parsed.databaseList : (Array.isArray(parsed.dbs) ? parsed.dbs : []));
+          rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : (Array.isArray(parsed.databaseList) ? parsed.databaseList : (Array.isArray(parsed.dbs) ? parsed.dbs : (Array.isArray(parsed.database_list) ? parsed.database_list : [])));
           rawBundledMethods = Array.isArray(parsed.notificationMethods) ? parsed.notificationMethods : (Array.isArray(parsed.alertMethods) ? parsed.alertMethods : []);
           bundleType = 'BUNDLE';
         } else if (parsed.name || parsed.groupName) {
@@ -592,7 +592,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             ? g.databases
             : (Array.isArray(g.assignedDatabases)
               ? g.assignedDatabases
-              : (Array.isArray(g.databaseList) ? g.databaseList : (Array.isArray(g.dbs) ? g.dbs : []))));
+              : (Array.isArray(g.databaseList) ? g.databaseList : (Array.isArray(g.dbs) ? g.dbs : (Array.isArray(g.database_list) ? g.database_list : [])))));
         dbs.forEach((db: any) => {
           if (db && typeof db === 'object') {
             const key = db.id || `${db.name}_${db.host}_${db.port}` || JSON.stringify(db);
@@ -883,39 +883,19 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         }
       }
 
-      // STEP 2: Import all Databases (skip if duplicate by (host, port, username) or existing ID)
+      // STEP 2: Import and save all Databases to database storage (upsert if existing ID or matching target)
       const currentDbIds = new Set(databases.map((d) => d.id));
       const knownDbs = [...databases];
 
       for (const candidate of importPreview.bundledDatabases) {
-        if (!importGenerateNewIds) {
-          // Check if candidate ID already exists in current databases
-          if (candidate.id && currentDbIds.has(candidate.id)) {
-            if (candidate.id) dbIdRemap.set(candidate.id, candidate.id);
-            if (candidate.name) dbIdRemap.set(candidate.name, candidate.id);
-            skippedDatabasesCount++;
-            continue;
-          }
+        const existingDb = findExistingDatabase(candidate, true);
 
-          // Check if database already exists by (host, port, username)
-          const existingDb = findExistingDatabase(candidate, true);
-          if (existingDb) {
-            if (candidate.id) dbIdRemap.set(candidate.id, existingDb.id);
-            if (candidate.name) dbIdRemap.set(candidate.name, existingDb.id);
-            skippedDatabasesCount++;
-            continue;
-          }
+        let dbId: string;
+        if (importGenerateNewIds) {
+          dbId = `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
+        } else {
+          dbId = candidate.id || existingDb?.id || `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
         }
-
-        const rawPass = (candidate.password || '').trim();
-        const rawEncPass = (candidate.passwordEncrypted || candidate.ciphertext || '').trim();
-        const isEnc = rawEncPass.startsWith('enc:') || rawPass.startsWith('enc:');
-        const cipherPass = rawEncPass.startsWith('enc:') ? rawEncPass : (rawPass.startsWith('enc:') ? rawPass : '');
-        const plainPass = !isEnc ? (rawPass || rawEncPass) : '';
-
-        const dbId = importGenerateNewIds
-          ? `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`
-          : candidate.id || `db-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6)}`;
 
         if (candidate.id) {
           dbIdRemap.set(candidate.id, dbId);
@@ -924,16 +904,23 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           dbIdRemap.set(candidate.name, dbId);
         }
 
+        const rawPass = (candidate.password || '').trim();
+        const rawEncPass = (candidate.passwordEncrypted || candidate.ciphertext || '').trim();
+        const isEnc = rawEncPass.startsWith('enc:') || rawPass.startsWith('enc:');
+        const cipherPass = rawEncPass.startsWith('enc:') ? rawEncPass : (rawPass.startsWith('enc:') ? rawPass : '');
+        const plainPass = !isEnc ? (rawPass || rawEncPass) : '';
+
         const dbSystem = (candidate.databaseSystem || candidate.database_system || candidate.databaseSystemName || candidate.database_system_name || candidate.system || candidate.systemName || '').trim();
+        const rawType = (candidate.dbType || candidate.engine || candidate.databaseEngine || candidate.databaseType || candidate.db_type || candidate.type || 'ORACLE').toString().toUpperCase() as DbEngine;
 
         const dbPayload: Partial<DatabaseEntity> = {
           id: dbId,
           name: (candidate.name || candidate.databaseName || 'Imported Database').trim(),
           databaseSystem: dbSystem,
           database_system: dbSystem,
-          dbType: (candidate.dbType || candidate.engine || candidate.databaseEngine || candidate.databaseType || 'ORACLE').toUpperCase() as DbEngine,
+          dbType: rawType,
           host: (candidate.host || candidate.hostname || candidate.ip || candidate.address || '127.0.0.1').trim(),
-          port: Number(candidate.port) || (String(candidate.dbType).toUpperCase() === 'POSTGRES' ? 5432 : 1521),
+          port: Number(candidate.port) || (rawType === 'POSTGRES' ? 5432 : (rawType === 'MYSQL' || rawType === 'MARIADB' ? 3306 : 1521)),
           pollId: Number(candidate.pollId) || 0,
           tags: Array.isArray(candidate.tags) ? candidate.tags : ['PRODUCTION'],
           pollIntervalMinutes: Number(candidate.pollIntervalMinutes) || 5,
@@ -945,7 +932,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           status: (candidate.status as any) || 'UP',
           connectionConfig: {
             username: candidate.username || candidate.user || candidate.connectionConfig?.username || '',
-            ...(candidate.dbType === 'ORACLE'
+            ...(rawType === 'ORACLE'
               ? { serviceName: candidate.databaseNameOrSid || candidate.serviceName || candidate.sid || candidate.connectionConfig?.serviceName || 'ORCLPDB1' }
               : { databaseName: candidate.databaseNameOrSid || candidate.databaseName || candidate.dbName || candidate.connectionConfig?.databaseName || 'app' }),
             sslMode: candidate.sslMode || candidate.connectionConfig?.sslMode || 'require',
