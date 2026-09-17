@@ -4,6 +4,15 @@ import { IStorageRepository } from './types';
 import { encryptPassword, isCiphertextValid, decryptPassword } from '../utils/crypto';
 import { sqlLogger } from '../utils/sqlLogger';
 import {
+  safeExtractString,
+  safeExtractStringArray,
+  safeExtractNumber,
+  safeParseDateGte,
+  safeParseDateLte,
+  safeEscapeSql,
+  safeFormatSqlDate,
+} from '../utils/sanitizer';
+import {
   User,
   DatabaseEntity,
   DatabaseEngineEntity,
@@ -1315,18 +1324,22 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   // --- Metric Value History ---
-  async getMetricHistory(dbId?: string, metricId?: string, fromDate?: string, toDate?: string): Promise<MetricHistoryEntity[]> {
-    const whereDataPoint: any = {};
-    if (dbId && dbId !== 'ALL') whereDataPoint.dbId = dbId;
-    if (metricId && metricId !== 'ALL') whereDataPoint.metricId = metricId;
+  async getMetricHistory(dbId?: unknown, metricId?: unknown, fromDate?: unknown, toDate?: unknown): Promise<MetricHistoryEntity[]> {
+    const safeDbId = safeExtractString(dbId);
+    const safeMetricId = safeExtractString(metricId);
+    const fromDateObj = safeParseDateGte(fromDate);
+    const toDateObj = safeParseDateLte(toDate);
 
-    if (fromDate || toDate) {
+    const whereDataPoint: any = {};
+    if (safeDbId && safeDbId !== 'ALL') whereDataPoint.dbId = safeDbId;
+    if (safeMetricId && safeMetricId !== 'ALL') whereDataPoint.metricId = safeMetricId;
+
+    if (fromDateObj || toDateObj) {
       whereDataPoint.measuredAt = {};
-      if (fromDate) {
-        whereDataPoint.measuredAt.gte = new Date(fromDate);
+      if (fromDateObj) {
+        whereDataPoint.measuredAt.gte = fromDateObj;
       }
-      if (toDate) {
-        const toDateObj = toDate.length === 10 ? new Date(`${toDate}T23:59:59.999Z`) : new Date(toDate);
+      if (toDateObj) {
         whereDataPoint.measuredAt.lte = toDateObj;
       }
     }
@@ -1366,13 +1379,10 @@ export class PrismaRepository implements IStorageRepository {
       // Fallback: Raw SQL with LEFT JOIN
       try {
         const conditions: string[] = [];
-        if (dbId && dbId !== 'ALL') conditions.push(`mdp.database_id = '${dbId.replace(/'/g, "''")}'`);
-        if (metricId && metricId !== 'ALL') conditions.push(`mdp.metric_id = '${metricId.replace(/'/g, "''")}'`);
-        if (fromDate) conditions.push(`mdp.measured_at >= '${new Date(fromDate).toISOString().slice(0, 19).replace('T', ' ')}'`);
-        if (toDate) {
-          const toDateObj = toDate.length === 10 ? new Date(`${toDate}T23:59:59.999Z`) : new Date(toDate);
-          conditions.push(`mdp.measured_at <= '${toDateObj.toISOString().slice(0, 19).replace('T', ' ')}'`);
-        }
+        if (safeDbId && safeDbId !== 'ALL') conditions.push(`mdp.database_id = '${safeEscapeSql(safeDbId)}'`);
+        if (safeMetricId && safeMetricId !== 'ALL') conditions.push(`mdp.metric_id = '${safeEscapeSql(safeMetricId)}'`);
+        if (fromDateObj) conditions.push(`mdp.measured_at >= '${safeFormatSqlDate(fromDateObj)}'`);
+        if (toDateObj) conditions.push(`mdp.measured_at <= '${safeFormatSqlDate(toDateObj)}'`);
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
         const sql = `
           SELECT mdp.id, mdp.database_id, mdp.metric_id, mdp.object_name, mdp.attribute_name, mdp.value, mdp.poll_status, mdp.poll_response, mdp.measured_at,
@@ -1658,27 +1668,32 @@ export class PrismaRepository implements IStorageRepository {
 
   // --- Audit Logs ---
   async getAuditLogs(
-    limitOrFilter?: number | { limit?: number; fromDate?: string; toDate?: string; actionType?: string; searchTerm?: string },
-    fromDateParam?: string,
-    toDateParam?: string,
-    actionTypeParam?: string,
-    searchTermParam?: string
+    limitOrFilter?: number | { limit?: number; fromDate?: unknown; toDate?: unknown; actionType?: unknown; searchTerm?: unknown },
+    fromDateParam?: unknown,
+    toDateParam?: unknown,
+    actionTypeParam?: unknown,
+    searchTermParam?: unknown
   ): Promise<AuditLogEntity[]> {
     let limit = 0;
-    let fromDate = fromDateParam;
-    let toDate = toDateParam;
-    let actionType = actionTypeParam;
-    let searchTerm = searchTermParam;
+    let fromDateRaw: unknown = fromDateParam;
+    let toDateRaw: unknown = toDateParam;
+    let actionTypeRaw: unknown = actionTypeParam;
+    let searchTermRaw: unknown = searchTermParam;
 
     if (typeof limitOrFilter === 'number') {
       limit = limitOrFilter;
     } else if (limitOrFilter && typeof limitOrFilter === 'object') {
-      if (limitOrFilter.limit !== undefined) limit = limitOrFilter.limit;
-      if (limitOrFilter.fromDate !== undefined) fromDate = limitOrFilter.fromDate;
-      if (limitOrFilter.toDate !== undefined) toDate = limitOrFilter.toDate;
-      if (limitOrFilter.actionType !== undefined) actionType = limitOrFilter.actionType;
-      if (limitOrFilter.searchTerm !== undefined) searchTerm = limitOrFilter.searchTerm;
+      if (limitOrFilter.limit !== undefined) limit = Number(limitOrFilter.limit) || 0;
+      if (limitOrFilter.fromDate !== undefined) fromDateRaw = limitOrFilter.fromDate;
+      if (limitOrFilter.toDate !== undefined) toDateRaw = limitOrFilter.toDate;
+      if (limitOrFilter.actionType !== undefined) actionTypeRaw = limitOrFilter.actionType;
+      if (limitOrFilter.searchTerm !== undefined) searchTermRaw = limitOrFilter.searchTerm;
     }
+
+    const fromDateObj = safeParseDateGte(fromDateRaw);
+    const toDateObj = safeParseDateLte(toDateRaw);
+    const safeActionType = safeExtractString(actionTypeRaw);
+    const safeSearchTerm = safeExtractString(searchTermRaw);
 
     const maxLimit = limit > 0 ? limit : undefined;
     let logs: any[] = [];
@@ -1686,20 +1701,20 @@ export class PrismaRepository implements IStorageRepository {
 
     // Build prisma where clause
     const where: any = {};
-    if (fromDate || toDate) {
+    if (fromDateObj || toDateObj) {
       where.createdAt = {};
-      if (fromDate) where.createdAt.gte = new Date(fromDate);
-      if (toDate) where.createdAt.lte = new Date(toDate);
+      if (fromDateObj) where.createdAt.gte = fromDateObj;
+      if (toDateObj) where.createdAt.lte = toDateObj;
     }
-    if (actionType && actionType !== 'ALL') {
-      where.actionType = actionType;
+    if (safeActionType && safeActionType !== 'ALL') {
+      where.actionType = safeActionType;
     }
-    if (searchTerm && searchTerm.trim()) {
+    if (safeSearchTerm) {
       where.OR = [
-        { userId: { contains: searchTerm.trim() } },
-        { clientIp: { contains: searchTerm.trim() } },
-        { targetEntity: { contains: searchTerm.trim() } },
-        { details: { contains: searchTerm.trim() } },
+        { userId: { contains: safeSearchTerm } },
+        { clientIp: { contains: safeSearchTerm } },
+        { targetEntity: { contains: safeSearchTerm } },
+        { details: { contains: safeSearchTerm } },
       ];
     }
 
@@ -1719,17 +1734,18 @@ export class PrismaRepository implements IStorageRepository {
     if (!hasLoaded) {
       // Build raw SQL WHERE clauses
       const conditions: string[] = [];
-      if (fromDate) {
-        conditions.push(`created_at >= '${new Date(fromDate).toISOString()}'`);
+      if (fromDateObj) {
+        conditions.push(`created_at >= '${safeFormatSqlDate(fromDateObj)}'`);
       }
-      if (toDate) {
-        conditions.push(`created_at <= '${new Date(toDate).toISOString()}'`);
+      if (toDateObj) {
+        conditions.push(`created_at <= '${safeFormatSqlDate(toDateObj)}'`);
       }
-      if (actionType && actionType !== 'ALL') {
-        conditions.push(`(action_type = '${actionType.replace(/'/g, "''")}' OR actionType = '${actionType.replace(/'/g, "''")}')`);
+      if (safeActionType && safeActionType !== 'ALL') {
+        const escaped = safeEscapeSql(safeActionType);
+        conditions.push(`(action_type = '${escaped}' OR actionType = '${escaped}')`);
       }
-      if (searchTerm && searchTerm.trim()) {
-        const s = searchTerm.trim().replace(/'/g, "''");
+      if (safeSearchTerm) {
+        const s = safeEscapeSql(safeSearchTerm);
         conditions.push(`(user_id LIKE '%${s}%' OR client_ip LIKE '%${s}%' OR target_entity LIKE '%${s}%' OR details LIKE '%${s}%')`);
       }
       const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -1743,11 +1759,14 @@ export class PrismaRepository implements IStorageRepository {
       } catch (rawErr1) {
         try {
           const conditions2: string[] = [];
-          if (fromDate) conditions2.push(`createdAt >= '${new Date(fromDate).toISOString()}'`);
-          if (toDate) conditions2.push(`createdAt <= '${new Date(toDate).toISOString()}'`);
-          if (actionType && actionType !== 'ALL') conditions2.push(`actionType = '${actionType.replace(/'/g, "''")}'`);
-          if (searchTerm && searchTerm.trim()) {
-            const s = searchTerm.trim().replace(/'/g, "''");
+          if (fromDateObj) conditions2.push(`createdAt >= '${safeFormatSqlDate(fromDateObj)}'`);
+          if (toDateObj) conditions2.push(`createdAt <= '${safeFormatSqlDate(toDateObj)}'`);
+          if (safeActionType && safeActionType !== 'ALL') {
+            const escaped = safeEscapeSql(safeActionType);
+            conditions2.push(`actionType = '${escaped}'`);
+          }
+          if (safeSearchTerm) {
+            const s = safeEscapeSql(safeSearchTerm);
             conditions2.push(`(userId LIKE '%${s}%' OR clientIp LIKE '%${s}%' OR targetEntity LIKE '%${s}%' OR details LIKE '%${s}%')`);
           }
           const whereSql2 = conditions2.length > 0 ? `WHERE ${conditions2.join(' AND ')}` : '';
@@ -2050,21 +2069,35 @@ export class PrismaRepository implements IStorageRepository {
 
         if (typeof filterOrLimit === 'number') {
           if (filterOrLimit > 0) limit = filterOrLimit;
-        } else if (filterOrLimit) {
+        } else if (filterOrLimit && typeof filterOrLimit === 'object') {
           filterObj = filterOrLimit;
-          if (filterOrLimit.limit !== undefined && filterOrLimit.limit > 0) {
-            limit = filterOrLimit.limit;
+          const parsedLimit = safeExtractNumber(filterOrLimit.limit);
+          if (parsedLimit !== undefined && parsedLimit > 0) {
+            limit = parsedLimit;
           }
 
+          const safeDbId = safeExtractString(filterOrLimit.dbId);
+          const safeDbIds = safeExtractStringArray(filterOrLimit.dbIds);
+          const safeDbType = safeExtractString(filterOrLimit.dbType);
+          const safeMetricId = safeExtractString(filterOrLimit.metricId);
+          const safeMetricIds = safeExtractStringArray(filterOrLimit.metricIds);
+          const rawStatusVal = filterOrLimit.status || filterOrLimit.pollStatus;
+          const safeStatusVal = safeExtractString(rawStatusVal);
+          const safeObjectName = safeExtractString(filterOrLimit.objectName);
+          const safeAttributeName = safeExtractString(filterOrLimit.attributeName);
+          const safeSearchTerm = safeExtractString(filterOrLimit.searchTerm);
+          const fromDateObj = safeParseDateGte(filterOrLimit.fromDate);
+          const toDateObj = safeParseDateLte(filterOrLimit.toDate);
+
           // Database filtering
-          if (filterOrLimit.dbId && filterOrLimit.dbId !== 'ALL') {
-            where.dbId = filterOrLimit.dbId;
-          } else if (filterOrLimit.dbIds && filterOrLimit.dbIds.length > 0) {
-            where.dbId = { in: filterOrLimit.dbIds };
-          } else if (filterOrLimit.dbType && filterOrLimit.dbType !== 'ALL') {
+          if (safeDbId && safeDbId !== 'ALL') {
+            where.dbId = safeDbId;
+          } else if (safeDbIds && safeDbIds.length > 0) {
+            where.dbId = { in: safeDbIds };
+          } else if (safeDbType && safeDbType !== 'ALL') {
             try {
               const matchingTypeDbs = await (this.prisma as any).database.findMany({
-                where: { dbType: filterOrLimit.dbType as any },
+                where: { dbType: safeDbType as any },
                 select: { id: true },
               });
               const matchingIds = matchingTypeDbs.map((d: any) => d.id);
@@ -2075,51 +2108,48 @@ export class PrismaRepository implements IStorageRepository {
           }
 
           // Metric filtering
-          if (filterOrLimit.metricId && filterOrLimit.metricId !== 'ALL') {
-            where.metricId = filterOrLimit.metricId;
-          } else if (filterOrLimit.metricIds && filterOrLimit.metricIds.length > 0) {
-            where.metricId = { in: filterOrLimit.metricIds };
+          if (safeMetricId && safeMetricId !== 'ALL') {
+            where.metricId = safeMetricId;
+          } else if (safeMetricIds && safeMetricIds.length > 0) {
+            where.metricId = { in: safeMetricIds };
           }
 
           // Status / PollStatus filtering
-          const statusVal = filterOrLimit.status || filterOrLimit.pollStatus;
-          if (statusVal && statusVal !== 'ALL') {
-            const sUpper = statusVal.toUpperCase();
+          if (safeStatusVal && safeStatusVal !== 'ALL') {
+            const sUpper = safeStatusVal.toUpperCase();
             if (sUpper === 'FAIL') {
               where.pollStatus = { in: ['FAIL', 'FAILED', 'ERROR', 'DOWN', 'TIMEOUT'] };
             } else if (sUpper === 'SUCCESS') {
               where.pollStatus = { in: ['SUCCESS', 'OK', 'NORMAL'] };
             } else {
-              where.pollStatus = statusVal;
+              where.pollStatus = safeStatusVal;
             }
           }
 
           // Object Name filtering
-          if (filterOrLimit.objectName && filterOrLimit.objectName !== 'ALL') {
-            where.objectName = filterOrLimit.objectName;
+          if (safeObjectName && safeObjectName !== 'ALL') {
+            where.objectName = safeObjectName;
           }
 
           // Attribute Name filtering
-          if (filterOrLimit.attributeName && filterOrLimit.attributeName !== 'ALL') {
-            where.attributeName = filterOrLimit.attributeName;
+          if (safeAttributeName && safeAttributeName !== 'ALL') {
+            where.attributeName = safeAttributeName;
           }
 
           // Timestamp date range filtering
-          if (filterOrLimit.fromDate || filterOrLimit.toDate) {
+          if (fromDateObj || toDateObj) {
             where.measuredAt = {};
-            if (filterOrLimit.fromDate) {
-              const fromDateStr = filterOrLimit.fromDate.includes('T') ? filterOrLimit.fromDate : `${filterOrLimit.fromDate}T00:00:00.000Z`;
-              where.measuredAt.gte = new Date(fromDateStr);
+            if (fromDateObj) {
+              where.measuredAt.gte = fromDateObj;
             }
-            if (filterOrLimit.toDate) {
-              const toDateStr = filterOrLimit.toDate.length === 10 ? `${filterOrLimit.toDate}T23:59:59.999Z` : new Date(filterOrLimit.toDate).toISOString();
-              where.measuredAt.lte = new Date(toDateStr);
+            if (toDateObj) {
+              where.measuredAt.lte = toDateObj;
             }
           }
 
           // Search term across DB names, Metric names, Objects, Attributes, Values and Responses
-          if (filterOrLimit.searchTerm && filterOrLimit.searchTerm.trim()) {
-            const q = filterOrLimit.searchTerm.trim();
+          if (safeSearchTerm) {
+            const q = safeSearchTerm;
             try {
               const [matchingDbRows, matchingMetricRows] = await Promise.all([
                 (this.prisma as any).database.findMany({
@@ -2153,7 +2183,7 @@ export class PrismaRepository implements IStorageRepository {
             }
           }
           // Duration filtering
-          const minDur = filterOrLimit.minDurationMs !== undefined ? filterOrLimit.minDurationMs : filterOrLimit.queryDurationMs;
+          const minDur = safeExtractNumber(filterOrLimit.minDurationMs !== undefined ? filterOrLimit.minDurationMs : filterOrLimit.queryDurationMs);
           if (minDur !== undefined && minDur > 0) {
             where.queryDurationMs = { gte: minDur };
           }
@@ -2198,46 +2228,57 @@ export class PrismaRepository implements IStorageRepository {
 
         if (!hasLoaded) {
           try {
+            const safeDbId = safeExtractString(filterObj?.dbId);
+            const safeDbIds = safeExtractStringArray(filterObj?.dbIds);
+            const safeMetricId = safeExtractString(filterObj?.metricId);
+            const safeMetricIds = safeExtractStringArray(filterObj?.metricIds);
+            const rawStatusVal = filterObj?.status || filterObj?.pollStatus;
+            const safeStatusVal = safeExtractString(rawStatusVal);
+            const safeObjectName = safeExtractString(filterObj?.objectName);
+            const safeAttributeName = safeExtractString(filterObj?.attributeName);
+            const safeSearchTerm = safeExtractString(filterObj?.searchTerm);
+            const fromDateObj = safeParseDateGte(filterObj?.fromDate);
+            const toDateObj = safeParseDateLte(filterObj?.toDate);
+
             const whereClauses: string[] = [];
-            if (filterObj?.dbId && filterObj.dbId !== 'ALL') {
-              whereClauses.push(`(mdp.database_id = '${filterObj.dbId}' OR mdp.dbId = '${filterObj.dbId}')`);
-            } else if (filterObj?.dbIds && filterObj.dbIds.length > 0) {
-              const idsList = filterObj.dbIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+            if (safeDbId && safeDbId !== 'ALL') {
+              const escaped = safeEscapeSql(safeDbId);
+              whereClauses.push(`(mdp.database_id = '${escaped}' OR mdp.dbId = '${escaped}')`);
+            } else if (safeDbIds && safeDbIds.length > 0) {
+              const idsList = safeDbIds.map((id) => `'${safeEscapeSql(id)}'`).join(',');
               whereClauses.push(`(mdp.database_id IN (${idsList}) OR mdp.dbId IN (${idsList}))`);
             }
-            if (filterObj?.metricId && filterObj.metricId !== 'ALL') {
-              whereClauses.push(`(mdp.metric_id = '${filterObj.metricId}' OR mdp.metricId = '${filterObj.metricId}')`);
-            } else if (filterObj?.metricIds && filterObj.metricIds.length > 0) {
-              const idsList = filterObj.metricIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+            if (safeMetricId && safeMetricId !== 'ALL') {
+              const escaped = safeEscapeSql(safeMetricId);
+              whereClauses.push(`(mdp.metric_id = '${escaped}' OR mdp.metricId = '${escaped}')`);
+            } else if (safeMetricIds && safeMetricIds.length > 0) {
+              const idsList = safeMetricIds.map((id) => `'${safeEscapeSql(id)}'`).join(',');
               whereClauses.push(`(mdp.metric_id IN (${idsList}) OR mdp.metricId IN (${idsList}))`);
             }
-            const statusVal = filterObj?.status || filterObj?.pollStatus;
-            if (statusVal && statusVal !== 'ALL') {
-              const sUpper = statusVal.toUpperCase();
+            if (safeStatusVal && safeStatusVal !== 'ALL') {
+              const sUpper = safeStatusVal.toUpperCase();
               if (sUpper === 'FAIL') {
                 whereClauses.push(`UPPER(COALESCE(mdp.poll_status, mdp.pollStatus, '')) IN ('FAIL', 'FAILED', 'ERROR', 'DOWN', 'TIMEOUT')`);
               } else if (sUpper === 'SUCCESS') {
                 whereClauses.push(`UPPER(COALESCE(mdp.poll_status, mdp.pollStatus, '')) IN ('SUCCESS', 'OK', 'NORMAL')`);
               } else {
-                whereClauses.push(`UPPER(COALESCE(mdp.poll_status, mdp.pollStatus, '')) = '${sUpper.replace(/'/g, "''")}'`);
+                whereClauses.push(`UPPER(COALESCE(mdp.poll_status, mdp.pollStatus, '')) = '${safeEscapeSql(sUpper)}'`);
               }
             }
-            if (filterObj?.objectName && filterObj.objectName !== 'ALL') {
-              whereClauses.push(`LOWER(COALESCE(mdp.object_name, mdp.objectName, '')) = '${filterObj.objectName.toLowerCase().replace(/'/g, "''")}'`);
+            if (safeObjectName && safeObjectName !== 'ALL') {
+              whereClauses.push(`LOWER(COALESCE(mdp.object_name, mdp.objectName, '')) = '${safeEscapeSql(safeObjectName.toLowerCase())}'`);
             }
-            if (filterObj?.attributeName && filterObj.attributeName !== 'ALL') {
-              whereClauses.push(`LOWER(COALESCE(mdp.attribute_name, mdp.attributeName, '')) = '${filterObj.attributeName.toLowerCase().replace(/'/g, "''")}'`);
+            if (safeAttributeName && safeAttributeName !== 'ALL') {
+              whereClauses.push(`LOWER(COALESCE(mdp.attribute_name, mdp.attributeName, '')) = '${safeEscapeSql(safeAttributeName.toLowerCase())}'`);
             }
-            if (filterObj?.fromDate) {
-              const fromDateIso = filterObj.fromDate.includes('T') ? filterObj.fromDate : `${filterObj.fromDate}T00:00:00.000Z`;
-              whereClauses.push(`mdp.measured_at >= '${new Date(fromDateIso).toISOString()}'`);
+            if (fromDateObj) {
+              whereClauses.push(`mdp.measured_at >= '${safeFormatSqlDate(fromDateObj)}'`);
             }
-            if (filterObj?.toDate) {
-              const toDateIso = filterObj.toDate.length === 10 ? `${filterObj.toDate}T23:59:59.999Z` : new Date(filterObj.toDate).toISOString();
-              whereClauses.push(`mdp.measured_at <= '${toDateIso}'`);
+            if (toDateObj) {
+              whereClauses.push(`mdp.measured_at <= '${safeFormatSqlDate(toDateObj)}'`);
             }
-            if (filterObj?.searchTerm && filterObj.searchTerm.trim()) {
-              const qSql = filterObj.searchTerm.trim().toLowerCase().replace(/'/g, "''");
+            if (safeSearchTerm) {
+              const qSql = safeEscapeSql(safeSearchTerm.toLowerCase());
               whereClauses.push(`(
                 LOWER(COALESCE(d.name, '')) LIKE '%${qSql}%' OR
                 LOWER(COALESCE(m.name, '')) LIKE '%${qSql}%' OR
@@ -2249,9 +2290,9 @@ export class PrismaRepository implements IStorageRepository {
               )`);
             }
 
-            const minDur = filterObj?.minDurationMs !== undefined ? filterObj.minDurationMs : filterObj?.queryDurationMs;
+            const minDur = safeExtractNumber(filterObj?.minDurationMs !== undefined ? filterObj.minDurationMs : filterObj?.queryDurationMs);
             if (minDur !== undefined && minDur > 0) {
-              whereClauses.push(`COALESCE(mdp.query_duration_ms, mdp.queryDurationMs, 0) >= ${Number(minDur)}`);
+              whereClauses.push(`COALESCE(mdp.query_duration_ms, mdp.queryDurationMs, 0) >= ${minDur}`);
             }
 
             const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -2382,21 +2423,25 @@ export class PrismaRepository implements IStorageRepository {
           });
 
           if (typeof filterOrLimit === 'object') {
-            const minDurFilter = filterOrLimit?.minDurationMs !== undefined ? filterOrLimit.minDurationMs : filterOrLimit?.queryDurationMs;
+            const minDurFilter = safeExtractNumber(filterOrLimit?.minDurationMs !== undefined ? filterOrLimit.minDurationMs : filterOrLimit?.queryDurationMs);
             if (minDurFilter !== undefined && minDurFilter > 0) {
               list = list.filter((m) => (m.queryDurationMs ?? 0) >= minDurFilter);
             }
-            if (filterOrLimit?.dbType && filterOrLimit.dbType !== 'ALL') {
-              list = list.filter((m) => m.dbType?.toUpperCase() === filterOrLimit.dbType?.toUpperCase());
+            const safeFilterDbType = safeExtractString(filterOrLimit?.dbType);
+            if (safeFilterDbType && safeFilterDbType !== 'ALL') {
+              list = list.filter((m) => m.dbType?.toUpperCase() === safeFilterDbType.toUpperCase());
             }
-            if (filterOrLimit?.status && filterOrLimit.status !== 'ALL') {
-              list = list.filter((m) => m.status?.toUpperCase() === filterOrLimit.status?.toUpperCase() || (m.pollStatus || '').toUpperCase() === filterOrLimit.status?.toUpperCase());
+            const safeFilterStatus = safeExtractString(filterOrLimit?.status);
+            if (safeFilterStatus && safeFilterStatus !== 'ALL') {
+              list = list.filter((m) => m.status?.toUpperCase() === safeFilterStatus.toUpperCase() || (m.pollStatus || '').toUpperCase() === safeFilterStatus.toUpperCase());
             }
-            if (filterOrLimit?.pollStatus && filterOrLimit.pollStatus !== 'ALL') {
-              list = list.filter((m) => (m.pollStatus || '').toUpperCase() === filterOrLimit.pollStatus!.toUpperCase());
+            const safeFilterPollStatus = safeExtractString(filterOrLimit?.pollStatus);
+            if (safeFilterPollStatus && safeFilterPollStatus !== 'ALL') {
+              list = list.filter((m) => (m.pollStatus || '').toUpperCase() === safeFilterPollStatus.toUpperCase());
             }
-            if (filterOrLimit?.searchTerm?.trim()) {
-              const q = filterOrLimit.searchTerm.toLowerCase().trim();
+            const safeFilterSearch = safeExtractString(filterOrLimit?.searchTerm);
+            if (safeFilterSearch) {
+              const q = safeFilterSearch.toLowerCase();
               list = list.filter((m: RawMeasurementEntity) =>
                 (m.dbName && m.dbName.toLowerCase().includes(q)) ||
                 (m.metricName && m.metricName.toLowerCase().includes(q)) ||
@@ -2756,17 +2801,18 @@ export class PrismaRepository implements IStorageRepository {
     return [];
   }
 
-  async clearDatabasePollQueue(statusFilter: 'processing' | 'pending' | 'all' = 'processing', dbId?: string): Promise<{ clearedCount: number }> {
+  async clearDatabasePollQueue(statusFilter: 'processing' | 'pending' | 'all' = 'processing', dbId?: unknown): Promise<{ clearedCount: number }> {
     let clearedCount = 0;
     try {
+      const safeDbId = safeExtractString(dbId);
       const where: any = {};
       if (statusFilter === 'processing') {
         where.status = 'processing';
       } else if (statusFilter === 'pending') {
         where.status = 'pending';
       }
-      if (dbId && dbId !== 'ALL') {
-        where.dbId = dbId;
+      if (safeDbId && safeDbId !== 'ALL') {
+        where.dbId = safeDbId;
       }
 
       try {
@@ -2784,7 +2830,7 @@ export class PrismaRepository implements IStorageRepository {
           const conds: string[] = [];
           if (statusFilter === 'processing') conds.push("status = 'processing'");
           else if (statusFilter === 'pending') conds.push("status = 'pending'");
-          if (dbId && dbId !== 'ALL') conds.push(`db_id = '${dbId.replace(/'/g, "''")}'`);
+          if (safeDbId && safeDbId !== 'ALL') conds.push(`db_id = '${safeEscapeSql(safeDbId)}'`);
           if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
           const rawRes = await (this.prisma as any).$executeRawUnsafe(sql);
           clearedCount = typeof rawRes === 'number' ? rawRes : 0;
@@ -2798,20 +2844,24 @@ export class PrismaRepository implements IStorageRepository {
     return { clearedCount };
   }
 
-  async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]> {
+  async getDatabasePollLogs(dbId?: unknown, fromDate?: unknown, toDate?: unknown, limit?: unknown): Promise<DatabasePollLogEntity[]> {
     try {
-      const effectiveLimit = limit !== undefined && limit > 0 ? limit : (dbId && dbId !== 'ALL' ? 5000 : 2000);
+      const safeDbId = safeExtractString(dbId);
+      const fromDateObj = safeParseDateGte(fromDate);
+      const toDateObj = safeParseDateLte(toDate);
+      const parsedLimit = safeExtractNumber(limit);
+      const effectiveLimit = parsedLimit !== undefined && parsedLimit > 0 ? parsedLimit : (safeDbId && safeDbId !== 'ALL' ? 5000 : 2000);
       const where: any = {};
-      if (dbId && dbId !== 'ALL') {
+      if (safeDbId && safeDbId !== 'ALL') {
         where.OR = [
-          { dbId: dbId },
-          { dbName: dbId },
+          { dbId: safeDbId },
+          { dbName: safeDbId },
         ];
       }
-      if (fromDate || toDate) {
+      if (fromDateObj || toDateObj) {
         where.startedAt = {};
-        if (fromDate) where.startedAt.gte = new Date(fromDate);
-        if (toDate) where.startedAt.lte = new Date(toDate);
+        if (fromDateObj) where.startedAt.gte = fromDateObj;
+        if (toDateObj) where.startedAt.lte = toDateObj;
       }
 
       let records = await (this.prisma as any).databasePollLog?.findMany({
@@ -2824,15 +2874,15 @@ export class PrismaRepository implements IStorageRepository {
         try {
           let sql = 'SELECT * FROM database_poll_log';
           const conditions: string[] = [];
-          if (dbId && dbId !== 'ALL') {
-            const escaped = dbId.replace(/'/g, "''");
+          if (safeDbId && safeDbId !== 'ALL') {
+            const escaped = safeEscapeSql(safeDbId);
             conditions.push(`(db_id = '${escaped}' OR db_name = '${escaped}')`);
           }
-          if (fromDate) {
-            conditions.push(`started_at >= '${new Date(fromDate).toISOString().slice(0, 19).replace('T', ' ')}'`);
+          if (fromDateObj) {
+            conditions.push(`started_at >= '${safeFormatSqlDate(fromDateObj)}'`);
           }
-          if (toDate) {
-            conditions.push(`started_at <= '${new Date(toDate).toISOString().slice(0, 19).replace('T', ' ')}'`);
+          if (toDateObj) {
+            conditions.push(`started_at <= '${safeFormatSqlDate(toDateObj)}'`);
           }
           if (conditions.length > 0) {
             sql += ' WHERE ' + conditions.join(' AND ');
