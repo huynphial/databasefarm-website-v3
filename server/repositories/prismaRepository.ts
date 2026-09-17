@@ -1,7 +1,11 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import net from 'net';
+import fs from 'fs';
+import path from 'path';
 import { PrismaClient, Role, DbType, ValueType, AlertLevel } from '@prisma/client';
 import { IStorageRepository } from './types';
+import { MemoryRepository } from './memoryRepository';
 import {
   encryptPassword,
   isCiphertextValid,
@@ -42,10 +46,67 @@ import {
   AlertNotificationQueueEntity,
 } from '../../src/types';
 
+function parseHostAndPortFromDatabaseUrl(urlStr?: string): { host: string; port: number } {
+  try {
+    if (!urlStr) return { host: '127.0.0.1', port: 3306 };
+    const u = new URL(urlStr);
+    return {
+      host: u.hostname || '127.0.0.1',
+      port: u.port ? parseInt(u.port, 10) : 3306,
+    };
+  } catch {
+    return { host: '127.0.0.1', port: 3306 };
+  }
+}
+
+function checkPortOpen(host: string, port: number, timeoutMs = 350): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let isResolved = false;
+    const cleanup = () => {
+      if (!isResolved) {
+        isResolved = true;
+        socket.destroy();
+      }
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => {
+      cleanup();
+      resolve(true);
+    });
+    socket.once('error', () => {
+      cleanup();
+      resolve(false);
+    });
+    socket.once('timeout', () => {
+      cleanup();
+      resolve(false);
+    });
+    socket.connect(port, host);
+  });
+}
+
 export class PrismaRepository implements IStorageRepository {
   private prisma: PrismaClient;
+  private store: MemoryRepository;
+  private mysqlConnected: boolean | null = null;
+  private lastMysqlCheck = 0;
+  private mysqlHost = '127.0.0.1';
+  private mysqlPort = 3306;
 
   constructor() {
+    this.store = new MemoryRepository();
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const storageFile = path.join(dataDir, 'prisma_storage.json');
+    this.store.enableFilePersistence(storageFile);
+
+    const parsed = parseHostAndPortFromDatabaseUrl(process.env.DATABASE_URL);
+    this.mysqlHost = parsed.host;
+    this.mysqlPort = parsed.port;
+
     this.prisma = new (PrismaClient as any)({
       log: [
         { emit: 'event', level: 'query' },
@@ -79,6 +140,100 @@ export class PrismaRepository implements IStorageRepository {
         context: 'Prisma:Warn',
       });
     });
+
+    const allRepoMethods: (keyof IStorageRepository)[] = [
+      'getUsers', 'getUserByUsername', 'saveUser', 'deleteUser', 'verifyUserPassword',
+      'getDatabaseEngines', 'saveDatabaseEngine', 'deleteDatabaseEngine',
+      'getAlertNotificationMethods', 'saveAlertNotificationMethod', 'deleteAlertNotificationMethod',
+      'getDatabases', 'getDatabaseById', 'saveDatabase', 'deleteDatabase',
+      'getMetrics', 'getMetricById', 'saveMetric', 'deleteMetric',
+      'getTemplates', 'getTemplateById', 'saveTemplate', 'deleteTemplate',
+      'getGroups', 'getGroupById', 'saveGroup', 'deleteGroup',
+      'getActiveAlerts', 'saveActiveAlert', 'acknowledgeActiveAlert', 'clearActiveAlert',
+      'getAlertHistory', 'addAlertHistory',
+      'getMetricHistory', 'addMetricHistory',
+      'getRawMeasurements', 'addRawMeasurement',
+      'getAlertNotificationLogs', 'getAlertNotificationQueue',
+      'getDatabasePollQueue', 'clearDatabasePollQueue',
+      'getDatabasePollLogs', 'getLicenseFailCount',
+      'getSystemSettings', 'saveSystemSettings', 'getSystemSettingsList',
+      'saveSystemSettingItem', 'deleteSystemSettingItem',
+      'getAuditLogs', 'addAuditLog',
+      'cleanAllMonitorData', 'cleanRawQueryHistory', 'resetData',
+    ];
+
+    for (const methodName of allRepoMethods) {
+      const originalMethod = (this as any)[methodName];
+      if (typeof originalMethod === 'function') {
+        (this as any)[methodName] = async (...args: any[]) => {
+          const available = await this.isMysqlAvailable();
+          if (available) {
+            try {
+              const res = await originalMethod.apply(this, args);
+              const storeMethod = (this.store as any)[methodName];
+              if (
+                typeof storeMethod === 'function' &&
+                (methodName.startsWith('save') ||
+                  methodName.startsWith('delete') ||
+                  methodName.startsWith('add') ||
+                  methodName.startsWith('clean') ||
+                  methodName.startsWith('clear') ||
+                  methodName === 'resetData')
+              ) {
+                try {
+                  await storeMethod.apply(this.store, args);
+                } catch {}
+              }
+              return res;
+            } catch (err: any) {
+              console.warn(
+                `⚠️ [PrismaRepository] Error executing ${methodName} on MySQL, falling back to persistent database store:`,
+                err?.message || err
+              );
+              this.mysqlConnected = false;
+            }
+          }
+
+          // Fallback / Standalone mode using durable file database storage (data/prisma_storage.json)
+          const storeMethod = (this.store as any)[methodName];
+          if (typeof storeMethod === 'function') {
+            return await storeMethod.apply(this.store, args);
+          }
+        };
+      }
+    }
+  }
+
+  private async isMysqlAvailable(): Promise<boolean> {
+    const now = Date.now();
+    if (this.mysqlConnected !== null && now - this.lastMysqlCheck < 15000) {
+      return this.mysqlConnected;
+    }
+    this.lastMysqlCheck = now;
+
+    const portOpen = await checkPortOpen(this.mysqlHost, this.mysqlPort, 350);
+    if (!portOpen) {
+      if (this.mysqlConnected !== false) {
+        console.log(
+          `ℹ️ [PrismaRepository] MySQL port (${this.mysqlHost}:${this.mysqlPort}) not reachable. Operating with durable file database persistence (data/prisma_storage.json).`
+        );
+      }
+      this.mysqlConnected = false;
+      return false;
+    }
+
+    try {
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500));
+      await Promise.race([(this.prisma as any).$queryRawUnsafe('SELECT 1'), timeout]);
+      if (this.mysqlConnected !== true) {
+        console.log(`⚡ [PrismaRepository] Connected successfully to MySQL database at ${this.mysqlHost}:${this.mysqlPort}!`);
+      }
+      this.mysqlConnected = true;
+      return true;
+    } catch {
+      this.mysqlConnected = false;
+      return false;
+    }
   }
 
   getStorageType(): 'prisma' | 'memory' {

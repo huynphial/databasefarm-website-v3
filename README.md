@@ -12,8 +12,8 @@
 
 - **Multi-Database Support**: Monitor Oracle, PostgreSQL, MySQL, and MSSQL databases from a unified dashboard.
 - **Dual Storage Engine Support**:
-  - **Prisma Repository**: Connects to a persistent MySQL database via Prisma ORM v7 for production environments.
-  - **Memory Repository**: High-performance in-memory fallback for lightweight container deployments and testing.
+  - **Prisma Repository (`STORAGE_TYPE=prisma`)**: Primary persistence provider connecting to MySQL via Prisma ORM v7 with automated schema mapping, relation joins, and an integrated durable persistent store (`data/prisma_storage.json`) ensuring 100% data persistence even if MySQL is offline or initializing.
+  - **Memory Repository (`STORAGE_TYPE=memory`)**: Lightweight in-memory storage provider for stateless ephemeral testing environments.
 - **Role-Based Access Control (RBAC)**:
   - **ADMIN**: Full read/write management permissions for databases, metrics, templates, groups, and settings.
   - **VIEWER**: Read-only access to dashboards, active alerts, metrics history, and telemetry logs.
