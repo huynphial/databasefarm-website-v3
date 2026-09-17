@@ -1,6 +1,13 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { encryptPassword } from '../utils/crypto';
+import {
+  encryptPassword,
+  hashPassword,
+  hashPasswordSync,
+  verifyPassword,
+  DUMMY_BCRYPT_HASH,
+  constantTimeEqual,
+} from '../utils/crypto';
 import {
   safeExtractString,
   safeExtractStringArray,
@@ -231,8 +238,8 @@ export class MemoryRepository implements IStorageRepository {
     ];
 
     this.userPasswords = new Map<string, string>([
-      ['usr-admin-01', bcrypt.hashSync(adminPass, 10)],
-      ['usr-viewer-02', bcrypt.hashSync(viewerPass, 10)],
+      ['usr-admin-01', hashPasswordSync(adminPass)],
+      ['usr-viewer-02', hashPasswordSync(viewerPass)],
     ]);
 
     // Support additional users configured in AUTH_USERS environment variable
@@ -249,7 +256,7 @@ export class MemoryRepository implements IStorageRepository {
                 role: u.role === 'ADMIN' ? 'ADMIN' : 'VIEWER',
                 createdAt: new Date().toISOString(),
               });
-              this.userPasswords.set(uId, bcrypt.hashSync(u.password.trim(), 10));
+              this.userPasswords.set(uId, hashPasswordSync(u.password.trim()));
             }
           });
         }
@@ -265,7 +272,7 @@ export class MemoryRepository implements IStorageRepository {
               role: parts[2]?.trim().toUpperCase() === 'ADMIN' ? 'ADMIN' : 'VIEWER',
               createdAt: new Date().toISOString(),
             });
-            this.userPasswords.set(uId, bcrypt.hashSync(parts[1].trim(), 10));
+            this.userPasswords.set(uId, hashPasswordSync(parts[1].trim()));
           }
         });
       }
@@ -1633,7 +1640,7 @@ FROM pg_tablespace`,
       userRecord = this.users[idx];
 
       if (userData.password) {
-        const hash = await bcrypt.hash(userData.password, 10);
+        const hash = await hashPassword(userData.password);
         if (typeof userRecord.id === 'string' && userRecord.id) {
           this.userPasswords.set(userRecord.id, hash);
         }
@@ -1654,7 +1661,7 @@ FROM pg_tablespace`,
       this.users.push(userRecord);
 
       const password = userData.password || 'TemporaryPassword#2026';
-      const hash = await bcrypt.hash(password, 10);
+      const hash = await hashPassword(password);
       this.userPasswords.set(newId, hash);
     }
 
@@ -1681,8 +1688,6 @@ FROM pg_tablespace`,
   }
 
   async verifyUserPassword(username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> {
-    const DUMMY_BCRYPT_HASH = '$2b$10$wN3b.9pXW9g2f2J6IeO3y.sN6y9Fk3L4M5N6O7P8Q9R0S1T2U3V4W';
-    
     // Strict input type checking
     if (typeof username !== 'string' || typeof password !== 'string') {
       await bcrypt.compare('dummy', DUMMY_BCRYPT_HASH);
@@ -1716,33 +1721,38 @@ FROM pg_tablespace`,
 
     let isMatch = false;
 
-    // Constant-time comparison helper for plaintext strings
-    const safeStringEqual = (a: string, b: string): boolean => {
-      const bufA = Buffer.from(a);
-      const bufB = Buffer.from(b);
-      if (bufA.length !== bufB.length) {
-        crypto.timingSafeEqual(bufA, bufA);
-        return false;
+    if (normUser === adminUser) {
+      // Check against current admin password via adaptive verification
+      let storedHash = typeof user.id === 'string' ? this.userPasswords.get(user.id) : undefined;
+      if (!storedHash) {
+        storedHash = hashPasswordSync(adminPass);
+        this.userPasswords.set(user.id, storedHash);
       }
-      return crypto.timingSafeEqual(bufA, bufB);
-    };
-
-    if (normUser === adminUser && safeStringEqual(trimmedPassword, adminPass)) {
-      isMatch = true;
-    } else if (normUser === viewerUser && safeStringEqual(trimmedPassword, viewerPass)) {
-      isMatch = true;
+      isMatch = await verifyPassword(trimmedPassword, storedHash);
+      if (!isMatch && adminPass) {
+        // In case environment changed dynamically, check with constant-time equality
+        if (constantTimeEqual(trimmedPassword, adminPass)) {
+          isMatch = true;
+          this.userPasswords.set(user.id, await hashPassword(trimmedPassword));
+        }
+      }
+    } else if (normUser === viewerUser) {
+      let storedHash = typeof user.id === 'string' ? this.userPasswords.get(user.id) : undefined;
+      if (!storedHash) {
+        storedHash = hashPasswordSync(viewerPass);
+        this.userPasswords.set(user.id, storedHash);
+      }
+      isMatch = await verifyPassword(trimmedPassword, storedHash);
+      if (!isMatch && viewerPass) {
+        if (constantTimeEqual(trimmedPassword, viewerPass)) {
+          isMatch = true;
+          this.userPasswords.set(user.id, await hashPassword(trimmedPassword));
+        }
+      }
     } else {
       const hash = typeof user.id === 'string' ? this.userPasswords.get(user.id) : undefined;
       if (hash) {
-        try {
-          if (hash.startsWith('$2') || hash.startsWith('$2a$') || hash.startsWith('$2b$')) {
-            isMatch = await bcrypt.compare(trimmedPassword, hash);
-          } else {
-            isMatch = safeStringEqual(trimmedPassword, hash);
-          }
-        } catch {
-          isMatch = safeStringEqual(trimmedPassword, hash);
-        }
+        isMatch = await verifyPassword(trimmedPassword, hash);
       } else {
         await bcrypt.compare(trimmedPassword, DUMMY_BCRYPT_HASH);
       }

@@ -255,40 +255,54 @@ export const INITIAL_GROUPS: GroupEntity[] = [
 
 /**
  * Strips raw passwords, keys, and unencrypted secrets before storing DatabaseEntity in client-side storage.
+ * Explicit safe projection ensures no sensitive data or credentials are persisted in web storage (CWE-312 / CWE-315).
  */
 export function sanitizeDatabaseEntity(db: Partial<DatabaseEntity> | any): DatabaseEntity {
   if (!db || typeof db !== 'object') {
-    return db as DatabaseEntity;
+    return {} as DatabaseEntity;
   }
 
-  // Clone object to avoid mutating runtime in-memory objects directly
-  const copy: any = { ...db };
+  // Whitelist-based projection of non-sensitive attributes for client storage
+  const safeEntity: DatabaseEntity = {
+    id: String(db.id || ''),
+    name: String(db.name || ''),
+    databaseSystem: db.databaseSystem ? String(db.databaseSystem) : undefined,
+    database_system: db.database_system ? String(db.database_system) : undefined,
+    dbType: db.dbType || 'POSTGRES',
+    databaseEngineId: db.databaseEngineId ? String(db.databaseEngineId) : undefined,
+    host: String(db.host || ''),
+    port: typeof db.port === 'number' ? db.port : Number(db.port) || 0,
+    pollId: typeof db.pollId === 'number' ? db.pollId : 0,
+    tags: Array.isArray(db.tags) ? [...db.tags] : [],
+    pollIntervalMinutes: typeof db.pollIntervalMinutes === 'number' ? db.pollIntervalMinutes : 5,
+    note: db.note ? String(db.note) : '',
+    authMethod: db.authMethod || 'PASSWORD',
+    username: db.username ? String(db.username) : '',
+    databaseName: db.databaseName ? String(db.databaseName) : undefined,
+    environment: db.environment || 'PRODUCTION',
+    connectionConfig:
+      db.connectionConfig && typeof db.connectionConfig === 'object'
+        ? (() => {
+            const safeConn = { ...db.connectionConfig };
+            delete safeConn.password;
+            delete safeConn.passwordEncrypted;
+            delete safeConn.secret;
+            delete safeConn.apiKey;
+            delete safeConn.authToken;
+            delete safeConn.authKey;
+            return safeConn;
+          })()
+        : {},
+    groupIds: Array.isArray(db.groupIds) ? [...db.groupIds] : [],
+    metricIds: Array.isArray(db.metricIds) ? [...db.metricIds] : [],
+    createdAt: db.createdAt ? String(db.createdAt) : new Date().toISOString(),
+    updatedAt: db.updatedAt ? String(db.updatedAt) : new Date().toISOString(),
+    status: db.status || 'UP',
+    lastCheckAt: db.lastCheckAt ? String(db.lastCheckAt) : new Date().toISOString(),
+    isEnabled: db.isEnabled !== undefined ? Boolean(db.isEnabled) : true,
+  };
 
-  // If password was already an encrypted ciphertext token (starts with 'enc:'), retain it as passwordEncrypted
-  if (typeof copy.password === 'string' && copy.password.startsWith('enc:') && !copy.passwordEncrypted) {
-    copy.passwordEncrypted = copy.password;
-  }
-
-  // Explicitly remove cleartext secret fields
-  delete copy.password;
-  delete copy.enteredPassword;
-  delete copy.importCustomPassword;
-  delete copy.finalPassword;
-  delete copy.plaintextPassword;
-  delete copy.rawPassword;
-  delete copy.authKey;
-
-  // Sanitize connectionConfig if it contains embedded credentials
-  if (copy.connectionConfig && typeof copy.connectionConfig === 'object') {
-    const safeConn = { ...copy.connectionConfig };
-    delete safeConn.password;
-    delete safeConn.secret;
-    delete safeConn.apiKey;
-    delete safeConn.authToken;
-    copy.connectionConfig = safeConn;
-  }
-
-  return copy as DatabaseEntity;
+  return safeEntity;
 }
 
 export function sanitizeDatabaseList(list: (Partial<DatabaseEntity> | any)[]): DatabaseEntity[] {
@@ -395,7 +409,6 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     pollIntervalMinutes: 5,
     note: 'Primary ERP transactional Oracle cluster. High availability database node.',
     username: 'dbmon_ro',
-    passwordEncrypted: 'enc:seed_db01_vault',
     connectionConfig: {
       serviceName: 'ORCLPDB1.internal',
       ssl: true,
@@ -418,7 +431,6 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     pollIntervalMinutes: 2,
     note: 'PCI-DSS compliant payment gateway core ledger database.',
     username: 'pg_readonly_mon',
-    passwordEncrypted: 'enc:seed_db02_vault',
     connectionConfig: {
       databaseName: 'payment_ledger',
       sslMode: 'require',
@@ -441,7 +453,6 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     pollIntervalMinutes: 5,
     note: 'Customer relationship portal staging replica.',
     username: 'app_monitor',
-    passwordEncrypted: 'enc:seed_db03_vault',
     connectionConfig: {
       databaseName: 'auth_users_db',
       charset: 'utf8mb4',
@@ -463,7 +474,6 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     pollIntervalMinutes: 10,
     note: 'Data warehouse batch reporting engine for executive dashboards.',
     username: 'mssql_reader',
-    passwordEncrypted: 'enc:seed_db04_vault',
     connectionConfig: {
       databaseName: 'HR_Enterprise',
       encrypt: true,
@@ -486,7 +496,6 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     pollIntervalMinutes: 5,
     note: 'Inventory management development integration server.',
     username: 'dw_mon',
-    passwordEncrypted: 'enc:seed_db05_vault',
     connectionConfig: {
       databaseName: 'analytics_dw',
       sslMode: 'prefer',
@@ -503,7 +512,7 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
 export const INITIAL_SYSTEM_SETTINGS: SystemSettingsEntity = {
   apiCollectorEnabled: true,
   collectorEndpoint: 'http://localhost:3000/api/collector/mock-health',
-  collectorApiKey: 'dbf_live_col_9f88a2e1b4c3d4e5f6a7b8c9d0e1f2a3',
+  collectorApiKey: '',
   collectorPollIntervalSeconds: 60,
   collectorBatchSize: 250,
   collectorTimeoutMs: 5000,

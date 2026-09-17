@@ -2,7 +2,14 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { PrismaClient, Role, DbType, ValueType, AlertLevel } from '@prisma/client';
 import { IStorageRepository } from './types';
-import { encryptPassword, isCiphertextValid, decryptPassword } from '../utils/crypto';
+import {
+  encryptPassword,
+  isCiphertextValid,
+  decryptPassword,
+  hashPassword,
+  verifyPassword,
+  DUMMY_BCRYPT_HASH,
+} from '../utils/crypto';
 import { sqlLogger } from '../utils/sqlLogger';
 import {
   safeExtractString,
@@ -184,7 +191,7 @@ export class PrismaRepository implements IStorageRepository {
     });
 
     if (userData.password) {
-      dataPayload.passwordHash = await bcrypt.hash(userData.password, 10);
+      dataPayload.passwordHash = await hashPassword(userData.password);
     }
 
     if (isEdit) {
@@ -195,7 +202,7 @@ export class PrismaRepository implements IStorageRepository {
     } else {
       if (!userData.username) throw new Error('Username is required.');
       if (!dataPayload.passwordHash) {
-        dataPayload.passwordHash = await bcrypt.hash(userData.password || 'TemporaryPassword#2026', 10);
+        dataPayload.passwordHash = await hashPassword(userData.password || 'TemporaryPassword#2026');
       }
       u = await this.prisma.user.create({
         data: {
@@ -233,8 +240,6 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async verifyUserPassword(username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> {
-    const DUMMY_BCRYPT_HASH = '$2b$10$wN3b.9pXW9g2f2J6IeO3y.sN6y9Fk3L4M5N6O7P8Q9R0S1T2U3V4W';
-
     // Strict input type checking
     if (typeof username !== 'string' || typeof password !== 'string') {
       await bcrypt.compare('dummy', DUMMY_BCRYPT_HASH);
@@ -272,38 +277,24 @@ export class PrismaRepository implements IStorageRepository {
       return { success: false, message: 'Invalid username or password.' };
     }
 
-    // Constant-time comparison helper for plaintext strings
-    const safeStringEqual = (a: string, b: string): boolean => {
-      const bufA = Buffer.from(a);
-      const bufB = Buffer.from(b);
-      if (bufA.length !== bufB.length) {
-        crypto.timingSafeEqual(bufA, bufA);
-        return false;
-      }
-      return crypto.timingSafeEqual(bufA, bufB);
-    };
-
     // STRICT: Only the password on the database table `users` is allowed (no hardcoded bypasses)
-    let isMatch = false;
-    try {
-      if (
-        u.passwordHash.startsWith('$2') ||
-        u.passwordHash.startsWith('$2a$') ||
-        u.passwordHash.startsWith('$2b$') ||
-        u.passwordHash.startsWith('$2y$')
-      ) {
-        isMatch = await bcrypt.compare(trimmedPassword, u.passwordHash);
-      } else {
-        // Direct comparison if password is stored as plain text in the database
-        isMatch = safeStringEqual(trimmedPassword, u.passwordHash);
-      }
-    } catch (err) {
-      console.warn('Database user password verification error:', err);
-      isMatch = safeStringEqual(trimmedPassword, u.passwordHash);
-    }
+    const isMatch = await verifyPassword(trimmedPassword, u.passwordHash);
 
     if (!isMatch) {
       return { success: false, message: 'Invalid username or password.' };
+    }
+
+    // Opportunistic hash upgrade: if legacy plaintext or weak hash, automatically upgrade to bcrypt KDF
+    if (!u.passwordHash.startsWith('$2')) {
+      try {
+        const upgradedHash = await hashPassword(trimmedPassword);
+        await this.prisma.user.update({
+          where: { id: u.id },
+          data: { passwordHash: upgradedHash },
+        });
+      } catch (err) {
+        console.warn('Failed to upgrade legacy user password hash:', err);
+      }
     }
 
     return {

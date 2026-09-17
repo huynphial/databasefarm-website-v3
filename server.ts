@@ -47,6 +47,13 @@ async function startServer() {
   // Secret key for signing server-controlled session tokens (CWE-807 / CWE-290 mitigation)
   const AUTH_SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex');
 
+  /**
+   * Generates a signed stateless bearer token (JWS HS256).
+   * Note on Separation of Concerns (CWE-916):
+   * - Passwords and user credentials are encrypted/hashed using adaptive KDFs (Bcrypt cost factor 12)
+   *   with cryptographically random salts in `server/utils/crypto.ts` to resist brute-force cracking.
+   * - HMAC-SHA256 is used strictly here for signing short-lived session claims (stateless bearer token integrity).
+   */
   function generateAuthToken(user: { id: string; username: string; role: string }): string {
     const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
     const payload = Buffer.from(
