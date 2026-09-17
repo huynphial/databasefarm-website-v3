@@ -7,8 +7,8 @@ let instance: IStorageRepository | null = null;
 export function getStorageRepository(): IStorageRepository {
   if (instance) return instance;
 
-  const envStorage = (process.env.STORAGE_TYPE || 'prisma').toLowerCase();
-  const usePrisma = process.env.USE_PRISMA_DB === 'true' || envStorage === 'prisma' || envStorage !== 'memory';
+  const envStorage = (process.env.STORAGE_TYPE || 'memory').toLowerCase();
+  const usePrisma = (process.env.USE_PRISMA_DB === 'true' || envStorage === 'prisma') && envStorage !== 'memory';
 
   if (usePrisma) {
     console.log('⚡ Initializing Prisma ORM MySQL Storage Provider (STORAGE_TYPE=prisma)');

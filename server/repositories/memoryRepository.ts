@@ -1,7 +1,5 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import fs from 'fs';
-import path from 'path';
 import {
   encryptPassword,
   hashPassword,
@@ -1614,117 +1612,6 @@ FROM pg_tablespace`,
 
   getStorageType(): 'memory' {
     return 'memory';
-  }
-
-  private persistFilePath: string | null = null;
-
-  public enableFilePersistence(filePath: string) {
-    this.persistFilePath = filePath;
-    this.loadFromFile();
-
-    const mutatingMethods = [
-      'saveUser', 'deleteUser',
-      'saveDatabaseEngine', 'deleteDatabaseEngine',
-      'saveAlertNotificationMethod', 'deleteAlertNotificationMethod',
-      'saveDatabase', 'deleteDatabase',
-      'saveMetric', 'deleteMetric',
-      'saveTemplate', 'deleteTemplate',
-      'saveGroup', 'deleteGroup',
-      'saveActiveAlert', 'acknowledgeActiveAlert', 'clearActiveAlert',
-      'addAlertHistory', 'addMetricHistory', 'addRawMeasurement',
-      'clearDatabasePollQueue', 'saveSystemSettings', 'saveSystemSettingItem',
-      'deleteSystemSettingItem', 'addAuditLog', 'cleanAllMonitorData',
-      'cleanRawQueryHistory', 'resetData',
-    ];
-
-    for (const methodName of mutatingMethods) {
-      const original = (this as any)[methodName];
-      if (typeof original === 'function') {
-        (this as any)[methodName] = async (...args: any[]) => {
-          const result = await original.apply(this, args);
-          this.persistToFile();
-          return result;
-        };
-      }
-    }
-  }
-
-  public exportState(): Record<string, any> {
-    return {
-      users: this.users,
-      userPasswords: Array.from(this.userPasswords.entries()),
-      databasePollQueue: this.databasePollQueue,
-      databasePollLogs: this.databasePollLogs,
-      alertNotificationQueue: this.alertNotificationQueue,
-      auditLogs: this.auditLogs,
-      databaseEngines: this.databaseEngines,
-      alertNotificationMethods: this.alertNotificationMethods,
-      systemSettings: this.systemSettings,
-      templates: this.templates,
-      metrics: this.metrics,
-      groups: this.groups,
-      databases: this.databases,
-      activeAlerts: this.activeAlerts,
-      alertHistory: this.alertHistory,
-      metricHistory: this.metricHistory,
-      alertNotificationLogs: this.alertNotificationLogs,
-      rawMeasurements: this.rawMeasurements,
-      nextActiveAlertId: this.nextActiveAlertId,
-      nextAlertHistoryId: this.nextAlertHistoryId,
-    };
-  }
-
-  public importState(data: any): void {
-    if (!data || typeof data !== 'object') return;
-    if (Array.isArray(data.users)) this.users = data.users;
-    if (Array.isArray(data.userPasswords)) this.userPasswords = new Map(data.userPasswords);
-    if (Array.isArray(data.databases)) this.databases = data.databases;
-    if (Array.isArray(data.groups)) this.groups = data.groups;
-    if (Array.isArray(data.metrics)) this.metrics = data.metrics;
-    if (Array.isArray(data.templates)) this.templates = data.templates;
-    if (Array.isArray(data.databaseEngines)) this.databaseEngines = data.databaseEngines;
-    if (Array.isArray(data.alertNotificationMethods)) this.alertNotificationMethods = data.alertNotificationMethods;
-    if (data.systemSettings) this.systemSettings = data.systemSettings;
-    if (Array.isArray(data.activeAlerts)) this.activeAlerts = data.activeAlerts;
-    if (Array.isArray(data.alertHistory)) this.alertHistory = data.alertHistory;
-    if (Array.isArray(data.metricHistory)) this.metricHistory = data.metricHistory;
-    if (Array.isArray(data.auditLogs)) this.auditLogs = data.auditLogs;
-    if (Array.isArray(data.rawMeasurements)) this.rawMeasurements = data.rawMeasurements;
-    if (Array.isArray(data.alertNotificationLogs)) this.alertNotificationLogs = data.alertNotificationLogs;
-    if (Array.isArray(data.alertNotificationQueue)) this.alertNotificationQueue = data.alertNotificationQueue;
-    if (Array.isArray(data.databasePollQueue)) this.databasePollQueue = data.databasePollQueue;
-    if (Array.isArray(data.databasePollLogs)) this.databasePollLogs = data.databasePollLogs;
-    if (typeof data.nextActiveAlertId === 'number') this.nextActiveAlertId = data.nextActiveAlertId;
-    if (typeof data.nextAlertHistoryId === 'number') this.nextAlertHistoryId = data.nextAlertHistoryId;
-  }
-
-  public loadFromFile(): void {
-    if (!this.persistFilePath) return;
-    try {
-      if (fs.existsSync(this.persistFilePath)) {
-        const raw = fs.readFileSync(this.persistFilePath, 'utf-8');
-        const parsed = JSON.parse(raw);
-        this.importState(parsed);
-        console.log(`💾 [Storage] Loaded persistent database state from ${this.persistFilePath}`);
-      } else {
-        this.persistToFile();
-      }
-    } catch (err) {
-      console.warn(`⚠️ [Storage] Could not load state from ${this.persistFilePath}:`, err);
-    }
-  }
-
-  public persistToFile(): void {
-    if (!this.persistFilePath) return;
-    try {
-      const dir = path.dirname(this.persistFilePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(this.persistFilePath, JSON.stringify(this.exportState(), null, 2), 'utf-8');
-    } catch (err) {
-      console.warn(`⚠️ [Storage] Failed to persist state to ${this.persistFilePath}:`, err);
-    }
   }
 
   // --- Users ---

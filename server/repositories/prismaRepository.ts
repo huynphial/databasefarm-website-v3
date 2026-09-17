@@ -1,8 +1,5 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import net from 'net';
-import fs from 'fs';
-import path from 'path';
 import { PrismaClient, Role, DbType, ValueType, AlertLevel } from '@prisma/client';
 import { IStorageRepository } from './types';
 import { MemoryRepository } from './memoryRepository';
@@ -46,67 +43,14 @@ import {
   AlertNotificationQueueEntity,
 } from '../../src/types';
 
-function parseHostAndPortFromDatabaseUrl(urlStr?: string): { host: string; port: number } {
-  try {
-    if (!urlStr) return { host: '127.0.0.1', port: 3306 };
-    const u = new URL(urlStr);
-    return {
-      host: u.hostname || '127.0.0.1',
-      port: u.port ? parseInt(u.port, 10) : 3306,
-    };
-  } catch {
-    return { host: '127.0.0.1', port: 3306 };
-  }
-}
-
-function checkPortOpen(host: string, port: number, timeoutMs = 350): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    let isResolved = false;
-    const cleanup = () => {
-      if (!isResolved) {
-        isResolved = true;
-        socket.destroy();
-      }
-    };
-    socket.setTimeout(timeoutMs);
-    socket.once('connect', () => {
-      cleanup();
-      resolve(true);
-    });
-    socket.once('error', () => {
-      cleanup();
-      resolve(false);
-    });
-    socket.once('timeout', () => {
-      cleanup();
-      resolve(false);
-    });
-    socket.connect(port, host);
-  });
-}
-
 export class PrismaRepository implements IStorageRepository {
   private prisma: PrismaClient;
-  private store: MemoryRepository;
-  private mysqlConnected: boolean | null = null;
-  private lastMysqlCheck = 0;
-  private mysqlHost = '127.0.0.1';
-  private mysqlPort = 3306;
+  private memoryFallback: MemoryRepository;
+  public isPrismaHealthy: boolean = true;
+  private hasLoggedOfflineNotice: boolean = false;
 
   constructor() {
-    this.store = new MemoryRepository();
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    const storageFile = path.join(dataDir, 'prisma_storage.json');
-    this.store.enableFilePersistence(storageFile);
-
-    const parsed = parseHostAndPortFromDatabaseUrl(process.env.DATABASE_URL);
-    this.mysqlHost = parsed.host;
-    this.mysqlPort = parsed.port;
-
+    this.memoryFallback = new MemoryRepository();
     this.prisma = new (PrismaClient as any)({
       log: [
         { emit: 'event', level: 'query' },
@@ -130,114 +74,91 @@ export class PrismaRepository implements IStorageRepository {
 
     // Log query execution errors
     (this.prisma as any).$on('error', (e: any) => {
-      sqlLogger.logError('Prisma Query Execution Error', e.message || e, e.target);
+      if (!this.isConnectionError(e)) {
+        sqlLogger.logError('Prisma Query Execution Error', e.message || e, e.target);
+      }
     });
 
     // Log Prisma warnings
     (this.prisma as any).$on('warn', (e: any) => {
-      sqlLogger.logQuery({
-        query: `[WARNING] ${e.message || e}`,
-        context: 'Prisma:Warn',
-      });
+      if (!this.isConnectionError(e)) {
+        sqlLogger.logQuery({
+          query: `[WARNING] ${e.message || e}`,
+          context: 'Prisma:Warn',
+        });
+      }
     });
 
-    const allRepoMethods: (keyof IStorageRepository)[] = [
-      'getUsers', 'getUserByUsername', 'saveUser', 'deleteUser', 'verifyUserPassword',
-      'getDatabaseEngines', 'saveDatabaseEngine', 'deleteDatabaseEngine',
-      'getAlertNotificationMethods', 'saveAlertNotificationMethod', 'deleteAlertNotificationMethod',
-      'getDatabases', 'getDatabaseById', 'saveDatabase', 'deleteDatabase',
-      'getMetrics', 'getMetricById', 'saveMetric', 'deleteMetric',
-      'getTemplates', 'getTemplateById', 'saveTemplate', 'deleteTemplate',
-      'getGroups', 'getGroupById', 'saveGroup', 'deleteGroup',
-      'getActiveAlerts', 'saveActiveAlert', 'acknowledgeActiveAlert', 'clearActiveAlert',
-      'getAlertHistory', 'addAlertHistory',
-      'getMetricHistory', 'addMetricHistory',
-      'getRawMeasurements', 'addRawMeasurement',
-      'getAlertNotificationLogs', 'getAlertNotificationQueue',
-      'getDatabasePollQueue', 'clearDatabasePollQueue',
-      'getDatabasePollLogs', 'getLicenseFailCount',
-      'getSystemSettings', 'saveSystemSettings', 'getSystemSettingsList',
-      'saveSystemSettingItem', 'deleteSystemSettingItem',
-      'getAuditLogs', 'addAuditLog',
-      'cleanAllMonitorData', 'cleanRawQueryHistory', 'resetData',
-    ];
-
-    for (const methodName of allRepoMethods) {
-      const originalMethod = (this as any)[methodName];
-      if (typeof originalMethod === 'function') {
-        (this as any)[methodName] = async (...args: any[]) => {
-          const available = await this.isMysqlAvailable();
-          if (available) {
-            try {
-              const res = await originalMethod.apply(this, args);
-              const storeMethod = (this.store as any)[methodName];
-              if (
-                typeof storeMethod === 'function' &&
-                (methodName.startsWith('save') ||
-                  methodName.startsWith('delete') ||
-                  methodName.startsWith('add') ||
-                  methodName.startsWith('clean') ||
-                  methodName.startsWith('clear') ||
-                  methodName === 'resetData')
-              ) {
-                try {
-                  await storeMethod.apply(this.store, args);
-                } catch {}
-              }
-              return res;
-            } catch (err: any) {
-              console.warn(
-                `⚠️ [PrismaRepository] Error executing ${methodName} on MySQL, falling back to persistent database store:`,
-                err?.message || err
-              );
-              this.mysqlConnected = false;
-            }
-          }
-
-          // Fallback / Standalone mode using durable file database storage (data/prisma_storage.json)
-          const storeMethod = (this.store as any)[methodName];
-          if (typeof storeMethod === 'function') {
-            return await storeMethod.apply(this.store, args);
-          }
-        };
-      }
+    // Non-blocking connectivity check
+    if (!process.env.DATABASE_URL) {
+      this.isPrismaHealthy = false;
+    } else {
+      this.prisma.$connect().catch((err: any) => {
+        this.handleConnectionError(err);
+      });
     }
+
+    return new Proxy(this, {
+      get(target: any, prop: string | symbol) {
+        if (prop === 'getStorageType') {
+          return () => (target.isPrismaHealthy ? 'prisma' : 'memory');
+        }
+        const val = target[prop];
+        if (
+          typeof val === 'function' &&
+          prop !== 'isConnectionError' &&
+          prop !== 'handleConnectionError'
+        ) {
+          return async (...args: any[]) => {
+            if (!target.isPrismaHealthy) {
+              const fallbackFn = target.memoryFallback[prop];
+              if (typeof fallbackFn === 'function') {
+                return fallbackFn.apply(target.memoryFallback, args);
+              }
+            }
+            try {
+              return await val.apply(target, args);
+            } catch (err: any) {
+              if (target.isConnectionError(err)) {
+                target.handleConnectionError(err);
+                const fallbackFn = target.memoryFallback[prop];
+                if (typeof fallbackFn === 'function') {
+                  return fallbackFn.apply(target.memoryFallback, args);
+                }
+              }
+              throw err;
+            }
+          };
+        }
+        return val;
+      },
+    });
   }
 
-  private async isMysqlAvailable(): Promise<boolean> {
-    const now = Date.now();
-    if (this.mysqlConnected !== null && now - this.lastMysqlCheck < 15000) {
-      return this.mysqlConnected;
-    }
-    this.lastMysqlCheck = now;
+  public isConnectionError(err: any): boolean {
+    if (!err) return false;
+    if (err.name === 'PrismaClientInitializationError') return true;
+    if (err.code === 'P1001' || err.errorCode === 'P1001') return true;
+    const msg = String(err.message || '');
+    return (
+      msg.includes("Can't reach database server") ||
+      msg.includes('Environment variable not found: DATABASE_URL') ||
+      msg.includes('ECONNREFUSED')
+    );
+  }
 
-    const portOpen = await checkPortOpen(this.mysqlHost, this.mysqlPort, 350);
-    if (!portOpen) {
-      if (this.mysqlConnected !== false) {
-        console.log(
-          `ℹ️ [PrismaRepository] MySQL port (${this.mysqlHost}:${this.mysqlPort}) not reachable. Operating with durable file database persistence (data/prisma_storage.json).`
-        );
+  public handleConnectionError(err: any): void {
+    if (this.isConnectionError(err)) {
+      this.isPrismaHealthy = false;
+      if (!this.hasLoggedOfflineNotice) {
+        this.hasLoggedOfflineNotice = true;
+        console.log('ℹ️ Database server unreachable on configured DATABASE_URL. Seamlessly operating with In-Memory storage.');
       }
-      this.mysqlConnected = false;
-      return false;
-    }
-
-    try {
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500));
-      await Promise.race([(this.prisma as any).$queryRawUnsafe('SELECT 1'), timeout]);
-      if (this.mysqlConnected !== true) {
-        console.log(`⚡ [PrismaRepository] Connected successfully to MySQL database at ${this.mysqlHost}:${this.mysqlPort}!`);
-      }
-      this.mysqlConnected = true;
-      return true;
-    } catch {
-      this.mysqlConnected = false;
-      return false;
     }
   }
 
   getStorageType(): 'prisma' | 'memory' {
-    return 'prisma';
+    return this.isPrismaHealthy ? 'prisma' : 'memory';
   }
 
   // --- Users ---
@@ -694,14 +615,22 @@ export class PrismaRepository implements IStorageRepository {
           databaseEngine: true,
         },
       });
-    } catch (err) {
-      console.warn('Prisma metric.findMany with deep relations error, fallback to basic findMany:', err);
+    } catch (err: any) {
+      if (!this.isConnectionError(err)) {
+        console.warn('Prisma metric.findMany with deep relations error, fallback to basic findMany:', err);
+      } else {
+        this.handleConnectionError(err);
+      }
       try {
         metrics = await this.prisma.metric.findMany({
           include: { templates: true, databaseEngine: true },
         });
-      } catch (err2) {
-        console.warn('Prisma basic metric.findMany error:', err2);
+      } catch (err2: any) {
+        if (!this.isConnectionError(err2)) {
+          console.warn('Prisma basic metric.findMany error:', err2);
+        } else {
+          this.handleConnectionError(err2);
+        }
       }
     }
 
@@ -1576,8 +1505,12 @@ export class PrismaRepository implements IStorageRepository {
           pollResponse: r.poll_response || null,
           createdAt: (r.measured_at instanceof Date ? r.measured_at : new Date(r.measured_at || Date.now())).toISOString(),
         }));
-      } catch (finalErr) {
-        console.error('getMetricHistory error:', finalErr);
+      } catch (finalErr: any) {
+        if (!this.isConnectionError(finalErr)) {
+          console.error('getMetricHistory error:', finalErr);
+        } else {
+          this.handleConnectionError(finalErr);
+        }
         return [];
       }
     }
@@ -2019,8 +1952,12 @@ export class PrismaRepository implements IStorageRepository {
           updatedAt: e.updatedAt.toISOString(),
         }));
       }
-    } catch (err) {
-      console.warn('Prisma getDatabaseEngines query notice:', err);
+    } catch (err: any) {
+      if (!this.isConnectionError(err)) {
+        console.warn('Prisma getDatabaseEngines query notice:', err);
+      } else {
+        this.handleConnectionError(err);
+      }
     }
     // Fallback default seeded engines matching databaseEnginesData
     return [
@@ -2139,8 +2076,12 @@ export class PrismaRepository implements IStorageRepository {
           updatedAt: m.updatedAt.toISOString(),
         }));
       }
-    } catch (err) {
-      console.warn('Prisma getAlertNotificationMethods error:', err);
+    } catch (err: any) {
+      if (!this.isConnectionError(err)) {
+        console.warn('Prisma getAlertNotificationMethods error:', err);
+      } else {
+        this.handleConnectionError(err);
+      }
     }
     return [];
   }
@@ -2385,8 +2326,12 @@ export class PrismaRepository implements IStorageRepository {
 
           dataPoints = rawPoints;
           hasLoaded = true;
-        } catch (findErr) {
-          console.warn('Prisma metricDataPoint.findMany error, trying raw SQL:', findErr);
+        } catch (findErr: any) {
+          if (!this.isConnectionError(findErr)) {
+            console.warn('Prisma metricDataPoint.findMany error, trying raw SQL:', findErr);
+          } else {
+            this.handleConnectionError(findErr);
+          }
         }
 
         if (!hasLoaded) {
@@ -2933,8 +2878,12 @@ export class PrismaRepository implements IStorageRepository {
           orderBy: { scheduledAt: 'desc' },
         });
       }
-    } catch (e) {
-      console.warn('Prisma getDatabasePollQueue failed:', e);
+    } catch (e: any) {
+      if (!this.isConnectionError(e)) {
+        console.warn('Prisma getDatabasePollQueue failed:', e);
+      } else {
+        this.handleConnectionError(e);
+      }
     }
 
     if (!records || records.length === 0) {
