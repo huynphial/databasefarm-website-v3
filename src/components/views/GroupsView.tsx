@@ -506,7 +506,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     });
   };
 
-  const findExistingDatabase = (item: { id?: string; host?: string; port?: number | string; username?: string; name?: string }) => {
+  const findExistingDatabase = (item: { id?: string; host?: string; port?: number | string; username?: string; name?: string }, checkId = true) => {
     const targetHost = (item.host || '').trim().toLowerCase();
     const targetPort = Number(item.port);
     const targetUsername = (item.username || '').trim().toLowerCase();
@@ -519,7 +519,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       });
       if (byCoords) return byCoords;
     }
-    if (item.id) {
+    if (checkId && item.id) {
       const byId = databases.find((d) => d.id === item.id);
       if (byId) return byId;
     }
@@ -544,19 +544,28 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
       if (parsed.type === 'DATABASE_GROUPS_BUNDLE' && Array.isArray(parsed.groups)) {
         rawGroups = parsed.groups;
-        rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : [];
-        rawBundledMethods = Array.isArray(parsed.notificationMethods) ? parsed.notificationMethods : [];
+        rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : (Array.isArray(parsed.databaseList) ? parsed.databaseList : (Array.isArray(parsed.dbs) ? parsed.dbs : []));
+        rawBundledMethods = Array.isArray(parsed.notificationMethods) ? parsed.notificationMethods : (Array.isArray(parsed.alertMethods) ? parsed.alertMethods : []);
         bundleType = 'BUNDLE';
       } else if (Array.isArray(parsed.groups)) {
         rawGroups = parsed.groups;
-        rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : [];
-        rawBundledMethods = Array.isArray(parsed.notificationMethods) ? parsed.notificationMethods : [];
+        rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : (Array.isArray(parsed.databaseList) ? parsed.databaseList : (Array.isArray(parsed.dbs) ? parsed.dbs : []));
+        rawBundledMethods = Array.isArray(parsed.notificationMethods) ? parsed.notificationMethods : (Array.isArray(parsed.alertMethods) ? parsed.alertMethods : []);
         bundleType = 'BUNDLE';
       } else if (Array.isArray(parsed)) {
-        rawGroups = parsed;
+        rawGroups = parsed.filter((item: any) => item && (item.name || item.groupName) && !item.dbType && !item.host);
+        const directDbs = parsed.filter((item: any) => item && (item.dbType || item.host || item.port || item.engine));
+        if (directDbs.length > 0) {
+          rawBundledDbs = directDbs;
+        }
         bundleType = 'ARRAY';
       } else if (parsed && typeof parsed === 'object') {
-        if (parsed.name || parsed.groupName) {
+        if (Array.isArray(parsed.databases) || Array.isArray(parsed.databaseList) || Array.isArray(parsed.dbs) || Array.isArray(parsed.groups)) {
+          rawGroups = Array.isArray(parsed.groups) ? parsed.groups : [];
+          rawBundledDbs = Array.isArray(parsed.databases) ? parsed.databases : (Array.isArray(parsed.databaseList) ? parsed.databaseList : (Array.isArray(parsed.dbs) ? parsed.dbs : []));
+          rawBundledMethods = Array.isArray(parsed.notificationMethods) ? parsed.notificationMethods : (Array.isArray(parsed.alertMethods) ? parsed.alertMethods : []);
+          bundleType = 'BUNDLE';
+        } else if (parsed.name || parsed.groupName) {
           rawGroups = [parsed];
           bundleType = 'SINGLE';
         } else {
@@ -564,23 +573,29 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         }
       }
 
-      if (rawGroups.length === 0) {
-        throw new Error('No database group records found in payload.');
+      if (rawGroups.length === 0 && rawBundledDbs.length === 0) {
+        throw new Error('No database group or database records found in payload.');
       }
 
       // 1. Gather all databases linked across all groups + top-level databases
       const uniqueDbsMap = new Map<string, any>();
       rawBundledDbs.forEach((db: any) => {
         if (db && typeof db === 'object') {
-          const key = db.id || `${db.name}_${db.host}_${db.port}`;
+          const key = db.id || `${db.name}_${db.host}_${db.port}` || JSON.stringify(db);
           if (!uniqueDbsMap.has(key)) uniqueDbsMap.set(key, db);
         }
       });
       rawGroups.forEach((g: any) => {
-        const dbs = Array.isArray(g.linkedDatabases) ? g.linkedDatabases : (Array.isArray(g.databases) ? g.databases : []);
+        const dbs = Array.isArray(g.linkedDatabases)
+          ? g.linkedDatabases
+          : (Array.isArray(g.databases)
+            ? g.databases
+            : (Array.isArray(g.assignedDatabases)
+              ? g.assignedDatabases
+              : (Array.isArray(g.databaseList) ? g.databaseList : (Array.isArray(g.dbs) ? g.dbs : []))));
         dbs.forEach((db: any) => {
           if (db && typeof db === 'object') {
-            const key = db.id || `${db.name}_${db.host}_${db.port}`;
+            const key = db.id || `${db.name}_${db.host}_${db.port}` || JSON.stringify(db);
             if (!uniqueDbsMap.has(key)) uniqueDbsMap.set(key, db);
           }
         });
@@ -873,26 +888,23 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       const knownDbs = [...databases];
 
       for (const candidate of importPreview.bundledDatabases) {
-        // Check if database already exists in Prisma storage table `database` by (host/IP, port, username)
-        const existingDb = findExistingDatabase(candidate);
-        if (existingDb) {
-          if (candidate.id) {
-            dbIdRemap.set(candidate.id, existingDb.id);
+        if (!importGenerateNewIds) {
+          // Check if candidate ID already exists in current databases
+          if (candidate.id && currentDbIds.has(candidate.id)) {
+            if (candidate.id) dbIdRemap.set(candidate.id, candidate.id);
+            if (candidate.name) dbIdRemap.set(candidate.name, candidate.id);
+            skippedDatabasesCount++;
+            continue;
           }
-          if (candidate.name) {
-            dbIdRemap.set(candidate.name, existingDb.id);
-          }
-          skippedDatabasesCount++;
-          continue;
-        }
 
-        // Check if ID duplicate
-        if (candidate.id && currentDbIds.has(candidate.id) && !importGenerateNewIds) {
-          if (candidate.id) {
-            dbIdRemap.set(candidate.id, candidate.id);
+          // Check if database already exists by (host, port, username)
+          const existingDb = findExistingDatabase(candidate, true);
+          if (existingDb) {
+            if (candidate.id) dbIdRemap.set(candidate.id, existingDb.id);
+            if (candidate.name) dbIdRemap.set(candidate.name, existingDb.id);
+            skippedDatabasesCount++;
+            continue;
           }
-          skippedDatabasesCount++;
-          continue;
         }
 
         const rawPass = (candidate.password || '').trim();
@@ -916,39 +928,46 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
         const dbPayload: Partial<DatabaseEntity> = {
           id: dbId,
-          name: (candidate.name || 'Imported Database').trim(),
+          name: (candidate.name || candidate.databaseName || 'Imported Database').trim(),
           databaseSystem: dbSystem,
           database_system: dbSystem,
-          dbType: (candidate.dbType || candidate.engine || 'ORACLE').toUpperCase() as DbEngine,
-          host: (candidate.host || '127.0.0.1').trim(),
-          port: Number(candidate.port) || 1521,
+          dbType: (candidate.dbType || candidate.engine || candidate.databaseEngine || candidate.databaseType || 'ORACLE').toUpperCase() as DbEngine,
+          host: (candidate.host || candidate.hostname || candidate.ip || candidate.address || '127.0.0.1').trim(),
+          port: Number(candidate.port) || (String(candidate.dbType).toUpperCase() === 'POSTGRES' ? 5432 : 1521),
           pollId: Number(candidate.pollId) || 0,
           tags: Array.isArray(candidate.tags) ? candidate.tags : ['PRODUCTION'],
           pollIntervalMinutes: Number(candidate.pollIntervalMinutes) || 5,
-          note: candidate.note || '',
-          username: candidate.username || candidate.connectionConfig?.username || '',
+          note: candidate.note || candidate.description || '',
+          username: candidate.username || candidate.user || candidate.connectionConfig?.username || '',
           password: plainPass,
           passwordEncrypted: cipherPass,
-          isEnabled: candidate.isEnabled !== false,
+          isEnabled: candidate.isEnabled !== false && candidate.statusOnOff !== 'OFF' && candidate.statusOnOff !== 'DISABLED',
           status: (candidate.status as any) || 'UP',
           connectionConfig: {
-            username: candidate.username || candidate.connectionConfig?.username || '',
+            username: candidate.username || candidate.user || candidate.connectionConfig?.username || '',
             ...(candidate.dbType === 'ORACLE'
-              ? { serviceName: candidate.databaseNameOrSid || candidate.connectionConfig?.serviceName || 'ORCLPDB1' }
-              : { databaseName: candidate.databaseNameOrSid || candidate.connectionConfig?.databaseName || 'app' }),
+              ? { serviceName: candidate.databaseNameOrSid || candidate.serviceName || candidate.sid || candidate.connectionConfig?.serviceName || 'ORCLPDB1' }
+              : { databaseName: candidate.databaseNameOrSid || candidate.databaseName || candidate.dbName || candidate.connectionConfig?.databaseName || 'app' }),
             sslMode: candidate.sslMode || candidate.connectionConfig?.sslMode || 'require',
             ...(candidate.connectionConfig || {}),
           },
           groupIds: Array.isArray(candidate.groupIds) ? candidate.groupIds : [],
         };
 
+        let savedDb: DatabaseEntity | undefined = undefined;
         if (onSaveDatabase) {
-          await onSaveDatabase(dbPayload);
+          savedDb = await onSaveDatabase(dbPayload);
         } else {
-          await api.createDatabase(dbPayload);
+          savedDb = await api.createDatabase(dbPayload);
         }
         currentDbIds.add(dbId);
-        knownDbs.push(dbPayload as DatabaseEntity);
+        if (savedDb?.id) {
+          currentDbIds.add(savedDb.id);
+          dbIdRemap.set(dbId, savedDb.id);
+          if (candidate.id) dbIdRemap.set(candidate.id, savedDb.id);
+          if (candidate.name) dbIdRemap.set(candidate.name, savedDb.id);
+        }
+        knownDbs.push((savedDb || dbPayload) as DatabaseEntity);
         importedDatabasesCount++;
       }
 
@@ -970,7 +989,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
         const assignedDbIds: string[] = [];
         Array.from(new Set(rawDbIdentifiers)).forEach((idOrName) => {
           const mappedId = dbIdRemap.get(idOrName) || idOrName;
-          const match = knownDbs.find((d) => d.id === mappedId || d.id === idOrName || d.name.toLowerCase() === idOrName.toLowerCase());
+          const strIdOrName = String(idOrName).toLowerCase();
+          const match = knownDbs.find((d) => d.id === mappedId || d.id === idOrName || d.name.toLowerCase() === strIdOrName);
           if (match) {
             if (!assignedDbIds.includes(match.id)) assignedDbIds.push(match.id);
           } else if (typeof mappedId === 'string' && mappedId.startsWith('db-')) {

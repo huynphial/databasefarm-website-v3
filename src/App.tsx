@@ -533,28 +533,57 @@ function MainAppContent() {
   };
 
   // Databases CRUD
-  const handleSaveDatabase = async (dbData: Partial<DatabaseEntity>) => {
+  const handleSaveDatabase = async (dbData: Partial<DatabaseEntity>): Promise<DatabaseEntity> => {
     try {
-      if (dbData.id) {
-        await api.updateDatabase(dbData.id, dbData);
+      const exists = dbData.id ? databases.some((d) => d.id === dbData.id) : false;
+      let saved: DatabaseEntity;
+      if (dbData.id && exists) {
+        saved = await api.updateDatabase(dbData.id, dbData);
       } else {
-        await api.createDatabase(dbData);
+        saved = await api.createDatabase(dbData);
       }
       const refreshed = await api.getDatabases();
       setDatabases(refreshed);
       storage.setDatabases(refreshed);
       toast({ title: 'Database Saved', description: `${dbData.name || 'Database'} saved to storage provider (${storageType.toUpperCase()}).`, type: 'success' });
+      return saved || refreshed.find((d) => d.id === (dbData.id || saved?.id)) || (dbData as DatabaseEntity);
     } catch (e) {
       // Local fallback
       let updated: DatabaseEntity[];
+      let savedDb: DatabaseEntity;
       if (dbData.id) {
-        updated = databases.map((d) =>
-          d.id === dbData.id ? ({ ...d, ...dbData, updatedAt: new Date().toISOString() } as DatabaseEntity) : d
-        );
+        const existingIdx = databases.findIndex((d) => d.id === dbData.id);
+        if (existingIdx !== -1) {
+          savedDb = { ...databases[existingIdx], ...dbData, updatedAt: new Date().toISOString() } as DatabaseEntity;
+          updated = databases.map((d) => (d.id === dbData.id ? savedDb : d));
+        } else {
+          savedDb = {
+            id: dbData.id,
+            name: dbData.name || 'NEW_DB',
+            databaseSystem: dbData.databaseSystem || '',
+            dbType: dbData.dbType || 'POSTGRES',
+            host: dbData.host || '127.0.0.1',
+            port: dbData.port || 5432,
+            tags: dbData.tags || [],
+            pollIntervalMinutes: dbData.pollIntervalMinutes ?? 5,
+            note: dbData.note || '',
+            username: dbData.username || 'dbmon_reader',
+            password: dbData.password || '',
+            connectionConfig: dbData.connectionConfig || {},
+            groupIds: dbData.groupIds || [],
+            metricIds: dbData.metricIds || [],
+            status: dbData.status || 'UP',
+            isEnabled: dbData.isEnabled !== false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          updated = [savedDb, ...databases];
+        }
       } else {
-        const newDb: DatabaseEntity = {
+        savedDb = {
           id: `db-${Date.now().toString().slice(-4)}`,
           name: dbData.name || 'NEW_DB',
+          databaseSystem: dbData.databaseSystem || '',
           dbType: dbData.dbType || 'POSTGRES',
           host: dbData.host || '127.0.0.1',
           port: dbData.port || 5432,
@@ -566,13 +595,16 @@ function MainAppContent() {
           connectionConfig: dbData.connectionConfig || {},
           groupIds: dbData.groupIds || [],
           metricIds: dbData.metricIds || [],
+          status: dbData.status || 'UP',
+          isEnabled: dbData.isEnabled !== false,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        updated = [newDb, ...databases];
+        updated = [savedDb, ...databases];
       }
       setDatabases(updated);
       storage.setDatabases(updated);
+      return savedDb;
     }
   };
 
@@ -602,10 +634,12 @@ function MainAppContent() {
   // Metrics CRUD
   const handleSaveMetric = async (metricData: Partial<MetricEntity>) => {
     try {
-      if (metricData.id) {
-        await api.updateMetric(metricData.id, metricData);
+      let savedMetric: MetricEntity;
+      const isExisting = metricData.id && metrics.some((m) => m.id === metricData.id);
+      if (isExisting) {
+        savedMetric = await api.updateMetric(metricData.id!, metricData);
       } else {
-        await api.createMetric(metricData);
+        savedMetric = await api.createMetric(metricData);
       }
       const [refreshedMets, refreshedDbs] = await Promise.all([
         api.getMetrics(),
@@ -617,15 +651,18 @@ function MainAppContent() {
       storage.setMetrics(refreshedMets);
       storage.setDatabases(syncedDatabases);
       toast({ title: 'Metric Saved', description: `${metricData.name || 'Metric'} persisted in ${storageType.toUpperCase()} store.`, type: 'success' });
+      return savedMetric;
     } catch (e) {
+      let savedMetric: MetricEntity;
       let updated: MetricEntity[];
-      if (metricData.id) {
+      if (metricData.id && metrics.some((m) => m.id === metricData.id)) {
+        savedMetric = { ...metrics.find((m) => m.id === metricData.id), ...metricData, updatedAt: new Date().toISOString() } as MetricEntity;
         updated = metrics.map((m) =>
-          m.id === metricData.id ? ({ ...m, ...metricData, updatedAt: new Date().toISOString() } as MetricEntity) : m
+          m.id === metricData.id ? savedMetric : m
         );
       } else {
-        const newMetric: MetricEntity = {
-          id: `met-${Date.now().toString().slice(-4)}`,
+        savedMetric = {
+          id: metricData.id || `met-${Date.now().toString().slice(-4)}`,
           name: metricData.name || 'New Metric',
           sqlQuery: metricData.sqlQuery || 'SELECT 1',
           valueType: metricData.valueType || 'NUMBER',
@@ -639,13 +676,14 @@ function MainAppContent() {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        updated = [newMetric, ...metrics];
+        updated = [savedMetric, ...metrics];
       }
       const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(databases, groups, templates, updated);
       setMetrics(updated);
       setDatabases(syncedDatabases);
       storage.setMetrics(updated);
       storage.setDatabases(syncedDatabases);
+      return savedMetric;
     }
   };
 
@@ -680,8 +718,9 @@ function MainAppContent() {
     };
     try {
       let savedTpl: TemplateEntity;
-      if (payload.id) {
-        savedTpl = await api.updateTemplate(payload.id, payload);
+      const isExisting = payload.id && templates.some((t) => t.id === payload.id);
+      if (isExisting) {
+        savedTpl = await api.updateTemplate(payload.id!, payload);
       } else {
         savedTpl = await api.createTemplate(payload);
       }

@@ -263,8 +263,9 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       if (!parsed) throw new Error('Empty or invalid JSON payload');
 
       // Case 1: Template Bundle
-      if (parsed.type === 'MONITORING_TEMPLATE_BUNDLE' && Array.isArray(parsed.templates)) {
-        const tpls = parsed.templates.map((item: any) => ({
+      if (parsed.type === 'MONITORING_TEMPLATE_BUNDLE' || Array.isArray(parsed.templates) || Array.isArray(parsed.templateList)) {
+        const rawTemplates = parsed.templates || parsed.templateList || [];
+        const tpls = rawTemplates.map((item: any) => ({
           name: item.template?.name || item.name || 'Imported Template',
           description: item.template?.description || item.description || null,
           targetDbType: item.template?.targetDbType || item.targetDbType || 'ALL',
@@ -272,7 +273,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
           alertHourMode: item.template?.alertHourMode || item.alertHourMode || 'ALL_DAY',
           alertHourStart: item.template?.alertHourStart || item.alertHourStart || '07:30',
           alertHourEnd: item.template?.alertHourEnd || item.alertHourEnd || '17:00',
-          metrics: Array.isArray(item.metrics) ? item.metrics : [],
+          metrics: Array.isArray(item.metrics) ? item.metrics : (Array.isArray(item.template?.metrics) ? item.template.metrics : []),
         }));
         setImportPreview({ type: 'BUNDLE', templates: tpls });
         return;
@@ -280,6 +281,26 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
       // Case 2: Array of templates or items
       if (Array.isArray(parsed)) {
+        const hasMetricsOnly = parsed.every((item: any) => item.sqlQuery || item.query);
+        if (hasMetricsOnly) {
+          setImportPreview({
+            type: 'SINGLE',
+            templates: [
+              {
+                name: 'Imported Metrics Template',
+                description: 'Template auto-created for imported metrics bundle',
+                targetDbType: 'ALL',
+                databaseEngineCode: 'ALL',
+                alertHourMode: 'ALL_DAY',
+                alertHourStart: '07:30',
+                alertHourEnd: '17:00',
+                metrics: parsed,
+              },
+            ],
+          });
+          return;
+        }
+
         const tpls = parsed.map((item: any) => ({
           name: item.template?.name || item.name || 'Imported Template',
           description: item.template?.description || item.description || null,
@@ -288,24 +309,21 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
           alertHourMode: item.template?.alertHourMode || item.alertHourMode || 'ALL_DAY',
           alertHourStart: item.template?.alertHourStart || item.alertHourStart || '07:30',
           alertHourEnd: item.template?.alertHourEnd || item.alertHourEnd || '17:00',
-          metrics: Array.isArray(item.metrics) ? item.metrics : [],
+          metrics: Array.isArray(item.metrics) ? item.metrics : (Array.isArray(item.template?.metrics) ? item.template.metrics : []),
         }));
         setImportPreview({ type: 'BUNDLE', templates: tpls });
         return;
       }
 
-      // Case 3: Single Template object
+      // Case 3: Single Template object or Metrics object
       const tplObj = parsed.template || parsed;
-      const templateName = tplObj.name;
-      if (!templateName || typeof templateName !== 'string') {
-        throw new Error('JSON is missing required template "name" property.');
-      }
-
       const metricsList = Array.isArray(parsed.metrics)
         ? parsed.metrics
         : Array.isArray(tplObj.metrics)
         ? tplObj.metrics
-        : [];
+        : (parsed.sqlQuery || parsed.query ? [parsed] : []);
+
+      const templateName = tplObj.name || (metricsList.length > 0 ? 'Imported Metrics Template' : 'Imported Template');
 
       setImportPreview({
         type: 'SINGLE',
@@ -375,7 +393,7 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
 
       // 1. Create or Save Template
       const newTemplateId = `tpl-imp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      onSaveTemplate({
+      const savedTpl = await onSaveTemplate({
         id: newTemplateId,
         name: item.name.trim(),
         description: item.description || null,
@@ -387,23 +405,25 @@ export const TemplatesView: React.FC<TemplatesViewProps> = ({
       });
       totalTemplatesImported++;
 
+      const activeTemplateId = savedTpl?.id || newTemplateId;
+
       // 2. Create/attach all metrics
       if (Array.isArray(item.metrics) && item.metrics.length > 0) {
         for (const m of item.metrics) {
-          if (!m.name || !m.sqlQuery) continue;
+          if (!m.name || (!m.sqlQuery && !m.query)) continue;
           const metricId = `met-imp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-          onSaveMetric({
+          await onSaveMetric({
             id: metricId,
             name: m.name.trim(),
-            sqlQuery: m.sqlQuery,
+            sqlQuery: m.sqlQuery || m.query || 'SELECT 1',
             valueType: (m.valueType as any) || 'NUMBER',
-            relationalOperator: (m.relationalOperator as any) || '>=',
-            thresholdWarn: m.thresholdWarn || null,
-            thresholdHigh: m.thresholdHigh || null,
-            thresholdCritical: m.thresholdCritical || null,
+            relationalOperator: (m.relationalOperator || m.thresholdOperator || '>=') as any,
+            thresholdWarn: m.thresholdWarn ?? m.warn ?? null,
+            thresholdHigh: m.thresholdHigh ?? m.high ?? null,
+            thresholdCritical: m.thresholdCritical ?? m.critical ?? null,
             cycle: m.cycle ?? 1,
-            templateIds: [newTemplateId],
-            templateId: newTemplateId,
+            templateIds: [activeTemplateId],
+            templateId: activeTemplateId,
             templateName: item.name.trim(),
             isEnabled: m.isEnabled !== false,
             noAlertRequired: !!m.noAlertRequired,

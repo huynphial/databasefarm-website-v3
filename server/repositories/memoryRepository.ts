@@ -1942,11 +1942,34 @@ FROM pg_tablespace`,
           password: '',
         };
       } else {
-        saved = {
-          ...(dbData as DatabaseEntity),
+        const newDb: DatabaseEntity = {
+          id: dbData.id,
+          name: dbData.name || 'New Database',
+          databaseSystem: dbData.databaseSystem || (dbData as any).database_system || '',
+          dbType: dbData.dbType || 'POSTGRES',
+          host: dbData.host || 'localhost',
+          port: dbData.port || 5432,
+          authMethod: dbData.authMethod || 'PASSWORD',
+          username: dbData.username || '',
           password: '',
           passwordEncrypted: newEncryptedPass !== undefined ? newEncryptedPass : (rawEncPass.startsWith('enc:') ? rawEncPass : (rawEncPass !== '' ? (encryptPassword(rawEncPass) || '') : '')),
+          authKey: dbData.authKey || '',
+          databaseName: dbData.databaseName || '',
+          environment: dbData.environment || 'PRODUCTION',
+          connectionConfig: dbData.connectionConfig || {},
+          groupIds: dbData.groupIds || [],
+          metricIds: dbData.metricIds || [],
+          tags: dbData.tags || ['PRODUCTION'],
+          pollIntervalMinutes: dbData.pollIntervalMinutes ?? 5,
+          note: dbData.note || '',
+          createdAt: dbData.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          status: dbData.status || 'UP',
+          isEnabled: dbData.isEnabled !== false,
+          lastCheckAt: new Date().toISOString(),
         };
+        this.databases = [newDb, ...this.databases];
+        saved = newDb;
       }
     } else {
       const newDb: DatabaseEntity = {
@@ -1966,6 +1989,9 @@ FROM pg_tablespace`,
         connectionConfig: dbData.connectionConfig || {},
         groupIds: dbData.groupIds || [],
         metricIds: dbData.metricIds || [],
+        tags: dbData.tags || ['PRODUCTION'],
+        pollIntervalMinutes: dbData.pollIntervalMinutes ?? 5,
+        note: dbData.note || '',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: dbData.status || 'UP',
@@ -2028,7 +2054,32 @@ FROM pg_tablespace`,
           databaseEngine: this.metrics[idx].databaseEngineId ? (this.databaseEngines.find((e) => e.id === this.metrics[idx].databaseEngineId) || null) : null,
         };
       } else {
-        savedResult = metricData as MetricEntity;
+        const newMetric: MetricEntity = {
+          id: metricData.id,
+          name: metricData.name || 'New Metric',
+          sqlQuery: metricData.sqlQuery || 'SELECT 1 AS value',
+          valueType: metricData.valueType || 'NUMBER',
+          relationalOperator: metricData.relationalOperator || '>=',
+          thresholdOperator: metricData.thresholdOperator || '>=',
+          thresholdWarn: metricData.thresholdWarn || null,
+          thresholdHigh: metricData.thresholdHigh || null,
+          thresholdCritical: metricData.thresholdCritical || null,
+          cycle: metricData.cycle ?? 1,
+          templateId: firstTemplateId,
+          templateName: firstTemplateName,
+          templateIds,
+          databaseEngineId: metricData.databaseEngineId || null,
+          isEnabled: metricData.isEnabled !== false,
+          metricQueryType: metricData.metricQueryType || 1,
+          thresholdsConfig: metricData.thresholdsConfig || null,
+          createdAt: metricData.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        this.metrics = [newMetric, ...this.metrics];
+        savedResult = {
+          ...newMetric,
+          databaseEngine: newMetric.databaseEngineId ? (this.databaseEngines.find((e) => e.id === newMetric.databaseEngineId) || null) : null,
+        };
       }
     } else {
       const newMetric: MetricEntity = {
@@ -2125,7 +2176,24 @@ FROM pg_tablespace`,
           databaseEngine: matchedEngine || null,
         };
       } else {
-        savedTemplate = tplData as TemplateEntity;
+        const newTemplate: TemplateEntity = {
+          id: tplData.id,
+          name: tplData.name || 'New Template',
+          description: tplData.description || null,
+          targetDbType,
+          databaseEngineId,
+          alertHourMode,
+          alertHourStart,
+          alertHourEnd,
+          metricIds: tplData.metricIds || [],
+          createdAt: tplData.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        this.templates = [newTemplate, ...this.templates];
+        savedTemplate = {
+          ...newTemplate,
+          databaseEngine: matchedEngine || null,
+        };
       }
     } else {
       const newTemplate: TemplateEntity = {
