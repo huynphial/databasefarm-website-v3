@@ -32,8 +32,12 @@ export function constantTimeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Adaptive Password Hashing using Bcrypt KDF (CWE-916 Mitigation)
- * Uses high computational cost (12 rounds) with cryptographically secure per-password salts
+ * Adaptive Password Hashing using Bcrypt & Scrypt KDFs (CWE-916 Mitigation)
+ * 
+ * Cryptographic Parameters:
+ * - Bcrypt: 12 salt rounds (cost factor 2^12 = 4,096 iterations), per-hash cryptographically secure random salt.
+ * - Scrypt: N=16384 (CPU/memory cost factor), r=8 (block size), p=1 (parallelization), 16-byte random salt, 64-byte key length.
+ * - Verification: Constant-time comparison using crypto.timingSafeEqual / bcrypt.compare to prevent side-channel timing attacks.
  */
 export const DEFAULT_BCRYPT_ROUNDS = 12;
 export const DUMMY_BCRYPT_HASH = '$2b$12$e7k2M3N4O5P6Q7R8S9T0UuV1W2X3Y4Z5a6b7c8d9e0f1g2h3i4j5k';
@@ -53,7 +57,24 @@ export function hashPasswordSync(password: string, rounds = DEFAULT_BCRYPT_ROUND
 }
 
 /**
- * Constant-Time Password Verification using Adaptive KDF (CWE-916 & Timing Attack Mitigation)
+ * Native Scrypt Password Hashing (Memory-hard adaptive KDF with 16-byte CSPRNG salt)
+ */
+export async function hashPasswordScrypt(password: string): Promise<string> {
+  if (typeof password !== 'string' || !password) {
+    throw new Error('Password must be a non-empty string.');
+  }
+  const salt = crypto.randomBytes(16);
+  return new Promise((resolve, reject) => {
+    // Parameters: N = 16384 (2^14), r = 8, p = 1, keylen = 64 bytes
+    crypto.scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }, (err, derivedKey) => {
+      if (err) return reject(err);
+      resolve(`$scrypt$N=16384,r=8,p=1$${salt.toString('base64url')}$${derivedKey.toString('base64url')}`);
+    });
+  });
+}
+
+/**
+ * Constant-Time Password Verification using Adaptive KDFs (CWE-916 & Timing Attack Mitigation)
  */
 export async function verifyPassword(password: string, hashOrPlain: string): Promise<boolean> {
   if (typeof password !== 'string' || typeof hashOrPlain !== 'string') {
@@ -62,6 +83,29 @@ export async function verifyPassword(password: string, hashOrPlain: string): Pro
   }
 
   try {
+    // 1. Scrypt format ($scrypt$params$salt$hash)
+    if (hashOrPlain.startsWith('$scrypt$')) {
+      const parts = hashOrPlain.split('$');
+      if (parts.length >= 5) {
+        const salt = Buffer.from(parts[3], 'base64url');
+        const expectedHash = Buffer.from(parts[4], 'base64url');
+        return new Promise<boolean>((resolve) => {
+          crypto.scrypt(password, salt, expectedHash.length, { N: 16384, r: 8, p: 1 }, (err, derivedKey) => {
+            if (err) {
+              crypto.timingSafeEqual(expectedHash, expectedHash);
+              return resolve(false);
+            }
+            if (derivedKey.length !== expectedHash.length) {
+              crypto.timingSafeEqual(expectedHash, expectedHash);
+              return resolve(false);
+            }
+            resolve(crypto.timingSafeEqual(derivedKey, expectedHash));
+          });
+        });
+      }
+    }
+
+    // 2. Bcrypt format ($2b$, $2a$, $2y$)
     if (
       hashOrPlain.startsWith('$2') ||
       hashOrPlain.startsWith('$2a$') ||
@@ -70,7 +114,8 @@ export async function verifyPassword(password: string, hashOrPlain: string): Pro
     ) {
       return await bcrypt.compare(password, hashOrPlain);
     }
-    // Fallback constant-time comparison for legacy non-bcrypt entries
+
+    // 3. Fallback constant-time comparison for legacy plaintext credentials
     return constantTimeEqual(password, hashOrPlain);
   } catch {
     return constantTimeEqual(password, hashOrPlain);
