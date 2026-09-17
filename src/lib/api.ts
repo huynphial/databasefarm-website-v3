@@ -258,24 +258,6 @@ export const api = {
     });
   },
 
-  // Health Check
-  async checkCollectorHealth(url?: string): Promise<{
-    targetUrl: string;
-    statusCode: number;
-    statusText: string;
-    isHealthy: boolean;
-    responseTimeMs: number;
-    timestamp: string;
-    responseData?: any;
-    message: string;
-    error?: string;
-  }> {
-    return fetchJson('/api/collector/health-check', {
-      method: 'POST',
-      body: JSON.stringify({ url }),
-    });
-  },
-
   // Audit Logs
   async getAuditLogs(filter?: {
     fromDate?: string;

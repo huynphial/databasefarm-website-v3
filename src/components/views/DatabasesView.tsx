@@ -48,6 +48,7 @@ import { DatabaseEngineFilter } from '../common/DatabaseEngineFilter';
 import { DatabaseEngineSummaryGrid } from '../common/DatabaseEngineSummaryGrid';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { BatchEditTagsModal } from './BatchEditTagsModal';
 
 interface DatabasesViewProps {
   databases: DatabaseEntity[];
@@ -182,6 +183,7 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDb, setEditingDb] = useState<DatabaseEntity | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [isBatchTagsModalOpen, setIsBatchTagsModalOpen] = useState(false);
 
   // Export / Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -1489,6 +1491,15 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
             {userRole === 'ADMIN' && (
               <>
                 <button
+                  onClick={() => setIsBatchTagsModalOpen(true)}
+                  title="Batch manage tags: add or remove a tag across multiple databases"
+                  className="flex items-center gap-1.5 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer shadow-2xs hover:shadow-xs"
+                >
+                  <Tag className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span>{t('databases.editTags') || 'Edit Tags'}</span>
+                </button>
+
+                <button
                   onClick={handleExportAllDatabases}
                   title="Export all database connection configurations to JSON"
                   className="flex items-center gap-1.5 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer shadow-2xs hover:shadow-xs"
@@ -2491,6 +2502,16 @@ export const DatabasesView: React.FC<DatabasesViewProps> = ({
           </div>
         </div>
       </Dialog>
+
+      {/* Batch Edit Tags Modal */}
+      <BatchEditTagsModal
+        isOpen={isBatchTagsModalOpen}
+        onClose={() => setIsBatchTagsModalOpen(false)}
+        databases={databases}
+        databaseEngines={databaseEngines}
+        onSaveDatabase={onSaveDatabase}
+        onRefresh={onRefresh}
+      />
     </div>
   );
 };
