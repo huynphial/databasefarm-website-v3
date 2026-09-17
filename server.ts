@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { createServer as createViteServer } from 'vite';
-import { getStorageRepository } from './server/repositories';
+import { getStorageRepository, setStorageRepositoryType, IStorageRepository } from './server/repositories';
 import { hashPassword, hashPasswordSync, verifyPassword } from './server/utils/crypto';
 
 // Global BigInt serialization patch for JSON.stringify support (MySQL BigInt values)
@@ -18,7 +18,9 @@ import { hashPassword, hashPasswordSync, verifyPassword } from './server/utils/c
 async function startServer() {
   const app = express();
   const PORT = 3000;
-  const repo = getStorageRepository();
+  const repo = new Proxy({} as IStorageRepository, {
+    get: (_, prop: string | symbol) => (getStorageRepository() as any)[prop],
+  });
 
   // Enable trust proxy for reverse proxies / Cloud Run environments
   app.set('trust proxy', 1);
@@ -148,6 +150,21 @@ async function startServer() {
   });
 
   app.get('/api/config/storage-type', (req, res) => {
+    res.json({
+      storageType: repo.getStorageType(),
+      isPrismaActive: repo.getStorageType() === 'prisma',
+    });
+  });
+
+  app.post('/api/config/storage-type', (req, res) => {
+    const { storageType } = req.body || {};
+    if (storageType === 'prisma' || storageType === 'memory') {
+      const updatedRepo = setStorageRepositoryType(storageType);
+      return res.json({
+        storageType: updatedRepo.getStorageType(),
+        isPrismaActive: updatedRepo.getStorageType() === 'prisma',
+      });
+    }
     res.json({
       storageType: repo.getStorageType(),
       isPrismaActive: repo.getStorageType() === 'prisma',

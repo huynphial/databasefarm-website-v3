@@ -37,6 +37,7 @@
 | `NODE_ENV` | Application runtime mode (`development` or `production`) | `development` |
 | `PORT` | HTTP server listening port | `3000` |
 | `STORAGE_TYPE` | Storage repository selection (`prisma` or `memory`) | `prisma` |
+| `USE_PRISMA_DB` | Force or enable Prisma ORM database storage (`true` or `false`) | `true` |
 | `DATABASE_URL` | MySQL connection string for Prisma ORM | `mysql://user:pass@127.0.0.1:3306/db_monitoring_system` |
 | `ENABLE_SQL_LOG` | Enable or disable SQL query file logging (`true` or `false`) | `true` |
 | `SESSION_TIMEOUT_MINUTES` | User inactivity session timeout limit | `30` |

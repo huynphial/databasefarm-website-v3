@@ -50,6 +50,9 @@ export const api = {
   async getStorageInfo(): Promise<{ storageType: 'prisma' | 'memory'; isPrismaActive: boolean }> {
     return fetchJson('/api/config/storage-type');
   },
+  async setStorageType(storageType: 'prisma' | 'memory'): Promise<{ storageType: 'prisma' | 'memory'; isPrismaActive: boolean }> {
+    return fetchJson('/api/config/storage-type', { method: 'POST', body: JSON.stringify({ storageType }) });
+  },
 
   // Databases
   async getDatabases(): Promise<DatabaseEntity[]> {
