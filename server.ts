@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 import express from 'express';
 import path from 'path';
+import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 import { createServer as createViteServer } from 'vite';
 import { getStorageRepository } from './server/repositories';
 
@@ -16,7 +18,96 @@ async function startServer() {
   const PORT = 3000;
   const repo = getStorageRepository();
 
+  // Enable trust proxy for reverse proxies / Cloud Run environments
+  app.set('trust proxy', 1);
+
   app.use(express.json());
+
+  // Rate Limiter: Authentication endpoint protection against brute force attacks (CWE-307)
+  const authRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15-minute window
+    max: 30, // Limit each IP to 30 login requests per window
+    standardHeaders: true, // Return standard RateLimit headers (RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset)
+    legacyHeaders: false, // Disable X-RateLimit-* legacy headers
+    message: {
+      success: false,
+      message: 'Too many login attempts from this IP. Please try again after 15 minutes.',
+    },
+  });
+
+  // Rate Limiter: SPA fallback & file-serving protection against resource exhaustion / DoS (CWE-770)
+  const spaFallbackLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15-minute window
+    max: 300, // Limit each IP to 300 page load / file requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'Too many page requests from this IP. Please try again later.',
+  });
+
+  // Secret key for signing server-controlled session tokens (CWE-807 / CWE-290 mitigation)
+  const AUTH_SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex');
+
+  function generateAuthToken(user: { id: string; username: string; role: string }): string {
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: user.id,
+        username: user.username,
+        role: user.role,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 86400 * 7, // 7-day session validity
+      })
+    ).toString('base64url');
+
+    const signature = crypto
+      .createHmac('sha256', AUTH_SECRET)
+      .update(`${header}.${payload}`)
+      .digest('base64url');
+
+    return `${header}.${payload}.${signature}`;
+  }
+
+  type LoginValidationResult =
+    | { isValid: true; username: string; password: string; error?: undefined }
+    | { isValid: false; error: string; username?: undefined; password?: undefined };
+
+  /**
+   * Strict Type Guard & Input Sanitizer for Authentication Payloads
+   * Prevents User-Controlled Bypass of Security Checks (CWE-807 / CWE-290)
+   */
+  function validateLoginInput(body: unknown): LoginValidationResult {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return { isValid: false, error: 'Invalid payload: request body must be a JSON object.' };
+    }
+
+    const record = body as Record<string, unknown>;
+
+    // Strict type check: parameters must be primitive strings (rejects arrays, objects, booleans, numbers)
+    if (typeof record.username !== 'string' || typeof record.password !== 'string') {
+      return { isValid: false, error: 'Username and password must be valid non-empty strings.' };
+    }
+
+    const trimmedUsername = record.username.trim();
+    const rawPassword = record.password;
+
+    if (trimmedUsername.length === 0) {
+      return { isValid: false, error: 'Username cannot be empty.' };
+    }
+
+    if (trimmedUsername.length > 100) {
+      return { isValid: false, error: 'Username exceeds the maximum permitted length (100 characters).' };
+    }
+
+    if (rawPassword.length === 0) {
+      return { isValid: false, error: 'Password cannot be empty.' };
+    }
+
+    if (rawPassword.length > 256) {
+      return { isValid: false, error: 'Password exceeds the maximum permitted length (256 characters).' };
+    }
+
+    return { isValid: true, username: trimmedUsername, password: rawPassword };
+  }
 
   // Helper functions for client IP and User ID extraction for Audit Logging
   function getClientIp(req: express.Request): string {
@@ -140,12 +231,17 @@ async function startServer() {
     }
   });
 
-  app.post('/api/auth/login', async (req, res) => {
+  app.post('/api/auth/login', authRateLimiter, async (req, res) => {
     try {
-      const { username, password } = req.body;
-      if (!username || !password) {
-        return res.status(400).json({ success: false, message: 'Username and password are required.' });
+      // 1. Strict Input Type Guarding & Sanitization (CWE-807 / CWE-290 Mitigation)
+      const validation = validateLoginInput(req.body);
+      if (!validation.isValid) {
+        return res.status(400).json({ success: false, message: validation.error });
       }
+
+      const { username, password } = validation;
+
+      // 2. Cryptographic constant-time credential verification (prevents timing-based user enumeration)
       const result = await repo.verifyUserPassword(username, password);
       if (!result.success || !result.user) {
         await repo.addAuditLog({
@@ -153,9 +249,12 @@ async function startServer() {
           clientIp: getClientIp(req),
           actionType: 'LOGIN_FAILED',
           targetEntity: 'AUTH',
-          details: `Authentication failed: ${result.message || 'Invalid credentials'}`,
+          details: `Authentication failed for account "${username}"`,
         });
-        return res.status(401).json(result);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid username or password.',
+        });
       }
 
       const nowIso = new Date().toISOString();
@@ -163,6 +262,13 @@ async function startServer() {
         id: result.user.id,
         lastLogin: nowIso,
       }).catch(() => {});
+
+      // 3. Issue server-signed cryptographic token (HMAC-SHA256) to establish trusted server-controlled session
+      const token = generateAuthToken({
+        id: result.user.id,
+        username: result.user.username,
+        role: result.user.role,
+      });
 
       await repo.addAuditLog({
         userId: result.user.username,
@@ -175,6 +281,7 @@ async function startServer() {
 
       res.json({
         success: true,
+        token,
         user: {
           id: result.user.id,
           username: result.user.username,
@@ -1011,7 +1118,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', spaFallbackLimiter, (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

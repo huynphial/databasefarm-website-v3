@@ -248,6 +248,142 @@ export const INITIAL_GROUPS: GroupEntity[] = [
   },
 ];
 
+/**
+ * Client-Side Storage Sanitization & Encryption Utilities
+ * Remediates CWE-312, CWE-315, CWE-359 (Cleartext storage of sensitive credentials in client storage)
+ */
+
+/**
+ * Strips raw passwords, keys, and unencrypted secrets before storing DatabaseEntity in client-side storage.
+ */
+export function sanitizeDatabaseEntity(db: Partial<DatabaseEntity> | any): DatabaseEntity {
+  if (!db || typeof db !== 'object') {
+    return db as DatabaseEntity;
+  }
+
+  // Clone object to avoid mutating runtime in-memory objects directly
+  const copy: any = { ...db };
+
+  // If password was already an encrypted ciphertext token (starts with 'enc:'), retain it as passwordEncrypted
+  if (typeof copy.password === 'string' && copy.password.startsWith('enc:') && !copy.passwordEncrypted) {
+    copy.passwordEncrypted = copy.password;
+  }
+
+  // Explicitly remove cleartext secret fields
+  delete copy.password;
+  delete copy.enteredPassword;
+  delete copy.importCustomPassword;
+  delete copy.finalPassword;
+  delete copy.plaintextPassword;
+  delete copy.rawPassword;
+  delete copy.authKey;
+
+  // Sanitize connectionConfig if it contains embedded credentials
+  if (copy.connectionConfig && typeof copy.connectionConfig === 'object') {
+    const safeConn = { ...copy.connectionConfig };
+    delete safeConn.password;
+    delete safeConn.secret;
+    delete safeConn.apiKey;
+    delete safeConn.authToken;
+    copy.connectionConfig = safeConn;
+  }
+
+  return copy as DatabaseEntity;
+}
+
+export function sanitizeDatabaseList(list: (Partial<DatabaseEntity> | any)[]): DatabaseEntity[] {
+  if (!Array.isArray(list)) return [];
+  return list.map(sanitizeDatabaseEntity);
+}
+
+/**
+ * Authenticated Encryption/Decryption Strategy for client-side storage (AES-GCM via Web Crypto API)
+ * Provides defense-in-depth when sensitive payload persistence in client storage is necessary.
+ */
+export class ClientCryptoVault {
+  private static readonly ALGO = 'AES-GCM';
+  private static readonly KEY_LEN = 256;
+  private static cachedKey: CryptoKey | null = null;
+
+  private static async getDerivedKey(): Promise<CryptoKey> {
+    if (this.cachedKey) return this.cachedKey;
+    if (typeof window === 'undefined' || !window.crypto || !window.crypto.subtle) {
+      throw new Error('Web Crypto API is not available in current environment');
+    }
+
+    const salt = new TextEncoder().encode('dbmon-client-storage-salt-v1');
+    const baseKey = await window.crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(window.location.origin + '_dbmon_vault'),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveKey']
+    );
+
+    this.cachedKey = await window.crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt,
+        iterations: 100000,
+        hash: 'SHA-256',
+      },
+      baseKey,
+      { name: this.ALGO, length: this.KEY_LEN },
+      false,
+      ['encrypt', 'decrypt']
+    );
+
+    return this.cachedKey;
+  }
+
+  static async encrypt(plaintext: string): Promise<string> {
+    const key = await this.getDerivedKey();
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(plaintext);
+
+    const ciphertext = await window.crypto.subtle.encrypt(
+      { name: this.ALGO, iv },
+      key,
+      encoded
+    );
+
+    const combined = new Uint8Array(iv.byteLength + ciphertext.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(ciphertext), iv.byteLength);
+
+    let binary = '';
+    const bytes = new Uint8Array(combined);
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return 'enc:gcm:' + btoa(binary);
+  }
+
+  static async decrypt(encryptedPayload: string): Promise<string> {
+    if (!encryptedPayload.startsWith('enc:gcm:')) {
+      throw new Error('Invalid encrypted payload format');
+    }
+    const base64 = encryptedPayload.slice(8);
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    const iv = bytes.slice(0, 12);
+    const ciphertext = bytes.slice(12);
+    const key = await this.getDerivedKey();
+
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: this.ALGO, iv },
+      key,
+      ciphertext
+    );
+
+    return new TextDecoder().decode(decrypted);
+  }
+}
+
 export const INITIAL_DATABASES: DatabaseEntity[] = [
   {
     id: 'db-01',
@@ -259,7 +395,7 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     pollIntervalMinutes: 5,
     note: 'Primary ERP transactional Oracle cluster. High availability database node.',
     username: 'dbmon_ro',
-    password: 'EncryptedPassword998#',
+    passwordEncrypted: 'enc:seed_db01_vault',
     connectionConfig: {
       serviceName: 'ORCLPDB1.internal',
       ssl: true,
@@ -282,7 +418,7 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     pollIntervalMinutes: 2,
     note: 'PCI-DSS compliant payment gateway core ledger database.',
     username: 'pg_readonly_mon',
-    password: 'SecurePostgresPass#44',
+    passwordEncrypted: 'enc:seed_db02_vault',
     connectionConfig: {
       databaseName: 'payment_ledger',
       sslMode: 'require',
@@ -305,7 +441,7 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     pollIntervalMinutes: 5,
     note: 'Customer relationship portal staging replica.',
     username: 'app_monitor',
-    password: 'MySQLMonitorPass_77',
+    passwordEncrypted: 'enc:seed_db03_vault',
     connectionConfig: {
       databaseName: 'auth_users_db',
       charset: 'utf8mb4',
@@ -327,7 +463,7 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     pollIntervalMinutes: 10,
     note: 'Data warehouse batch reporting engine for executive dashboards.',
     username: 'mssql_reader',
-    password: 'MSSQLVaultKey#2026',
+    passwordEncrypted: 'enc:seed_db04_vault',
     connectionConfig: {
       databaseName: 'HR_Enterprise',
       encrypt: true,
@@ -350,7 +486,7 @@ export const INITIAL_DATABASES: DatabaseEntity[] = [
     pollIntervalMinutes: 5,
     note: 'Inventory management development integration server.',
     username: 'dw_mon',
-    password: 'DataWarehousePass#88',
+    passwordEncrypted: 'enc:seed_db05_vault',
     connectionConfig: {
       databaseName: 'analytics_dw',
       sslMode: 'prefer',
@@ -462,7 +598,7 @@ export const INITIAL_ALERT_NOTIFICATION_LOGS: AlertNotificationLogEntity[] = [
     dispatcherId: 'meth-tg-02',
     dispatcherName: 'Telegram Incident Operations Bot',
     dispatcherType: 'TELEGRAM',
-    dispatcherConfig: JSON.stringify({ botToken: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ', defaultChatId: '-1001234567890' }),
+    dispatcherConfig: JSON.stringify({ botToken: 'REDACTED_BOT_TOKEN', defaultChatId: '-1001234567890' }),
     responseSuccess: true,
     responseStatus: '200 OK',
     responseDetail: 'HTTP 200 OK: Telegram message delivered to chat -1001234567890',
@@ -510,7 +646,7 @@ export const INITIAL_ALERT_NOTIFICATION_LOGS: AlertNotificationLogEntity[] = [
     dispatcherId: 'meth-tg-02',
     dispatcherName: 'Telegram Incident Operations Bot',
     dispatcherType: 'TELEGRAM',
-    dispatcherConfig: JSON.stringify({ botToken: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ' }),
+    dispatcherConfig: JSON.stringify({ botToken: 'REDACTED_BOT_TOKEN' }),
     responseSuccess: true,
     responseStatus: '200 OK',
     responseDetail: 'HTTP 200 OK: Telegram message sent successfully',
@@ -582,7 +718,7 @@ export const INITIAL_ALERT_NOTIFICATION_LOGS: AlertNotificationLogEntity[] = [
     dispatcherId: 'meth-tg-02',
     dispatcherName: 'Telegram Incident Operations Bot',
     dispatcherType: 'TELEGRAM',
-    dispatcherConfig: JSON.stringify({ botToken: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ' }),
+    dispatcherConfig: JSON.stringify({ botToken: 'REDACTED_BOT_TOKEN' }),
     responseSuccess: false,
     responseStatus: '429 Rate Limit Exceeded',
     responseDetail: 'HTTP 429 Too Many Requests: Rate limit exceeded on Telegram provider',
@@ -609,7 +745,7 @@ export const INITIAL_ALERT_NOTIFICATION_QUEUE: AlertNotificationQueueEntity[] = 
     dispatcherId: 'meth-tg-02',
     dispatcherName: 'Telegram Incident Operations Bot',
     dispatcherType: 'TELEGRAM',
-    dispatcherConfig: JSON.stringify({ botToken: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ' }),
+    dispatcherConfig: JSON.stringify({ botToken: 'REDACTED_BOT_TOKEN' }),
     lockedAt: null,
     lockedBy: null,
   },
@@ -629,7 +765,7 @@ export const INITIAL_ALERT_NOTIFICATION_QUEUE: AlertNotificationQueueEntity[] = 
     dispatcherId: 'meth-tg-02',
     dispatcherName: 'Telegram Incident Operations Bot',
     dispatcherType: 'TELEGRAM',
-    dispatcherConfig: JSON.stringify({ botToken: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ' }),
+    dispatcherConfig: JSON.stringify({ botToken: 'REDACTED_BOT_TOKEN' }),
     lockedAt: new Date(Date.now() - 10000).toISOString(),
     lockedBy: 'dispatcher-worker-01',
   },
@@ -939,18 +1075,21 @@ export const storage = {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           return parsed.map((db: any) => ({
-            ...db,
+            ...sanitizeDatabaseEntity(db),
             lastCheckAt: db.lastCheckAt || db.updatedAt || new Date().toISOString(),
           }));
         }
       }
-      localStorage.setItem(STORAGE_KEYS.DATABASES, JSON.stringify(INITIAL_DATABASES));
+      const initialSanitized = INITIAL_DATABASES.map(sanitizeDatabaseEntity);
+      localStorage.setItem(STORAGE_KEYS.DATABASES, JSON.stringify(initialSanitized));
+      return initialSanitized;
     } catch (e) {}
-    return INITIAL_DATABASES;
+    return INITIAL_DATABASES.map(sanitizeDatabaseEntity);
   },
   setDatabases(data: DatabaseEntity[]) {
     try {
-      localStorage.setItem(STORAGE_KEYS.DATABASES, JSON.stringify(data));
+      const sanitized = Array.isArray(data) ? data.map(sanitizeDatabaseEntity) : [];
+      localStorage.setItem(STORAGE_KEYS.DATABASES, JSON.stringify(sanitized));
     } catch (e) {}
   },
   getDatabaseEngines(): any[] {

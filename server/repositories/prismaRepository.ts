@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { PrismaClient, Role, DbType, ValueType, AlertLevel } from '@prisma/client';
 import { IStorageRepository } from './types';
@@ -232,8 +233,16 @@ export class PrismaRepository implements IStorageRepository {
   }
 
   async verifyUserPassword(username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> {
-    const trimmedUsername = (username || '').trim();
-    const trimmedPassword = (password || '').trim();
+    const DUMMY_BCRYPT_HASH = '$2b$10$wN3b.9pXW9g2f2J6IeO3y.sN6y9Fk3L4M5N6O7P8Q9R0S1T2U3V4W';
+
+    // Strict input type checking
+    if (typeof username !== 'string' || typeof password !== 'string') {
+      await bcrypt.compare('dummy', DUMMY_BCRYPT_HASH);
+      return { success: false, message: 'Invalid username or password.' };
+    }
+
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password;
 
     // Look up user strictly in the database `users` table
     let u = await this.prisma.user.findUnique({ where: { username: trimmedUsername } });
@@ -248,16 +257,31 @@ export class PrismaRepository implements IStorageRepository {
       });
     }
 
+    // Mitigate timing-based user enumeration: execute dummy bcrypt check if user not found
     if (!u) {
-      return { success: false, message: 'Invalid username. No matching account found in database.' };
+      await bcrypt.compare(trimmedPassword, DUMMY_BCRYPT_HASH);
+      return { success: false, message: 'Invalid username or password.' };
     }
     if ((u as any).isLocked) {
+      await bcrypt.compare(trimmedPassword, DUMMY_BCRYPT_HASH);
       return { success: false, message: 'This account is locked. Please contact your system administrator.' };
     }
 
     if (!u.passwordHash) {
-      return { success: false, message: 'No password configured in database for this account.' };
+      await bcrypt.compare(trimmedPassword, DUMMY_BCRYPT_HASH);
+      return { success: false, message: 'Invalid username or password.' };
     }
+
+    // Constant-time comparison helper for plaintext strings
+    const safeStringEqual = (a: string, b: string): boolean => {
+      const bufA = Buffer.from(a);
+      const bufB = Buffer.from(b);
+      if (bufA.length !== bufB.length) {
+        crypto.timingSafeEqual(bufA, bufA);
+        return false;
+      }
+      return crypto.timingSafeEqual(bufA, bufB);
+    };
 
     // STRICT: Only the password on the database table `users` is allowed (no hardcoded bypasses)
     let isMatch = false;
@@ -271,15 +295,15 @@ export class PrismaRepository implements IStorageRepository {
         isMatch = await bcrypt.compare(trimmedPassword, u.passwordHash);
       } else {
         // Direct comparison if password is stored as plain text in the database
-        isMatch = u.passwordHash === trimmedPassword;
+        isMatch = safeStringEqual(trimmedPassword, u.passwordHash);
       }
     } catch (err) {
       console.warn('Database user password verification error:', err);
-      isMatch = u.passwordHash === trimmedPassword;
+      isMatch = safeStringEqual(trimmedPassword, u.passwordHash);
     }
 
     if (!isMatch) {
-      return { success: false, message: 'Invalid password. Credentials verification failed.' };
+      return { success: false, message: 'Invalid username or password.' };
     }
 
     return {

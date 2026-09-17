@@ -1,5 +1,13 @@
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { encryptPassword } from '../utils/crypto';
+import {
+  safeExtractString,
+  safeExtractStringArray,
+  safeExtractNumber,
+  safeParseDateGte,
+  safeParseDateLte,
+} from '../utils/sanitizer';
 import {
   User,
   DatabaseEntity,
@@ -24,7 +32,8 @@ import {
 import { IStorageRepository } from './types';
 
 export class MemoryRepository implements IStorageRepository {
-  private userPasswords: Record<string, string> = {};
+  // Use ECMAScript Map to prevent Prototype Pollution / Remote Property Injection (CWE-250, CWE-400)
+  private userPasswords: Map<string, string> = new Map<string, string>();
   private users: User[] = [];
   private databasePollQueue: DatabasePollQueueEntity[] = [
     {
@@ -221,10 +230,10 @@ export class MemoryRepository implements IStorageRepository {
       },
     ];
 
-    this.userPasswords = {
-      'usr-admin-01': bcrypt.hashSync(adminPass, 10),
-      'usr-viewer-02': bcrypt.hashSync(viewerPass, 10),
-    };
+    this.userPasswords = new Map<string, string>([
+      ['usr-admin-01', bcrypt.hashSync(adminPass, 10)],
+      ['usr-viewer-02', bcrypt.hashSync(viewerPass, 10)],
+    ]);
 
     // Support additional users configured in AUTH_USERS environment variable
     if (process.env.AUTH_USERS) {
@@ -240,7 +249,7 @@ export class MemoryRepository implements IStorageRepository {
                 role: u.role === 'ADMIN' ? 'ADMIN' : 'VIEWER',
                 createdAt: new Date().toISOString(),
               });
-              this.userPasswords[uId] = bcrypt.hashSync(u.password.trim(), 10);
+              this.userPasswords.set(uId, bcrypt.hashSync(u.password.trim(), 10));
             }
           });
         }
@@ -256,7 +265,7 @@ export class MemoryRepository implements IStorageRepository {
               role: parts[2]?.trim().toUpperCase() === 'ADMIN' ? 'ADMIN' : 'VIEWER',
               createdAt: new Date().toISOString(),
             });
-            this.userPasswords[uId] = bcrypt.hashSync(parts[1].trim(), 10);
+            this.userPasswords.set(uId, bcrypt.hashSync(parts[1].trim(), 10));
           }
         });
       }
@@ -1625,7 +1634,9 @@ FROM pg_tablespace`,
 
       if (userData.password) {
         const hash = await bcrypt.hash(userData.password, 10);
-        this.userPasswords[userRecord.id] = hash;
+        if (typeof userRecord.id === 'string' && userRecord.id) {
+          this.userPasswords.set(userRecord.id, hash);
+        }
       }
     } else {
       if (!userData.username) throw new Error('Username is required.');
@@ -1644,13 +1655,17 @@ FROM pg_tablespace`,
 
       const password = userData.password || 'TemporaryPassword#2026';
       const hash = await bcrypt.hash(password, 10);
-      this.userPasswords[newId] = hash;
+      this.userPasswords.set(newId, hash);
     }
 
     return userRecord;
   }
 
   async deleteUser(id: string): Promise<boolean> {
+    if (typeof id !== 'string' || !id) {
+      throw new Error('Invalid user ID provided.');
+    }
+
     const userToDelete = this.users.find((u) => u.id === id);
     if (userToDelete && userToDelete.role === 'ADMIN') {
       const remainingAdmins = this.users.filter((u) => u.role === 'ADMIN' && u.id !== id);
@@ -1660,18 +1675,33 @@ FROM pg_tablespace`,
     }
 
     this.users = this.users.filter((u) => u.id !== id);
-    delete this.userPasswords[id];
+    // Use Map.prototype.delete to prevent Prototype Pollution / Property Injection
+    this.userPasswords.delete(id);
     return true;
   }
 
   async verifyUserPassword(username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> {
-    const trimmedUsername = (username || '').trim();
-    const trimmedPassword = (password || '').trim();
-    const user = this.users.find((u) => u.username.toLowerCase() === trimmedUsername.toLowerCase());
-    if (!user) {
-      return { success: false, message: 'Invalid username. No matching account found.' };
+    const DUMMY_BCRYPT_HASH = '$2b$10$wN3b.9pXW9g2f2J6IeO3y.sN6y9Fk3L4M5N6O7P8Q9R0S1T2U3V4W';
+    
+    // Strict input type checking
+    if (typeof username !== 'string' || typeof password !== 'string') {
+      await bcrypt.compare('dummy', DUMMY_BCRYPT_HASH);
+      return { success: false, message: 'Invalid username or password.' };
     }
+
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password;
+
+    const user = this.users.find((u) => u.username.toLowerCase() === trimmedUsername.toLowerCase());
+    
+    // Mitigate timing-based user enumeration: perform dummy bcrypt check if user not found
+    if (!user) {
+      await bcrypt.compare(trimmedPassword, DUMMY_BCRYPT_HASH);
+      return { success: false, message: 'Invalid username or password.' };
+    }
+
     if (user.isLocked) {
+      await bcrypt.compare(trimmedPassword, DUMMY_BCRYPT_HASH);
       return { success: false, message: 'This account is locked. Please contact your system administrator.' };
     }
 
@@ -1686,27 +1716,40 @@ FROM pg_tablespace`,
 
     let isMatch = false;
 
-    if (normUser === adminUser && trimmedPassword === adminPass) {
+    // Constant-time comparison helper for plaintext strings
+    const safeStringEqual = (a: string, b: string): boolean => {
+      const bufA = Buffer.from(a);
+      const bufB = Buffer.from(b);
+      if (bufA.length !== bufB.length) {
+        crypto.timingSafeEqual(bufA, bufA);
+        return false;
+      }
+      return crypto.timingSafeEqual(bufA, bufB);
+    };
+
+    if (normUser === adminUser && safeStringEqual(trimmedPassword, adminPass)) {
       isMatch = true;
-    } else if (normUser === viewerUser && trimmedPassword === viewerPass) {
+    } else if (normUser === viewerUser && safeStringEqual(trimmedPassword, viewerPass)) {
       isMatch = true;
     } else {
-      const hash = this.userPasswords[user.id];
+      const hash = typeof user.id === 'string' ? this.userPasswords.get(user.id) : undefined;
       if (hash) {
         try {
           if (hash.startsWith('$2') || hash.startsWith('$2a$') || hash.startsWith('$2b$')) {
             isMatch = await bcrypt.compare(trimmedPassword, hash);
           } else {
-            isMatch = hash === trimmedPassword;
+            isMatch = safeStringEqual(trimmedPassword, hash);
           }
         } catch {
-          isMatch = hash === trimmedPassword;
+          isMatch = safeStringEqual(trimmedPassword, hash);
         }
+      } else {
+        await bcrypt.compare(trimmedPassword, DUMMY_BCRYPT_HASH);
       }
     }
 
     if (!isMatch) {
-      return { success: false, message: 'Invalid password. Credentials verification failed.' };
+      return { success: false, message: 'Invalid username or password.' };
     }
     return { success: true, user };
   }
@@ -2298,19 +2341,22 @@ FROM pg_tablespace`,
   }
 
   // --- Metric History ---
-  async getMetricHistory(dbId?: string, metricId?: string, fromDate?: string, toDate?: string): Promise<MetricHistoryEntity[]> {
+  async getMetricHistory(dbId?: unknown, metricId?: unknown, fromDate?: unknown, toDate?: unknown): Promise<MetricHistoryEntity[]> {
+    const safeDbId = safeExtractString(dbId);
+    const safeMetricId = safeExtractString(metricId);
+    const fromDateObj = safeParseDateGte(fromDate);
+    const toDateObj = safeParseDateLte(toDate);
+
     let result = [...this.metricHistory];
-    if (dbId && dbId !== 'ALL') result = result.filter((m) => m.dbId === dbId);
-    if (metricId && metricId !== 'ALL') result = result.filter((m) => m.metricId === metricId);
-    if (fromDate) {
-      const fromTime = new Date(fromDate).getTime();
+    if (safeDbId && safeDbId !== 'ALL') result = result.filter((m) => m.dbId === safeDbId);
+    if (safeMetricId && safeMetricId !== 'ALL') result = result.filter((m) => m.metricId === safeMetricId);
+    if (fromDateObj) {
+      const fromTime = fromDateObj.getTime();
       result = result.filter((m) => new Date(m.createdAt).getTime() >= fromTime);
     }
-    if (toDate) {
-      const toDateObj = toDate.length === 10
-        ? new Date(`${toDate}T23:59:59.999Z`).getTime()
-        : new Date(toDate).getTime();
-      result = result.filter((m) => new Date(m.createdAt).getTime() <= toDateObj);
+    if (toDateObj) {
+      const toTime = toDateObj.getTime();
+      result = result.filter((m) => new Date(m.createdAt).getTime() <= toTime);
     }
     return result.map((m) => ({
       ...m,
@@ -2339,37 +2385,50 @@ FROM pg_tablespace`,
   // --- Raw Measurements / Telemetry ---
   async getRawMeasurements(filterOrLimit?: number | RawMeasurementFilter): Promise<RawMeasurementEntity[]> {
     let limit = 0;
-    let filter: RawMeasurementFilter = {};
+    let filterObj: RawMeasurementFilter = {};
 
     if (typeof filterOrLimit === 'number') {
       limit = filterOrLimit;
-    } else if (filterOrLimit) {
-      filter = filterOrLimit;
-      if (filter.limit !== undefined) {
-        limit = filter.limit;
+    } else if (filterOrLimit && typeof filterOrLimit === 'object') {
+      filterObj = filterOrLimit;
+      const parsedLimit = safeExtractNumber(filterObj.limit);
+      if (parsedLimit !== undefined && parsedLimit > 0) {
+        limit = parsedLimit;
       }
     }
 
     let list = [...this.rawMeasurements];
 
-    if (filter.dbId && filter.dbId !== 'ALL') {
-      list = list.filter((m) => m.dbId === filter.dbId);
-    } else if (filter.dbIds && filter.dbIds.length > 0) {
-      const allowed = new Set(filter.dbIds);
+    const safeDbId = safeExtractString(filterObj.dbId);
+    const safeDbIds = safeExtractStringArray(filterObj.dbIds);
+    const safeDbType = safeExtractString(filterObj.dbType);
+    const safeMetricId = safeExtractString(filterObj.metricId);
+    const safeMetricIds = safeExtractStringArray(filterObj.metricIds);
+    const rawStatusVal = filterObj.status || filterObj.pollStatus;
+    const safeStatusVal = safeExtractString(rawStatusVal);
+    const safeObjectName = safeExtractString(filterObj.objectName);
+    const safeAttributeName = safeExtractString(filterObj.attributeName);
+    const safeSearchTerm = safeExtractString(filterObj.searchTerm);
+    const fromDateObj = safeParseDateGte(filterObj.fromDate);
+    const toDateObj = safeParseDateLte(filterObj.toDate);
+
+    if (safeDbId && safeDbId !== 'ALL') {
+      list = list.filter((m) => m.dbId === safeDbId);
+    } else if (safeDbIds && safeDbIds.length > 0) {
+      const allowed = new Set(safeDbIds);
       list = list.filter((m) => allowed.has(m.dbId));
     }
-    if (filter.metricId && filter.metricId !== 'ALL') {
-      list = list.filter((m) => m.metricId === filter.metricId);
-    } else if (filter.metricIds && filter.metricIds.length > 0) {
-      const allowed = new Set(filter.metricIds);
+    if (safeMetricId && safeMetricId !== 'ALL') {
+      list = list.filter((m) => m.metricId === safeMetricId);
+    } else if (safeMetricIds && safeMetricIds.length > 0) {
+      const allowed = new Set(safeMetricIds);
       list = list.filter((m) => allowed.has(m.metricId));
     }
-    if (filter.dbType && filter.dbType !== 'ALL') {
-      list = list.filter((m) => (m.dbType || '').toUpperCase() === filter.dbType!.toUpperCase());
+    if (safeDbType && safeDbType !== 'ALL') {
+      list = list.filter((m) => (m.dbType || '').toUpperCase() === safeDbType.toUpperCase());
     }
-    const statusVal = filter.status || filter.pollStatus;
-    if (statusVal && statusVal !== 'ALL') {
-      const sUpper = statusVal.toUpperCase();
+    if (safeStatusVal && safeStatusVal !== 'ALL') {
+      const sUpper = safeStatusVal.toUpperCase();
       if (sUpper === 'FAIL') {
         list = list.filter((m) => ['FAIL', 'FAILED', 'ERROR', 'DOWN', 'TIMEOUT'].includes((m.pollStatus || m.status || '').toUpperCase()));
       } else if (sUpper === 'SUCCESS') {
@@ -2378,26 +2437,24 @@ FROM pg_tablespace`,
         list = list.filter((m) => (m.status || '').toUpperCase() === sUpper || (m.pollStatus || '').toUpperCase() === sUpper);
       }
     }
-    if (filter.objectName && filter.objectName !== 'ALL') {
-      const targetObj = filter.objectName.toLowerCase().trim();
+    if (safeObjectName && safeObjectName !== 'ALL') {
+      const targetObj = safeObjectName.toLowerCase();
       list = list.filter((m) => (m.objectName || '').toLowerCase().trim() === targetObj);
     }
-    if (filter.attributeName && filter.attributeName !== 'ALL') {
-      const targetAttr = filter.attributeName.toLowerCase().trim();
+    if (safeAttributeName && safeAttributeName !== 'ALL') {
+      const targetAttr = safeAttributeName.toLowerCase();
       list = list.filter((m) => (m.attributeName || '').toLowerCase().trim() === targetAttr);
     }
-    if (filter.fromDate) {
-      const fromTime = new Date(filter.fromDate).getTime();
+    if (fromDateObj) {
+      const fromTime = fromDateObj.getTime();
       list = list.filter((m) => new Date(m.measuredAt).getTime() >= fromTime);
     }
-    if (filter.toDate) {
-      const toDateObj = filter.toDate.length === 10
-        ? new Date(`${filter.toDate}T23:59:59.999Z`).getTime()
-        : new Date(filter.toDate).getTime();
-      list = list.filter((m) => new Date(m.measuredAt).getTime() <= toDateObj);
+    if (toDateObj) {
+      const toTime = toDateObj.getTime();
+      list = list.filter((m) => new Date(m.measuredAt).getTime() <= toTime);
     }
-    if (filter.searchTerm && filter.searchTerm.trim()) {
-      const q = filter.searchTerm.toLowerCase().trim();
+    if (safeSearchTerm) {
+      const q = safeSearchTerm.toLowerCase();
       list = list.filter((m) =>
         (m.dbName && m.dbName.toLowerCase().includes(q)) ||
         (m.metricName && m.metricName.toLowerCase().includes(q)) ||
@@ -2412,7 +2469,7 @@ FROM pg_tablespace`,
       );
     }
 
-    const minDur = filter.minDurationMs !== undefined ? filter.minDurationMs : filter.queryDurationMs;
+    const minDur = safeExtractNumber(filterObj.minDurationMs !== undefined ? filterObj.minDurationMs : filterObj.queryDurationMs);
     if (minDur !== undefined && minDur > 0) {
       list = list.filter((m) => (m.queryDurationMs ?? 0) >= minDur);
     }
@@ -2460,37 +2517,39 @@ FROM pg_tablespace`,
     return this.databasePollQueue;
   }
 
-  async clearDatabasePollQueue(statusFilter: 'processing' | 'pending' | 'all' = 'processing', dbId?: string): Promise<{ clearedCount: number }> {
+  async clearDatabasePollQueue(statusFilter: 'processing' | 'pending' | 'all' = 'processing', dbId?: unknown): Promise<{ clearedCount: number }> {
     const initialLen = this.databasePollQueue.length;
+    const safeDbId = safeExtractString(dbId);
     this.databasePollQueue = this.databasePollQueue.filter((item) => {
       const matchStatus = statusFilter === 'all' || item.status === statusFilter;
-      const matchDb = !dbId || dbId === 'ALL' || item.dbId === dbId;
+      const matchDb = !safeDbId || safeDbId === 'ALL' || item.dbId === safeDbId;
       return !(matchStatus && matchDb);
     });
     const clearedCount = initialLen - this.databasePollQueue.length;
     return { clearedCount };
   }
 
-  async getDatabasePollLogs(dbId?: string, fromDate?: string, toDate?: string, limit?: number): Promise<DatabasePollLogEntity[]> {
+  async getDatabasePollLogs(dbId?: unknown, fromDate?: unknown, toDate?: unknown, limit?: unknown): Promise<DatabasePollLogEntity[]> {
+    const safeDbId = safeExtractString(dbId);
+    const fromDateObj = safeParseDateGte(fromDate);
+    const toDateObj = safeParseDateLte(toDate);
+    const parsedLimit = safeExtractNumber(limit);
+
     let result = [...this.databasePollLogs];
-    if (dbId && dbId !== 'ALL') {
-      const q = dbId.toLowerCase();
+    if (safeDbId && safeDbId !== 'ALL') {
+      const q = safeDbId.toLowerCase();
       result = result.filter((l) => (l.dbId && l.dbId.toLowerCase() === q) || (l.dbName && l.dbName.toLowerCase() === q));
     }
-    if (fromDate) {
-      const fromMs = new Date(fromDate).getTime();
-      if (!isNaN(fromMs)) {
-        result = result.filter((l) => new Date(l.startedAt).getTime() >= fromMs);
-      }
+    if (fromDateObj) {
+      const fromMs = fromDateObj.getTime();
+      result = result.filter((l) => new Date(l.startedAt).getTime() >= fromMs);
     }
-    if (toDate) {
-      const toMs = new Date(toDate).getTime();
-      if (!isNaN(toMs)) {
-        result = result.filter((l) => new Date(l.startedAt).getTime() <= toMs);
-      }
+    if (toDateObj) {
+      const toMs = toDateObj.getTime();
+      result = result.filter((l) => new Date(l.startedAt).getTime() <= toMs);
     }
     result.sort((a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime());
-    const effectiveLimit = limit !== undefined && limit > 0 ? limit : (dbId && dbId !== 'ALL' ? 5000 : 2000);
+    const effectiveLimit = parsedLimit !== undefined && parsedLimit > 0 ? parsedLimit : (safeDbId && safeDbId !== 'ALL' ? 5000 : 2000);
     return result.slice(0, effectiveLimit);
   }
 
@@ -2577,50 +2636,51 @@ FROM pg_tablespace`,
 
   // --- Audit Logs ---
   async getAuditLogs(
-    limitOrFilter?: number | { limit?: number; fromDate?: string; toDate?: string; actionType?: string; searchTerm?: string },
-    fromDateParam?: string,
-    toDateParam?: string,
-    actionTypeParam?: string,
-    searchTermParam?: string
+    limitOrFilter?: number | { limit?: number; fromDate?: unknown; toDate?: unknown; actionType?: unknown; searchTerm?: unknown },
+    fromDateParam?: unknown,
+    toDateParam?: unknown,
+    actionTypeParam?: unknown,
+    searchTermParam?: unknown
   ): Promise<AuditLogEntity[]> {
     let limit = 0;
-    let fromDate = fromDateParam;
-    let toDate = toDateParam;
-    let actionType = actionTypeParam;
-    let searchTerm = searchTermParam;
+    let fromDateRaw: unknown = fromDateParam;
+    let toDateRaw: unknown = toDateParam;
+    let actionTypeRaw: unknown = actionTypeParam;
+    let searchTermRaw: unknown = searchTermParam;
 
     if (typeof limitOrFilter === 'number') {
       limit = limitOrFilter;
     } else if (limitOrFilter && typeof limitOrFilter === 'object') {
-      if (limitOrFilter.limit !== undefined) limit = limitOrFilter.limit;
-      if (limitOrFilter.fromDate !== undefined) fromDate = limitOrFilter.fromDate;
-      if (limitOrFilter.toDate !== undefined) toDate = limitOrFilter.toDate;
-      if (limitOrFilter.actionType !== undefined) actionType = limitOrFilter.actionType;
-      if (limitOrFilter.searchTerm !== undefined) searchTerm = limitOrFilter.searchTerm;
+      if (limitOrFilter.limit !== undefined) limit = safeExtractNumber(limitOrFilter.limit) || 0;
+      if (limitOrFilter.fromDate !== undefined) fromDateRaw = limitOrFilter.fromDate;
+      if (limitOrFilter.toDate !== undefined) toDateRaw = limitOrFilter.toDate;
+      if (limitOrFilter.actionType !== undefined) actionTypeRaw = limitOrFilter.actionType;
+      if (limitOrFilter.searchTerm !== undefined) searchTermRaw = limitOrFilter.searchTerm;
     }
+
+    const fromDateObj = safeParseDateGte(fromDateRaw);
+    const toDateObj = safeParseDateLte(toDateRaw);
+    const safeActionType = safeExtractString(actionTypeRaw);
+    const safeSearchTerm = safeExtractString(searchTermRaw);
 
     let filtered = [...this.auditLogs];
 
-    if (fromDate) {
-      const fromTime = new Date(fromDate).getTime();
-      if (!isNaN(fromTime)) {
-        filtered = filtered.filter((log) => new Date(log.createdAt).getTime() >= fromTime);
-      }
+    if (fromDateObj) {
+      const fromTime = fromDateObj.getTime();
+      filtered = filtered.filter((log) => new Date(log.createdAt).getTime() >= fromTime);
     }
 
-    if (toDate) {
-      const toTime = new Date(toDate).getTime();
-      if (!isNaN(toTime)) {
-        filtered = filtered.filter((log) => new Date(log.createdAt).getTime() <= toTime);
-      }
+    if (toDateObj) {
+      const toTime = toDateObj.getTime();
+      filtered = filtered.filter((log) => new Date(log.createdAt).getTime() <= toTime);
     }
 
-    if (actionType && actionType !== 'ALL') {
-      filtered = filtered.filter((log) => log.actionType.toUpperCase() === actionType.toUpperCase());
+    if (safeActionType && safeActionType !== 'ALL') {
+      filtered = filtered.filter((log) => log.actionType.toUpperCase() === safeActionType.toUpperCase());
     }
 
-    if (searchTerm && searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
+    if (safeSearchTerm) {
+      const term = safeSearchTerm.toLowerCase();
       filtered = filtered.filter(
         (log) =>
           (log.userId && log.userId.toLowerCase().includes(term)) ||
@@ -2655,9 +2715,11 @@ FROM pg_tablespace`,
     return entry;
   }
 
-  async cleanAllMonitorData(daysToKeep = 0, dbId = 'ALL') {
-    const cutoffTime = daysToKeep <= 0 ? Date.now() + 60000 : Date.now() - daysToKeep * 86400000;
-    const matchesDb = (targetDbId: string) => dbId === 'ALL' || targetDbId === dbId;
+  async cleanAllMonitorData(daysToKeep = 0, dbId: unknown = 'ALL') {
+    const safeDays = safeExtractNumber(daysToKeep) ?? 0;
+    const safeDbId = safeExtractString(dbId) || 'ALL';
+    const cutoffTime = safeDays <= 0 ? Date.now() + 60000 : Date.now() - safeDays * 86400000;
+    const matchesDb = (targetDbId: string) => safeDbId === 'ALL' || targetDbId === safeDbId;
 
     const initActive = this.activeAlerts.length;
     this.activeAlerts = this.activeAlerts.filter((a) => {
@@ -2699,9 +2761,11 @@ FROM pg_tablespace`,
     };
   }
 
-  async cleanRawQueryHistory(daysToKeep = 0, dbId = 'ALL') {
-    const cutoffTime = daysToKeep <= 0 ? Date.now() + 60000 : Date.now() - daysToKeep * 86400000;
-    const matchesDb = (targetDbId: string) => dbId === 'ALL' || targetDbId === dbId;
+  async cleanRawQueryHistory(daysToKeep = 0, dbId: unknown = 'ALL') {
+    const safeDays = safeExtractNumber(daysToKeep) ?? 0;
+    const safeDbId = safeExtractString(dbId) || 'ALL';
+    const cutoffTime = safeDays <= 0 ? Date.now() + 60000 : Date.now() - safeDays * 86400000;
+    const matchesDb = (targetDbId: string) => safeDbId === 'ALL' || targetDbId === safeDbId;
 
     const initMetrics = this.metricHistory.length;
     this.metricHistory = this.metricHistory.filter((m) => {
