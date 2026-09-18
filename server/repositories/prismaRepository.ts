@@ -3218,21 +3218,21 @@ export class PrismaRepository implements IStorageRepository {
       console.warn('⚠️ Standard Prisma delete transaction failed, falling back to raw SQL deletion:', err);
       await p.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0;');
       try {
-        await p.$executeRawUnsafe('DELETE FROM `alert_notification_queue`;');
-        await p.$executeRawUnsafe('DELETE FROM `database_poll_queue`;');
-        await p.$executeRawUnsafe('DELETE FROM `database_poll_log`;');
-        await p.$executeRawUnsafe('DELETE FROM `metric_data_points`;');
-        await p.$executeRawUnsafe('DELETE FROM `active_alerts`;');
-        await p.$executeRawUnsafe('DELETE FROM `alert_history`;');
-        await p.$executeRawUnsafe('DELETE FROM `alert_notification_logs`;');
-        await p.$executeRawUnsafe('DELETE FROM `database_group_mappings`;');
-        await p.$executeRawUnsafe('DELETE FROM `group_template_mappings`;');
-        await p.$executeRawUnsafe('DELETE FROM `metric_template_mappings`;');
-        await p.$executeRawUnsafe('DELETE FROM `database_metric_mappings`;');
-        await p.$executeRawUnsafe('DELETE FROM `databases`;');
-        await p.$executeRawUnsafe('DELETE FROM `database_groups`;');
-        await p.$executeRawUnsafe('DELETE FROM `metrics`;');
-        await p.$executeRawUnsafe('DELETE FROM `templates`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `alert_notification_queue`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `database_poll_queue`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `database_poll_log`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `metric_data_points`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `active_alerts`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `alert_history`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `alert_notification_logs`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `database_group_mappings`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `group_template_mappings`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `metric_template_mappings`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `database_metric_mappings`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `databases`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `database_groups`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `metrics`;');
+        await p.$executeRawUnsafe('TRUNCATE TABLE `templates`;');
       } finally {
         await p.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1;');
       }
