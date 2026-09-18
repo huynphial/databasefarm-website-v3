@@ -106,133 +106,384 @@ function MainAppContent() {
   const [metricHistory, setMetricHistory] = useState<MetricHistoryEntity[]>(() => storage.getMetricHistory());
   const [systemSettings, setSystemSettings] = useState<SystemSettingsEntity>(() => storage.getSystemSettings());
 
-  // Ref to handle concurrent data load requests safely
-  const loadDataCountRef = useRef(0);
+  // Ref to handle concurrent tab data load requests safely
+  const loadTabDataCountRef = useRef<Record<string, number>>({});
 
-  // Load Data from Backend API / Storage
-  const loadData = useCallback(async () => {
-    const requestId = ++loadDataCountRef.current;
+  // Optimize: Load only data relevant to the active tab
+  const loadTabSpecificData = useCallback(async (tab: NavigationTab) => {
+    const requestId = (loadTabDataCountRef.current[tab] || 0) + 1;
+    loadTabDataCountRef.current[tab] = requestId;
+
     try {
-      const [
-        sInfo,
-        dbs,
-        engines,
-        methods,
-        raws,
-        mets,
-        tpls,
-        grps,
-        active,
-        history,
-        notifLogs,
-        notifQueue,
-        dbPollQueue,
-        dbPollLogs,
-        mHistory,
-        settings,
-      ] = await Promise.all([
-        api.getStorageInfo().catch(() => ({ storageType: 'memory' as const, isPrismaActive: false })),
-        api.getDatabases().catch(() => storage.getDatabases()),
-        api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
-        api.getAlertNotificationMethods().catch(() => storage.getAlertNotificationMethods()),
-        api.getRawMeasurements().catch(() => storage.getRawMeasurements()),
-        api.getMetrics().catch(() => storage.getMetrics()),
-        api.getTemplates().catch(() => storage.getTemplates()),
-        api.getGroups().catch(() => storage.getGroups()),
-        api.getActiveAlerts().catch(() => storage.getActiveAlerts()),
-        api.getAlertHistory().catch(() => storage.getAlertHistory()),
-        api.getAlertNotificationLogs().catch(() => storage.getAlertNotificationLogs()),
-        api.getAlertNotificationQueue().catch(() => storage.getAlertNotificationQueue()),
-        api.getDatabasePollQueue().catch(() => storage.getDatabasePollQueue()),
-        api.getDatabasePollLogs().catch(() => storage.getDatabasePollLogs()),
-        api.getMetricHistory().catch(() => storage.getMetricHistory()),
-        api.getSystemSettings().catch(() => storage.getSystemSettings()),
-      ]);
+      switch (tab) {
+        case 'dashboard': {
+          const [dbs, engines, active, logs] = await Promise.all([
+            api.getDatabases().catch(() => storage.getDatabases()),
+            api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+            api.getActiveAlerts().catch(() => storage.getActiveAlerts()),
+            api.getDatabasePollLogs().catch(() => storage.getDatabasePollLogs()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeDbs = Array.isArray(dbs) ? dbs : [];
+          const safeEngines = Array.isArray(engines) ? engines : [];
+          const safeActive = Array.isArray(active) ? active : [];
+          const safeLogs = Array.isArray(logs) ? logs : [];
 
-      if (requestId !== loadDataCountRef.current) return;
+          setDatabases(safeDbs);
+          setDatabaseEngines(safeEngines);
+          setActiveAlerts(safeActive);
+          if (safeLogs.length > 0) setDatabasePollLogs(safeLogs);
 
-      const safeDbs = Array.isArray(dbs) ? dbs : [];
-      const safeEngines = Array.isArray(engines) ? engines : [];
-      const safeMethods = Array.isArray(methods) ? methods : [];
-      const safeRaws = Array.isArray(raws) ? raws : [];
-      const safeMets = Array.isArray(mets) ? mets : [];
-      const safeTpls = Array.isArray(tpls) ? tpls : [];
-      const safeGrps = Array.isArray(grps) ? grps : [];
-      const safeActive = Array.isArray(active) ? active : [];
-      const safeHistory = Array.isArray(history) ? history : [];
-      const safeNotifLogs = Array.isArray(notifLogs) ? notifLogs : [];
-      const safeNotifQueue = Array.isArray(notifQueue) ? notifQueue : [];
-      const safeDbPollQueue = Array.isArray(dbPollQueue) ? dbPollQueue : [];
-      const safeDbPollLogs = Array.isArray(dbPollLogs) ? dbPollLogs : [];
-      const safeMHistory = Array.isArray(mHistory) ? mHistory : [];
-      const safeSettings = settings && typeof settings === 'object' ? settings : storage.getSystemSettings();
-
-      let safeSyncedDbs = safeDbs;
-      try {
-        const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(safeDbs, safeGrps, safeTpls, safeMets);
-        if (Array.isArray(syncedDatabases) && syncedDatabases.length > 0) {
-          safeSyncedDbs = syncedDatabases;
+          storage.setDatabases(safeDbs);
+          storage.setDatabaseEngines(safeEngines);
+          storage.setActiveAlerts(safeActive);
+          break;
         }
-      } catch (err) {
-        console.warn('autoSyncDatabaseTemplateMetrics warning:', err);
-      }
 
-      setStorageType(sInfo?.storageType || 'memory');
-      setDatabases(safeSyncedDbs);
-      setDatabaseEngines(safeEngines);
-      setAlertMethods(safeMethods);
-      setRawMeasurements(safeRaws);
-      setMetrics(safeMets);
-      setTemplates(safeTpls);
-      setGroups(safeGrps);
-      setActiveAlerts(safeActive);
-      setAlertHistory(safeHistory);
-      setAlertNotificationLogs(safeNotifLogs);
-      setAlertNotificationQueue(safeNotifQueue);
-      setDatabasePollQueue(safeDbPollQueue);
-      setDatabasePollLogs(safeDbPollLogs);
-      setMetricHistory(safeMHistory);
-      setSystemSettings(safeSettings);
+        case 'active-alerts': {
+          const [active, dbs] = await Promise.all([
+            api.getActiveAlerts().catch(() => storage.getActiveAlerts()),
+            api.getDatabases().catch(() => storage.getDatabases()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeActive = Array.isArray(active) ? active : [];
+          const safeDbs = Array.isArray(dbs) ? dbs : [];
 
-      // Cache locally for offline availability
-      try {
-        storage.setDatabases(safeSyncedDbs);
-        storage.setDatabaseEngines(safeEngines);
-        storage.setAlertNotificationMethods(safeMethods);
-        storage.setRawMeasurements(safeRaws);
-        storage.setMetrics(safeMets);
-        storage.setTemplates(safeTpls);
-        storage.setGroups(safeGrps);
-        storage.setActiveAlerts(safeActive);
-        storage.setAlertHistory(safeHistory);
-        storage.setAlertNotificationLogs(safeNotifLogs);
-        storage.setAlertNotificationQueue(safeNotifQueue);
-        storage.setDatabasePollQueue(safeDbPollQueue);
-        storage.setDatabasePollLogs(safeDbPollLogs);
-        storage.setMetricHistory(safeMHistory);
-        storage.setSystemSettings(safeSettings);
-      } catch (cacheErr) {
-        console.warn('Storage caching warning:', cacheErr);
+          setActiveAlerts(safeActive);
+          setDatabases(safeDbs);
+          storage.setActiveAlerts(safeActive);
+          storage.setDatabases(safeDbs);
+          break;
+        }
+
+        case 'alert-notification-logs': {
+          const [queue, logs, dbs, engines, methods] = await Promise.all([
+            api.getAlertNotificationQueue().catch(() => storage.getAlertNotificationQueue()),
+            api.getAlertNotificationLogs().catch(() => storage.getAlertNotificationLogs()),
+            api.getDatabases().catch(() => storage.getDatabases()),
+            api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+            api.getAlertNotificationMethods().catch(() => storage.getAlertNotificationMethods()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeQueue = Array.isArray(queue) ? queue : [];
+          const safeLogs = Array.isArray(logs) ? logs : [];
+          const safeDbs = Array.isArray(dbs) ? dbs : [];
+          const safeEngines = Array.isArray(engines) ? engines : [];
+          const safeMethods = Array.isArray(methods) ? methods : [];
+
+          setAlertNotificationQueue(safeQueue);
+          setAlertNotificationLogs(safeLogs);
+          setDatabases(safeDbs);
+          setDatabaseEngines(safeEngines);
+          setAlertMethods(safeMethods);
+
+          storage.setAlertNotificationQueue(safeQueue);
+          storage.setAlertNotificationLogs(safeLogs);
+          storage.setDatabases(safeDbs);
+          storage.setDatabaseEngines(safeEngines);
+          storage.setAlertNotificationMethods(safeMethods);
+          break;
+        }
+
+        case 'monitor-poll-logs': {
+          const [queue, logs, dbs, engines] = await Promise.all([
+            api.getDatabasePollQueue().catch(() => storage.getDatabasePollQueue()),
+            api.getDatabasePollLogs().catch(() => storage.getDatabasePollLogs()),
+            api.getDatabases().catch(() => storage.getDatabases()),
+            api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeQueue = Array.isArray(queue) ? queue : [];
+          const safeLogs = Array.isArray(logs) ? logs : [];
+          const safeDbs = Array.isArray(dbs) ? dbs : [];
+          const safeEngines = Array.isArray(engines) ? engines : [];
+
+          setDatabasePollQueue(safeQueue);
+          setDatabasePollLogs(safeLogs);
+          setDatabases(safeDbs);
+          setDatabaseEngines(safeEngines);
+
+          storage.setDatabasePollQueue(safeQueue);
+          storage.setDatabasePollLogs(safeLogs);
+          storage.setDatabases(safeDbs);
+          storage.setDatabaseEngines(safeEngines);
+          break;
+        }
+
+        case 'databases': {
+          const [dbs, engines, grps, tpls, mets, active] = await Promise.all([
+            api.getDatabases().catch(() => storage.getDatabases()),
+            api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+            api.getGroups().catch(() => storage.getGroups()),
+            api.getTemplates().catch(() => storage.getTemplates()),
+            api.getMetrics().catch(() => storage.getMetrics()),
+            api.getActiveAlerts().catch(() => storage.getActiveAlerts()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeDbs = Array.isArray(dbs) ? dbs : [];
+          const safeEngines = Array.isArray(engines) ? engines : [];
+          const safeGrps = Array.isArray(grps) ? grps : [];
+          const safeTpls = Array.isArray(tpls) ? tpls : [];
+          const safeMets = Array.isArray(mets) ? mets : [];
+          const safeActive = Array.isArray(active) ? active : [];
+
+          let safeSyncedDbs = safeDbs;
+          try {
+            const { syncedDatabases } = autoSyncDatabaseTemplateMetrics(safeDbs, safeGrps, safeTpls, safeMets);
+            if (Array.isArray(syncedDatabases) && syncedDatabases.length > 0) {
+              safeSyncedDbs = syncedDatabases;
+            }
+          } catch (err) {
+            console.warn('autoSyncDatabaseTemplateMetrics warning:', err);
+          }
+
+          setDatabases(safeSyncedDbs);
+          setDatabaseEngines(safeEngines);
+          setGroups(safeGrps);
+          setTemplates(safeTpls);
+          setMetrics(safeMets);
+          setActiveAlerts(safeActive);
+
+          storage.setDatabases(safeSyncedDbs);
+          storage.setDatabaseEngines(safeEngines);
+          storage.setGroups(safeGrps);
+          storage.setTemplates(safeTpls);
+          storage.setMetrics(safeMets);
+          storage.setActiveAlerts(safeActive);
+          break;
+        }
+
+        case 'raw-measurements': {
+          const [raws, dbs, mets, grps, tpls, engines] = await Promise.all([
+            api.getRawMeasurements().catch(() => storage.getRawMeasurements()),
+            api.getDatabases().catch(() => storage.getDatabases()),
+            api.getMetrics().catch(() => storage.getMetrics()),
+            api.getGroups().catch(() => storage.getGroups()),
+            api.getTemplates().catch(() => storage.getTemplates()),
+            api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeRaws = Array.isArray(raws) ? raws : [];
+          const safeDbs = Array.isArray(dbs) ? dbs : [];
+          const safeMets = Array.isArray(mets) ? mets : [];
+          const safeGrps = Array.isArray(grps) ? grps : [];
+          const safeTpls = Array.isArray(tpls) ? tpls : [];
+          const safeEngines = Array.isArray(engines) ? engines : [];
+
+          setRawMeasurements(safeRaws);
+          setDatabases(safeDbs);
+          setMetrics(safeMets);
+          setGroups(safeGrps);
+          setTemplates(safeTpls);
+          setDatabaseEngines(safeEngines);
+
+          storage.setRawMeasurements(safeRaws);
+          storage.setDatabases(safeDbs);
+          storage.setMetrics(safeMets);
+          storage.setGroups(safeGrps);
+          storage.setTemplates(safeTpls);
+          storage.setDatabaseEngines(safeEngines);
+          break;
+        }
+
+        case 'metrics': {
+          const [mets, tpls, engines] = await Promise.all([
+            api.getMetrics().catch(() => storage.getMetrics()),
+            api.getTemplates().catch(() => storage.getTemplates()),
+            api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeMets = Array.isArray(mets) ? mets : [];
+          const safeTpls = Array.isArray(tpls) ? tpls : [];
+          const safeEngines = Array.isArray(engines) ? engines : [];
+
+          setMetrics(safeMets);
+          setTemplates(safeTpls);
+          setDatabaseEngines(safeEngines);
+
+          storage.setMetrics(safeMets);
+          storage.setTemplates(safeTpls);
+          storage.setDatabaseEngines(safeEngines);
+          break;
+        }
+
+        case 'templates': {
+          const [tpls, mets, engines] = await Promise.all([
+            api.getTemplates().catch(() => storage.getTemplates()),
+            api.getMetrics().catch(() => storage.getMetrics()),
+            api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeTpls = Array.isArray(tpls) ? tpls : [];
+          const safeMets = Array.isArray(mets) ? mets : [];
+          const safeEngines = Array.isArray(engines) ? engines : [];
+
+          setTemplates(safeTpls);
+          setMetrics(safeMets);
+          setDatabaseEngines(safeEngines);
+
+          storage.setTemplates(safeTpls);
+          storage.setMetrics(safeMets);
+          storage.setDatabaseEngines(safeEngines);
+          break;
+        }
+
+        case 'groups': {
+          const [grps, dbs, tpls, engines, methods, active] = await Promise.all([
+            api.getGroups().catch(() => storage.getGroups()),
+            api.getDatabases().catch(() => storage.getDatabases()),
+            api.getTemplates().catch(() => storage.getTemplates()),
+            api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+            api.getAlertNotificationMethods().catch(() => storage.getAlertNotificationMethods()),
+            api.getActiveAlerts().catch(() => storage.getActiveAlerts()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeGrps = Array.isArray(grps) ? grps : [];
+          const safeDbs = Array.isArray(dbs) ? dbs : [];
+          const safeTpls = Array.isArray(tpls) ? tpls : [];
+          const safeEngines = Array.isArray(engines) ? engines : [];
+          const safeMethods = Array.isArray(methods) ? methods : [];
+          const safeActive = Array.isArray(active) ? active : [];
+
+          setGroups(safeGrps);
+          setDatabases(safeDbs);
+          setTemplates(safeTpls);
+          setDatabaseEngines(safeEngines);
+          setAlertMethods(safeMethods);
+          setActiveAlerts(safeActive);
+
+          storage.setGroups(safeGrps);
+          storage.setDatabases(safeDbs);
+          storage.setTemplates(safeTpls);
+          storage.setDatabaseEngines(safeEngines);
+          storage.setAlertNotificationMethods(safeMethods);
+          storage.setActiveAlerts(safeActive);
+          break;
+        }
+
+        case 'alert-history': {
+          const [history, dbs] = await Promise.all([
+            api.getAlertHistory().catch(() => storage.getAlertHistory()),
+            api.getDatabases().catch(() => storage.getDatabases()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeHistory = Array.isArray(history) ? history : [];
+          const safeDbs = Array.isArray(dbs) ? dbs : [];
+
+          setAlertHistory(safeHistory);
+          setDatabases(safeDbs);
+
+          storage.setAlertHistory(safeHistory);
+          storage.setDatabases(safeDbs);
+          break;
+        }
+
+        case 'analytics-database': {
+          const [dbs, mets, grps, tpls, raws, mHistory, active, history, engines] = await Promise.all([
+            api.getDatabases().catch(() => storage.getDatabases()),
+            api.getMetrics().catch(() => storage.getMetrics()),
+            api.getGroups().catch(() => storage.getGroups()),
+            api.getTemplates().catch(() => storage.getTemplates()),
+            api.getRawMeasurements().catch(() => storage.getRawMeasurements()),
+            api.getMetricHistory().catch(() => storage.getMetricHistory()),
+            api.getActiveAlerts().catch(() => storage.getActiveAlerts()),
+            api.getAlertHistory().catch(() => storage.getAlertHistory()),
+            api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeDbs = Array.isArray(dbs) ? dbs : [];
+          const safeMets = Array.isArray(mets) ? mets : [];
+          const safeGrps = Array.isArray(grps) ? grps : [];
+          const safeTpls = Array.isArray(tpls) ? tpls : [];
+          const safeRaws = Array.isArray(raws) ? raws : [];
+          const safeMHistory = Array.isArray(mHistory) ? mHistory : [];
+          const safeActive = Array.isArray(active) ? active : [];
+          const safeHistory = Array.isArray(history) ? history : [];
+          const safeEngines = Array.isArray(engines) ? engines : [];
+
+          setDatabases(safeDbs);
+          setMetrics(safeMets);
+          setGroups(safeGrps);
+          setTemplates(safeTpls);
+          setRawMeasurements(safeRaws);
+          setMetricHistory(safeMHistory);
+          setActiveAlerts(safeActive);
+          setAlertHistory(safeHistory);
+          setDatabaseEngines(safeEngines);
+
+          storage.setDatabases(safeDbs);
+          storage.setMetrics(safeMets);
+          storage.setGroups(safeGrps);
+          storage.setTemplates(safeTpls);
+          storage.setRawMeasurements(safeRaws);
+          storage.setMetricHistory(safeMHistory);
+          storage.setActiveAlerts(safeActive);
+          storage.setAlertHistory(safeHistory);
+          storage.setDatabaseEngines(safeEngines);
+          break;
+        }
+
+        case 'system-settings': {
+          const [settings, sInfo, dbs, engines, methods, pollLogs] = await Promise.all([
+            api.getSystemSettings().catch(() => storage.getSystemSettings()),
+            api.getStorageInfo().catch(() => ({ storageType: 'memory' as const, isPrismaActive: false })),
+            api.getDatabases().catch(() => storage.getDatabases()),
+            api.getDatabaseEngines().catch(() => storage.getDatabaseEngines()),
+            api.getAlertNotificationMethods().catch(() => storage.getAlertNotificationMethods()),
+            api.getDatabasePollLogs().catch(() => storage.getDatabasePollLogs()),
+          ]);
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeSettings = settings && typeof settings === 'object' ? settings : storage.getSystemSettings();
+          const safeDbs = Array.isArray(dbs) ? dbs : [];
+          const safeEngines = Array.isArray(engines) ? engines : [];
+          const safeMethods = Array.isArray(methods) ? methods : [];
+          const safePollLogs = Array.isArray(pollLogs) ? pollLogs : [];
+
+          setSystemSettings(safeSettings);
+          setStorageType(sInfo?.storageType || 'memory');
+          setDatabases(safeDbs);
+          setDatabaseEngines(safeEngines);
+          setAlertMethods(safeMethods);
+          setDatabasePollLogs(safePollLogs);
+
+          storage.setSystemSettings(safeSettings);
+          storage.setDatabases(safeDbs);
+          storage.setDatabaseEngines(safeEngines);
+          storage.setAlertNotificationMethods(safeMethods);
+          storage.setDatabasePollLogs(safePollLogs);
+          break;
+        }
+
+        case 'account':
+        case 'audit-logs': {
+          const settings = await api.getSystemSettings().catch(() => storage.getSystemSettings());
+          if (loadTabDataCountRef.current[tab] !== requestId) return;
+          const safeSettings = settings && typeof settings === 'object' ? settings : storage.getSystemSettings();
+          setSystemSettings(safeSettings);
+          storage.setSystemSettings(safeSettings);
+          break;
+        }
+
+        default:
+          break;
       }
     } catch (e) {
-      console.warn('API sync warning, using local storage cache fallback:', e);
-      // Fallback state population so view is never empty
-      setDatabases(storage.getDatabases());
-      setDatabaseEngines(storage.getDatabaseEngines());
-      setAlertMethods(storage.getAlertNotificationMethods());
-      setRawMeasurements(storage.getRawMeasurements());
-      setMetrics(storage.getMetrics());
-      setTemplates(storage.getTemplates());
-      setGroups(storage.getGroups());
-      setActiveAlerts(storage.getActiveAlerts());
-      setAlertHistory(storage.getAlertHistory());
-      setAlertNotificationLogs(storage.getAlertNotificationLogs());
-      setAlertNotificationQueue(storage.getAlertNotificationQueue());
-      setDatabasePollQueue(storage.getDatabasePollQueue());
-      setDatabasePollLogs(storage.getDatabasePollLogs());
-      setMetricHistory(storage.getMetricHistory());
-      setSystemSettings(storage.getSystemSettings());
+      console.warn(`Tab data refresh notice for "${tab}":`, e);
     }
+  }, []);
+
+  // Fetch global configuration (storage provider & system settings) once on mount
+  useEffect(() => {
+    Promise.all([
+      api.getStorageInfo().catch(() => ({ storageType: 'memory' as const, isPrismaActive: false })),
+      api.getSystemSettings().catch(() => storage.getSystemSettings()),
+    ]).then(([sInfo, settings]) => {
+      if (sInfo?.storageType) setStorageType(sInfo.storageType);
+      if (settings && typeof settings === 'object') {
+        setSystemSettings(settings);
+        storage.setSystemSettings(settings);
+      }
+    });
   }, []);
 
   // Sync activeTab to localStorage and window hash
@@ -257,10 +508,10 @@ function MainAppContent() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Auto refresh newest data whenever activeTab changes (including initial load)
+  // Auto refresh ONLY the data for the active tab whenever activeTab changes
   useEffect(() => {
-    loadData();
-  }, [activeTab, loadData]);
+    loadTabSpecificData(activeTab);
+  }, [activeTab, loadTabSpecificData]);
 
   const handleSaveEngine = async (engine: Partial<DatabaseEngineEntity>) => {
     try {
@@ -953,7 +1204,7 @@ function MainAppContent() {
               databaseEngines={databaseEngines}
               activeAlerts={activeAlerts}
               onClearAlert={handleClearAlert}
-              onRefresh={loadData}
+              onRefresh={() => loadTabSpecificData('dashboard')}
               userRole={currentUser.role}
               onNavigateToDatabases={() => handleSelectTab('databases')}
               onNavigateToAnalytics={(dbId) => handleSelectTab('analytics-database', dbId)}
@@ -967,7 +1218,7 @@ function MainAppContent() {
               activeAlerts={activeAlerts}
               onClearAlert={handleClearAlert}
               onAcknowledgeAlert={handleAcknowledgeAlert}
-              onRefresh={loadData}
+              onRefresh={() => loadTabSpecificData('active-alerts')}
               userRole={currentUser.role}
               showInfoTips={systemSettings.showInfoTips !== false}
             />
@@ -982,7 +1233,7 @@ function MainAppContent() {
               alertMethods={alertMethods}
               userRole={currentUser.role}
               showInfoTips={systemSettings.showInfoTips !== false}
-              onRefresh={loadData}
+              onRefresh={() => loadTabSpecificData('alert-notification-logs')}
               onSaveAlertMethod={handleSaveAlertMethod}
               onDeleteAlertMethod={handleDeleteAlertMethod}
             />
@@ -996,7 +1247,7 @@ function MainAppContent() {
               databaseEngines={databaseEngines}
               userRole={currentUser.role}
               showInfoTips={systemSettings.showInfoTips !== false}
-              onRefresh={loadData}
+              onRefresh={() => loadTabSpecificData('monitor-poll-logs')}
             />
           )}
 
@@ -1014,7 +1265,7 @@ function MainAppContent() {
               onDeleteDatabase={handleDeleteDatabase}
               onNavigateToAnalytics={(dbId) => handleSelectTab('analytics-database', dbId)}
               onNavigateToSettings={() => handleSelectTab('system-settings')}
-              onRefresh={loadData}
+              onRefresh={() => loadTabSpecificData('databases')}
             />
           )}
 
@@ -1027,7 +1278,7 @@ function MainAppContent() {
               templates={templates}
               databaseEngines={databaseEngines}
               timestampFormat={systemSettings.timestampFormat}
-              onRefresh={loadData}
+              onRefresh={() => loadTabSpecificData('raw-measurements')}
               showInfoTips={systemSettings.showInfoTips !== false}
             />
           )}
@@ -1071,7 +1322,7 @@ function MainAppContent() {
               onDeleteGroup={handleDeleteGroup}
               onSaveDatabase={handleSaveDatabase}
               onSaveAlertMethod={handleSaveAlertMethod}
-              onRefresh={loadData}
+              onRefresh={() => loadTabSpecificData('groups')}
             />
           )}
 
@@ -1079,7 +1330,7 @@ function MainAppContent() {
             <AlertHistoryView
               alertHistory={alertHistory}
               databases={databases}
-              onRefresh={loadData}
+              onRefresh={() => loadTabSpecificData('alert-history')}
               showInfoTips={systemSettings.showInfoTips !== false}
             />
           )}
@@ -1098,7 +1349,7 @@ function MainAppContent() {
               systemSettings={systemSettings}
               userRole={currentUser.role}
               initialDbId={analyticsInitialDbId}
-              onRefresh={loadData}
+              onRefresh={() => loadTabSpecificData('analytics-database')}
               onClearAlert={handleClearAlert}
               onAcknowledgeAlert={handleAcknowledgeAlert}
               showInfoTips={systemSettings.showInfoTips !== false}
@@ -1119,7 +1370,7 @@ function MainAppContent() {
               onSaveAlertMethod={handleSaveAlertMethod}
               onDeleteAlertMethod={handleDeleteAlertMethod}
               onResetAllData={handleResetAllData}
-              onRefreshData={loadData}
+              onRefreshData={() => loadTabSpecificData('system-settings')}
             />
           )}
 
