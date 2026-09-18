@@ -126,7 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="font-bold text-base tracking-tight text-slate-900 block truncate">
                 {t('common.appTitle')}
               </span>
-              <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wider block">
+              <span className="text-[8px] font-semibold text-indigo-600 uppercase tracking-wider block">
                 {t('common.appSubtitle')}
               </span>
             </div>
